@@ -34,26 +34,82 @@
       <a href="#how-it-works" class="link-secondary">See how it works ↓</a>
     </div>
 
-    <div class="coil">
-      <div class="coil-label">
-        <span>SPY · LIVE CONCEPT</span>
-        <span>COIL · ATTRIBUTE CONVERGENCE</span>
-      </div>
-      <div class="coil-stage" aria-hidden="true">
-        <div class="coil-ring coil-ring-3"></div>
-        <div class="coil-ring coil-ring-2"></div>
-        <div class="coil-ring coil-ring-1"></div>
-        <div class="coil-core">
-          <span class="coil-core-pulse"></span>
+    <div class="visual-compare" id="visual-concepts">
+      <p class="section-label" style="margin-bottom:8px;">Visual concepts · testing</p>
+      <p class="compare-intro">Three hero visuals for comparison. Coil language stays in the copy above — pick the graphic that best supports it.</p>
+
+      <!-- OPTION 1 -->
+      <article class="viz-card">
+        <div class="viz-option-tag">Option 1 · Path / datapoint alignment</div>
+        <div class="coil-label">
+          <span>SPY · LIVE CONCEPT</span>
+          <span>ATTRIBUTES · ALIGNING</span>
         </div>
-        <ul class="coil-attrs">
-          <li>Structure</li>
-          <li>Momentum</li>
-          <li>Volatility</li>
-          <li>Context</li>
-        </ul>
-      </div>
-      <p class="coil-caption">Multiple market attributes tighten into a coil. When that convergence matches conditions historically tied to meaningful moves, you get a text.</p>
+        <div class="path-stage" aria-hidden="true">
+          <div class="path-fire">
+            <span class="path-fire-line"></span>
+            <span class="path-fire-pulse"></span>
+            <span class="path-fire-label">ALERT</span>
+          </div>
+          <div class="path-lane"><span class="path-name">Structure</span><span class="path-track"></span><span class="path-dot" style="--delay:0s"></span></div>
+          <div class="path-lane"><span class="path-name">Momentum</span><span class="path-track"></span><span class="path-dot" style="--delay:0.35s"></span></div>
+          <div class="path-lane"><span class="path-name">Volatility</span><span class="path-track"></span><span class="path-dot" style="--delay:0.7s"></span></div>
+          <div class="path-lane"><span class="path-name">Context</span><span class="path-track"></span><span class="path-dot" style="--delay:1.05s"></span></div>
+        </div>
+        <p class="coil-caption">Datapoints travel their paths and snap into alignment. When they register together, the alert fires.</p>
+      </article>
+
+      <!-- OPTION 2 -->
+      <article class="viz-card">
+        <div class="viz-option-tag">Option 2 · Coil tension + last datapoint locks</div>
+        <div class="coil-label">
+          <span>SPY · LIVE CONCEPT</span>
+          <span>COIL · BUILDING → LOCK</span>
+        </div>
+        <div class="hybrid-stage" aria-hidden="true">
+          <div class="hybrid-coil">
+            <div class="coil-ring coil-ring-3"></div>
+            <div class="coil-ring coil-ring-2"></div>
+            <div class="coil-ring coil-ring-1"></div>
+            <div class="coil-core"><span class="coil-core-pulse"></span></div>
+          </div>
+          <ul class="hybrid-locks">
+            <li class="lock-dot" style="--i:0"><span>Structure</span></li>
+            <li class="lock-dot" style="--i:1"><span>Momentum</span></li>
+            <li class="lock-dot" style="--i:2"><span>Volatility</span></li>
+            <li class="lock-dot lock-dot-last" style="--i:3"><span>Context</span></li>
+          </ul>
+        </div>
+        <p class="coil-caption">Coil tension builds as attributes converge. The alert fires when the last datapoint locks into place.</p>
+      </article>
+
+      <!-- OPTION 3 -->
+      <article class="viz-card">
+        <div class="viz-option-tag">Option 3 · Constellation lock</div>
+        <div class="coil-label">
+          <span>SPY · LIVE CONCEPT</span>
+          <span>DATAPOINTS · RESOLVING</span>
+        </div>
+        <div class="constellation-stage" aria-hidden="true">
+          <svg class="constellation-lines" viewBox="0 0 320 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M60 120 L140 40 L220 100 L260 50" />
+            <path d="M140 40 L180 130" />
+            <path d="M220 100 L180 130" />
+          </svg>
+          <span class="star star-1"></span>
+          <span class="star star-2"></span>
+          <span class="star star-3"></span>
+          <span class="star star-4"></span>
+          <span class="star star-5 star-core"></span>
+          <span class="star-labels">
+            <i style="--x:18%; --y:72%">Structure</i>
+            <i style="--x:42%; --y:18%">Momentum</i>
+            <i style="--x:66%; --y:58%">Volatility</i>
+            <i style="--x:78%; --y:24%">Context</i>
+          </span>
+        </div>
+        <p class="coil-caption">Scattered datapoints resolve into a fixed pattern. When the constellation locks, the signal pulses.</p>
+      </article>
     </div>
   </section>
 
