@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Get Signals by Text — DeltaIQ</title>
+<title>Get Signals by Text &mdash; DeltaIQ</title>
 <meta name="description" content="Sign up for DeltaIQ SMS signal alerts. Choose free or paid tier and opt in to receive text message alerts.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -225,7 +225,7 @@ footer.site .wrap { display: flex; justify-content: space-between; flex-wrap: wr
   <div class="wrap">
     <p class="eyebrow">Get Signals By Text</p>
     <h1 class="headline" style="font-size:32px;">Sign up for SMS alerts</h1>
-    <p class="lede" style="margin-bottom:36px;">Enter your details below. You'll get a confirmation text — reply YES to activate your alerts.</p>
+    <p class="lede" style="margin-bottom:36px;">Enter your details below. You'll get a confirmation text &mdash; reply YES to activate your alerts.</p>
 
     <form class="form-card" id="signup-form" action="/api/signup" method="POST">
 
@@ -233,12 +233,12 @@ footer.site .wrap { display: flex; justify-content: space-between; flex-wrap: wr
         <label class="tier-opt selected">
           <input type="radio" name="tier" value="free" checked>
           <span class="name">Free</span>
-          <span class="price">$0/mo — sample alerts</span>
+          <span class="price">$0/mo &mdash; sample alerts</span>
         </label>
         <label class="tier-opt">
           <input type="radio" name="tier" value="paid">
           <span class="name">Paid</span>
-          <span class="price">$49/mo — full feed</span>
+          <span class="price">$49/mo &mdash; full feed</span>
         </label>
       </div>
 
@@ -288,7 +288,7 @@ footer.site .wrap { display: flex; justify-content: space-between; flex-wrap: wr
 </footer>
 
 <script>
-  // Visual state for tier selection — wire actual submission to your backend / Stripe Checkout.
+  // Visual state for tier selection &mdash; wire actual submission to your backend / Stripe Checkout.
   document.querySelectorAll('.tier-opt').forEach(function (opt) {
     opt.addEventListener('click', function () {
       document.querySelectorAll('.tier-opt').forEach(function (o) { o.classList.remove('selected'); });
@@ -296,10 +296,10 @@ footer.site .wrap { display: flex; justify-content: space-between; flex-wrap: wr
     });
   });
 
-  // Placeholder submit handler — replace with real POST to your signup/Stripe Checkout endpoint.
+  // Placeholder submit handler &mdash; replace with real POST to your signup/Stripe Checkout endpoint.
   document.getElementById('signup-form').addEventListener('submit', function (e) {
     e.preventDefault();
-    alert('Form UI only — wire this up to your backend endpoint (see code comments).');
+    alert('Form UI only &mdash; wire this up to your backend endpoint (see code comments).');
   });
 </script>
 
