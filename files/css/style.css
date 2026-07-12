@@ -336,7 +336,7 @@ h1.headline {
 .track-line {
   position: absolute;
   left: 0;
-  right: 58px;
+  right: 66px;
   top: 50%;
   height: 2px;
   transform: translateY(-50%);
@@ -408,7 +408,7 @@ h1.headline {
     box-shadow: 0 0 0 3px rgba(16,185,129,.25), 0 0 28px rgba(16,185,129,.7);
   }
   58%, 74% {
-    left: calc(100% - 126px);
+    left: calc(100% - 134px);
     transform: translate(0, -50%) scale(1.04);
     border-color: #10b981;
     background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%);
@@ -440,7 +440,7 @@ h1.headline {
 
 .phone-target {
   position: absolute;
-  right: 4px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
   width: 52px;
@@ -528,7 +528,7 @@ h1.headline {
   .cond-btn::after { opacity: 1; }
   .track-line { opacity: 1; }
   .button-alert {
-    left: calc(100% - 126px);
+    left: calc(100% - 134px);
     border-color: #10b981;
     background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%);
     box-shadow: 0 0 24px rgba(16,185,129,.65);
@@ -544,14 +544,14 @@ h1.headline {
   .button-row { gap: 5px; }
   .button-alert { width: 60px; height: 30px; }
   .button-alert-label { font-size: 10px; letter-spacing: 0.08em; }
-  .phone-target { width: 46px; right: 0; }
+  .phone-target { width: 46px; right: 10px; }
   .phone-icon { width: 24px; height: 36px; }
-  .track-line { right: 50px; }
+  .track-line { right: 58px; }
   .sms-chip { top: 11px; font-size: 7px; }
   @keyframes alert-travel {
     0%, 38% { left: 0; transform: translate(0, -50%) scale(1); border-color: #2a4a6d; background: linear-gradient(180deg, #1a4a7a 0%, #0e2a47 100%); box-shadow: 0 3px 0 #07111f, 0 5px 8px rgba(0,0,0,.3); }
     42%, 46% { left: 0; transform: translate(0, -50%) scale(1.08); border-color: #10b981; background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%); box-shadow: 0 0 22px rgba(16,185,129,.65); }
-    58%, 74% { left: calc(100% - 110px); transform: translate(0, -50%) scale(1.03); border-color: #10b981; background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%); box-shadow: 0 0 18px rgba(16,185,129,.55); }
+    58%, 74% { left: calc(100% - 118px); transform: translate(0, -50%) scale(1.03); border-color: #10b981; background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%); box-shadow: 0 0 18px rgba(16,185,129,.55); }
     86%, 100% { left: 0; transform: translate(0, -50%) scale(1); border-color: #2a4a6d; background: linear-gradient(180deg, #1a4a7a 0%, #0e2a47 100%); box-shadow: 0 3px 0 #07111f, 0 5px 8px rgba(0,0,0,.3); }
   }
 }
