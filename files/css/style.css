@@ -173,82 +173,150 @@ h1.headline {
 }
 .link-secondary:hover { color: var(--emerald); }
 
-/* ---------- Signature element: threshold readout ---------- */
+/* ---------- Signature element: coil convergence ---------- */
 
-.readout {
+.coil {
   position: relative;
   border: 1px solid var(--border);
-  background: var(--bg-elevated);
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 45%, rgba(16, 185, 129, 0.08), transparent 65%),
+    var(--bg-elevated);
   border-radius: 8px;
-  padding: 22px 24px;
+  padding: 22px 24px 20px;
   overflow: hidden;
 }
 
-.readout-label {
+.coil-label {
   font-family: var(--display);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-faint);
-  margin-bottom: 14px;
+  margin-bottom: 8px;
   display: flex;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.readout-track {
+.coil-stage {
   position: relative;
-  height: 40px;
+  height: 168px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 4px 0 8px;
 }
 
-.readout-baseline {
+.coil-ring {
   position: absolute;
-  top: 50%;
-  left: 0; right: 0;
-  height: 1px;
-  background: var(--border);
-}
-
-.readout-threshold-tick {
-  position: absolute;
-  top: 0; bottom: 0;
-  width: 1px;
-  background: var(--emerald-dim);
-  left: 50%;
-}
-
-.readout-threshold-tick::after {
-  content: '$1.00 THRESHOLD';
-  position: absolute;
-  top: -18px;
-  left: 8px;
-  font-family: var(--display);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  color: var(--emerald-dim);
-  white-space: nowrap;
-}
-
-.readout-dot {
-  position: absolute;
-  top: 50%;
-  width: 8px; height: 8px;
-  background: var(--emerald);
   border-radius: 50%;
-  transform: translate(-50%, -50%);
-  box-shadow: 0 0 0 4px var(--emerald-soft);
-  animation: drift 6s ease-in-out infinite;
+  border: 1px solid rgba(143, 161, 188, 0.28);
+  animation: coil-tighten 7s ease-in-out infinite;
 }
 
-@keyframes drift {
-  0%   { left: 30%; }
-  50%  { left: 52%; }
-  100% { left: 30%; }
+.coil-ring-3 {
+  width: 148px;
+  height: 148px;
+  border-color: rgba(143, 161, 188, 0.22);
+  animation-delay: 0s;
+}
+
+.coil-ring-2 {
+  width: 104px;
+  height: 104px;
+  border-color: rgba(16, 185, 129, 0.28);
+  animation-delay: 0.35s;
+}
+
+.coil-ring-1 {
+  width: 64px;
+  height: 64px;
+  border-color: rgba(16, 185, 129, 0.55);
+  animation-delay: 0.7s;
+}
+
+.coil-core {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 0 6px var(--emerald-soft);
+  z-index: 2;
+}
+
+.coil-core-pulse {
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  animation: coil-pulse 2.8s ease-out infinite;
+}
+
+.coil-attrs {
+  position: absolute;
+  inset: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+.coil-attrs li {
+  position: absolute;
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  background: rgba(7, 17, 31, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.coil-attrs li:nth-child(1) { top: 10px; left: 50%; transform: translateX(-50%); }
+.coil-attrs li:nth-child(2) { right: 8px; top: 50%; transform: translateY(-50%); }
+.coil-attrs li:nth-child(3) { bottom: 10px; left: 50%; transform: translateX(-50%); }
+.coil-attrs li:nth-child(4) { left: 8px; top: 50%; transform: translateY(-50%); }
+
+.coil-caption {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 8px 0 0;
+  max-width: 620px;
+  line-height: 1.55;
+}
+
+@keyframes coil-tighten {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(0.92); opacity: 1; }
+}
+
+@keyframes coil-pulse {
+  0% { transform: scale(0.7); opacity: 0.7; }
+  70% { transform: scale(1.6); opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .readout-dot { animation: none; left: 46%; }
+  .coil-ring,
+  .coil-core-pulse { animation: none; }
+}
+
+@media (max-width: 640px) {
+  .coil-stage { height: 190px; }
+  .coil-attrs li:nth-child(2),
+  .coil-attrs li:nth-child(4) {
+    top: auto;
+    bottom: 4px;
+    transform: none;
+  }
+  .coil-attrs li:nth-child(2) { right: 12px; left: auto; }
+  .coil-attrs li:nth-child(4) { left: 12px; right: auto; }
+  .coil-attrs li:nth-child(3) { display: none; }
 }
 
 /* ---------- Sections ---------- */
