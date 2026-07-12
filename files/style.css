@@ -1,12 +1,12 @@
 /* ==========================================================================
    DeltaIQ — Design Tokens (Brand Book v1.0)
-   Palette: black canvas, deep navy surfaces, emerald accent.
+   Palette: navy-black canvas, deep navy surfaces, emerald accent.
    Type: Poppins (headers Medium, body Regular).
    Brand: Deep navy #0E2A47 · Emerald #10B981 · Ink #1E293B · Cloud #F5F7FA
    ========================================================================== */
 
 :root {
-  --bg: #000000;
+  --bg: #07111f;
   --bg-elevated: #0a1c30;
   --bg-elevated-2: #0e2a47;
   --border: #1e293b;
