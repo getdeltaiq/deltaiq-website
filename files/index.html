@@ -34,7 +34,7 @@
     <p class="past-note"><em>Alerts describe observed conditions and do not guarantee results.</em></p>
     <div class="cta-row">
       <a href="#subscribe" class="btn-primary">Subscribe Now</a>
-      <a href="#how-it-works" class="link-secondary">See how it works ↓</a>
+      <a href="account.html" class="link-secondary">My Account →</a>
     </div>
 
     <div class="viz-card">
@@ -134,9 +134,12 @@
   <section id="subscribe">
     <p class="section-label">Get started</p>
     <h2>Ready to get started?</h2>
-    <p class="lede">One publication plan, delivered by text. No app required.</p>
-    <a href="#" class="btn-primary">Subscribe Now</a>
-    <!-- TODO: replace href="#" with your Stripe Payment Link -->
+    <p class="lede">One publication plan, delivered by text. No app required. Already subscribed? Use <a href="account.html">My Account</a> to sign in, manage billing, or cancel.</p>
+    <div class="cta-row">
+      <button type="button" class="btn-primary" data-checkout-plan="monthly">Subscribe monthly</button>
+      <button type="button" class="btn-primary" data-checkout-plan="annual" style="background:transparent;border:1px solid var(--emerald);color:var(--emerald);">Subscribe annual</button>
+    </div>
+    <p class="past-note" style="margin-top:16px;"><em>Checkout opens securely via Stripe. After signup, create your password in My Account.</em></p>
   </section>
 
   <!-- SMS OPT-IN / TCPA -->
@@ -169,5 +172,6 @@
   </div>
 </footer>
 
+<script src="js/checkout.js"></script>
 </body>
 </html>
