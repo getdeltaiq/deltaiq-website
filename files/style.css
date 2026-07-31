@@ -105,6 +105,15 @@ nav.top-nav {
 }
 nav.top-nav a { color: var(--text-dim); }
 nav.top-nav a:hover { color: var(--emerald); text-decoration: none; }
+nav.top-nav a.nav-account {
+  color: var(--emerald);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+nav.top-nav a.nav-account:hover {
+  background: rgba(52, 211, 153, 0.1);
+}
 
 /* ---------- Hero ---------- */
 
@@ -832,7 +841,8 @@ footer {
 }
 
 @media (max-width: 640px) {
-  nav.top-nav { display: none; }
+  /* Keep My Account reachable on small screens; hide secondary nav links. */
+  nav.top-nav a:not(.nav-account) { display: none; }
   .hero { padding: 48px 0 36px; }
   .two-col { gap: 20px; }
 }
