@@ -22,13 +22,27 @@
 <div class="wrap">
   <section class="hero" style="border-bottom:none;">
     <p class="eyebrow">// WELCOME</p>
-    <h1 class="headline">You&rsquo;re in. Next: set up My Account.</h1>
-    <p class="subhead">Checkout is complete. Open My Account to create your password, manage billing, and access your subscriber dashboard. Account tools run on our secure app host.</p>
+    <h1 class="headline">You&rsquo;re in. Next: create your password.</h1>
+    <p class="subhead">Checkout is complete. Use the button below to create your account password on our secure app host. Keep this page&rsquo;s link — it verifies your checkout.</p>
     <div class="cta-row">
-      <a class="btn-primary" href="https://deltaiq-signal-engine-production.up.railway.app/account/login">Open My Account</a>
+      <a class="btn-primary" id="accountCta" href="https://deltaiq-signal-engine-production.up.railway.app/account/login?set_password=1">Create password</a>
       <a class="link-secondary" href="../index.html">Back to home</a>
     </div>
+    <p class="subhead" id="ctaHint" style="margin-top:18px;font-size:.9rem;"></p>
   </section>
 </div>
+<script>
+(function () {
+  var base = "https://deltaiq-signal-engine-production.up.railway.app/account/login";
+  var sid = new URLSearchParams(location.search).get("session_id") || "";
+  var a = document.getElementById("accountCta");
+  var hint = document.getElementById("ctaHint");
+  if (sid) {
+    a.href = base + "?set_password=1&session_id=" + encodeURIComponent(sid);
+  } else {
+    hint.textContent = "If Create password asks for a session link, return here from Stripe Checkout (URL should include session_id), or contact support@getdeltaiq.com.";
+  }
+})();
+</script>
 </body>
 </html>
