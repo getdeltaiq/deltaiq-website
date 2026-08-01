@@ -33,7 +33,7 @@
     <p class="subhead">DeltaIQ is a rules-based publication service that monitors SPY and SPX market conditions and sends a plain-language SMS when defined conditions are observed. No app to download. No personalized advice.</p>
     <p class="past-note"><em>Alerts describe observed conditions and do not guarantee results.</em></p>
     <div class="cta-row">
-      <a href="#subscribe" class="btn-primary">Subscribe Now</a>
+      <button type="button" class="btn-primary" data-checkout-start>Subscribe Now</button>
       <a href="account.html" class="link-secondary">My Account →</a>
     </div>
 
@@ -130,40 +130,19 @@
     </div>
   </section>
 
-  <!-- SUBSCRIBE / PAY SCREEN -->
+  <!-- SUBSCRIBE CTA -->
   <section id="subscribe" class="pay-screen">
     <p class="section-label">Subscribe</p>
-    <h2>Choose your plan</h2>
-    <p class="lede">Select Monthly or Annual, enter your email, then continue to the secure Stripe pay screen. Already subscribed? Use <a href="account.html">My Account</a>.</p>
+    <h2>Ready to get started?</h2>
+    <p class="lede">One publication plan, delivered by text. Choose Monthly or Annual on the secure Stripe checkout page. Already subscribed? Use <a href="account.html">My Account</a>.</p>
 
-    <p class="trial-note" id="trialNote">Brand New Customers try it free<span aria-hidden="true">*</span>.</p>
-    <p class="trial-footnote" id="trialFootnote">* Brand new customers are eligible for a free 14 calendar day trial period, prior to the start of the subscription.</p>
-
-    <div class="plan-grid" role="radiogroup" aria-label="Subscription plan">
-      <label class="plan-card is-selected" data-plan-card="monthly">
-        <input type="radio" name="plan" value="monthly" checked>
-        <span class="plan-card-label">Monthly</span>
-        <span class="plan-card-price">$69<span>/mo</span></span>
-        <span class="plan-card-blurb">Billed every month</span>
-      </label>
-      <label class="plan-card" data-plan-card="annual">
-        <input type="radio" name="plan" value="annual">
-        <span class="plan-card-label">Annual</span>
-        <span class="plan-card-price">$690<span>/yr</span></span>
-        <span class="plan-card-blurb">~2 months free vs monthly</span>
-      </label>
-    </div>
-    <p class="plan-hint" id="planHint">$69/month</p>
-
-    <div class="pay-fields">
-      <label class="pay-label" for="checkoutEmail">Email for this subscription</label>
-      <input class="pay-input" id="checkoutEmail" name="email" type="email" autocomplete="email" required placeholder="you@email.com">
-    </div>
+    <p class="trial-note">Brand New Customers try it free<span aria-hidden="true">*</span>.</p>
+    <p class="trial-footnote">* Brand new customers are eligible for a free 14 calendar day trial period, prior to the start of the subscription. Returning subscribers are not eligible — billing begins immediately.</p>
 
     <div class="cta-row" style="margin-bottom:20px;">
-      <button type="button" class="btn-primary" data-checkout-start>Continue to payment</button>
+      <button type="button" class="btn-primary" data-checkout-start>Subscribe Now</button>
     </div>
-    <p class="past-note"><em>Stripe collects your card, phone, and billing address. Returning subscribers are not eligible for the free trial — billing begins immediately.</em></p>
+    <p class="past-note"><em>Checkout opens securely via Stripe (card, phone, email, and plan selection).</em></p>
   </section>
 
   <!-- SMS OPT-IN / TCPA -->
