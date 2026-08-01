@@ -15,36 +15,33 @@
     <div class="chrome-dots"><span></span><span></span><span></span></div>
     <div class="brand"><a href="../index.html" style="color:inherit;text-decoration:none;">delta<span>iq</span></a></div>
     <nav class="top-nav">
-      <a href="#" class="nav-account" id="navAccount">My Account</a>
+      <a href="../account.html" class="nav-account">My Account</a>
     </nav>
   </div>
 </div>
 <div class="wrap">
   <section class="hero" style="border-bottom:none;">
     <p class="eyebrow">// WELCOME</p>
-    <h1 class="headline">You&rsquo;re in. Next: create your account.</h1>
-    <p class="subhead">Payment details are on file. Continue to create your password — that&rsquo;s the only step left before My Account and your dashboard.</p>
+    <h1 class="headline">Check your email to finish setup.</h1>
+    <p class="subhead">Payment details are on file. We sent a confirmation to the email from checkout with a secure link to create your password. Your phone and email stay attached to that subscriber record — the link only asks you to choose a password.</p>
     <div class="cta-row">
-      <a class="btn-primary" id="accountCta" href="https://deltaiq-signal-engine-production.up.railway.app/account/login?set_password=1">Create your account</a>
+      <a class="btn-primary" id="accountCta" href="https://deltaiq-signal-engine-production.up.railway.app/account/login?set_password=1">Create password from this browser</a>
       <a class="link-secondary" href="../index.html">Back to home</a>
     </div>
-    <p class="subhead" id="ctaHint" style="margin-top:18px;font-size:.9rem;"></p>
+    <p class="subhead" id="ctaHint" style="margin-top:18px;font-size:.9rem;">Prefer the email path when you can — it is the primary create-password link.</p>
   </section>
 </div>
 <script>
 (function () {
   var base = "https://deltaiq-signal-engine-production.up.railway.app/account/login";
   var sid = new URLSearchParams(location.search).get("session_id") || "";
-  var createUrl = sid
-    ? base + "?set_password=1&session_id=" + encodeURIComponent(sid)
-    : base + "?set_password=1";
   var a = document.getElementById("accountCta");
-  var nav = document.getElementById("navAccount");
   var hint = document.getElementById("ctaHint");
-  a.href = createUrl;
-  nav.href = createUrl;
-  if (!sid) {
-    hint.textContent = "If Create your account fails, return here from Stripe Checkout (URL should include session_id), or contact support@getdeltaiq.com.";
+  if (sid) {
+    a.href = base + "?set_password=1&session_id=" + encodeURIComponent(sid);
+    hint.textContent = "Didn't get the email? Use Create password from this browser (verifies the same checkout), or contact support@getdeltaiq.com.";
+  } else {
+    hint.textContent = "If the email hasn't arrived, return here from Stripe Checkout (URL should include session_id), or contact support@getdeltaiq.com.";
   }
 })();
 </script>
