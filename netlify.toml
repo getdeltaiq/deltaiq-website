@@ -1,0 +1,9 @@
+# Static marketing site — publish the files/ directory.
+[build]
+  publish = "files"
+  command = "echo 'static site'"
+
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
