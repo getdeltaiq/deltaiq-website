@@ -22,13 +22,13 @@
 <div class="wrap">
   <section class="hero" style="border-bottom:none;">
     <p class="eyebrow">// WELCOME</p>
-    <h1 class="headline">Check your email to finish setup.</h1>
-    <p class="subhead">Payment details are on file. We sent a confirmation to the email from checkout with a secure link to create your password. Your phone and email stay attached to that subscriber record — the link only asks you to choose a password.</p>
+    <h1 class="headline">Next step: create your password.</h1>
+    <p class="subhead" id="subhead">Payment details are on file. Continue to choose a password for My Account — you will be signed in automatically after that.</p>
     <div class="cta-row">
-      <a class="btn-primary" id="accountCta" href="https://deltaiq-signal-engine-production.up.railway.app/account/login?set_password=1">Create password from this browser</a>
+      <a class="btn-primary" id="accountCta" href="https://deltaiq-signal-engine-production.up.railway.app/account/login?set_password=1">Create password</a>
       <a class="link-secondary" href="../index.html">Back to home</a>
     </div>
-    <p class="subhead" id="ctaHint" style="margin-top:18px;font-size:.9rem;">Prefer the email path when you can — it is the primary create-password link.</p>
+    <p class="subhead" id="ctaHint" style="margin-top:18px;font-size:.9rem;">A welcome email with the same link is also sent when email delivery is configured.</p>
   </section>
 </div>
 <script>
@@ -38,10 +38,13 @@
   var a = document.getElementById("accountCta");
   var hint = document.getElementById("ctaHint");
   if (sid) {
-    a.href = base + "?set_password=1&session_id=" + encodeURIComponent(sid);
-    hint.textContent = "Didn't get the email? Use Create password from this browser (verifies the same checkout), or contact support@getdeltaiq.com.";
+    var next = base + "?set_password=1&session_id=" + encodeURIComponent(sid);
+    a.href = next;
+    hint.textContent = "Continuing to Create password…";
+    // Land on Create password immediately (session_id proves this checkout).
+    location.replace(next);
   } else {
-    hint.textContent = "If the email hasn't arrived, return here from Stripe Checkout (URL should include session_id), or contact support@getdeltaiq.com.";
+    hint.textContent = "Missing checkout session in the URL. Use the Create password link in your welcome email, or contact support@getdeltaiq.com.";
   }
 })();
 </script>
