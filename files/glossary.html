@@ -46,12 +46,12 @@
     <p class="lede">Every alert you get is built the same basic way:</p>
     <ul class="plain glossary-list">
       <li>A name for the alert (like &ldquo;Strong Entrance&rdquo; or &ldquo;Runway Qualified&rdquo;)</li>
-      <li>A direction &mdash; either <strong>BULL</strong> (price expected to go up) or <strong>BEAR</strong> (price expected to go down)</li>
-      <li>A suggested entry price for the trade</li>
-      <li>A quick track record &mdash; how this type of alert has performed in the past</li>
+      <li>A direction label &mdash; <strong>BULL</strong> or <strong>BEAR</strong> &mdash; used by the publication for the observed condition set (not a prediction or instruction)</li>
+      <li>A reference price level shown in the alert (observational; not an instruction to buy or sell)</li>
+      <li>A quick historical summary &mdash; how similar published alerts have looked relative to later market movement (illustrative only)</li>
       <li>A current price snapshot of SPY</li>
-      <li>A green light or a caution &mdash; whether conditions look good right now</li>
-      <li>A typical timeframe &mdash; how long this type of move has taken to play out before</li>
+      <li>A clearer / more cautious mark &mdash; how the model&rsquo;s rules classified conditions at send time</li>
+      <li>A typical timeframe from past examples &mdash; how long similar observed moves have taken historically (not a guarantee)</li>
     </ul>
   </section>
 
@@ -63,43 +63,43 @@
     <div class="glossary-defs" role="list">
       <div class="glossary-def" role="listitem">
         <h3>Strong Entrance</h3>
-        <p>Conditions appear aligned for a move; this is the most common type of entry alert.</p>
+        <p>Conditions appear aligned under the model&rsquo;s rules; the most common type of condition alert.</p>
       </div>
       <div class="glossary-def" role="listitem">
         <h3>High Potential Entry</h3>
-        <p>Historical conditions suggest that a price move should be coming &mdash; this alert, by design, alerts a bit earlier and is less confirmed than a Strong Entrance.</p>
+        <p>Historical patterns associated with earlier publication timing than a Strong Entrance &mdash; less confirmed by design.</p>
       </div>
       <div class="glossary-def" role="listitem">
         <h3>Early Entrance</h3>
-        <p>Historical conditions suggest that a price move should be coming &mdash; this alert, by design, is a very early indicator and is less confirmed than the High Potential Entry alert.</p>
+        <p>Historical patterns associated with very early publication timing &mdash; less confirmed than High Potential Entry by design.</p>
       </div>
       <div class="glossary-def" role="listitem">
         <h3>Runway Qualified</h3>
-        <p>High-confidence Strong Entrance &mdash; where extra checks confirmed the likelihood of a Strong Entrance.</p>
+        <p>A Strong Entrance condition set where additional rules also fired (extra checks on the same automated cycle).</p>
       </div>
       <div class="glossary-def" role="listitem">
         <h3>Late Fade</h3>
-        <p>Conditions suggest that the current trend is likely to reverse directions.</p>
+        <p>Conditions under the model&rsquo;s rules associated historically with a change in the then-prevailing direction.</p>
       </div>
       <div class="glossary-def" role="listitem">
         <h3>Macro Impulse</h3>
-        <p>A sudden, sharp price move, associated with news updates or economic events. These tend to impact price within short windows.</p>
+        <p>A sudden, sharp observed price move, often near news or economic releases; historically short windows.</p>
       </div>
       <div class="glossary-def" role="listitem">
         <h3>Trend Continuation</h3>
-        <p>The existing move paused, and has potential to pick back up.</p>
+        <p>An existing directional move paused; conditions associated historically with the move resuming.</p>
       </div>
       <div class="glossary-def" role="listitem">
         <h3>Trend Join</h3>
-        <p>The move never paused &mdash; this is a chance to join a trend already in progress, even though the early part of it was missed.</p>
+        <p>Conditions published after a move is already underway (early portion may have been missed).</p>
       </div>
       <div class="glossary-def" role="listitem">
         <h3>Lower Band Bear</h3>
-        <p>A downward (bear) move with supporting signs behind it.</p>
+        <p>A downward (bear) condition set with additional supporting signs under the model&rsquo;s rules.</p>
       </div>
       <div class="glossary-def" role="listitem">
         <h3>Pin Session</h3>
-        <p>A calmer, lower-conviction pattern where price is expected to drift near its average rather than trend strongly in either direction.</p>
+        <p>A calmer pattern where price has historically tended to stay near its average rather than trend strongly.</p>
       </div>
     </div>
   </section>
@@ -114,12 +114,12 @@
         <div role="columnheader">What it means</div>
       </div>
       <div class="glossary-row" role="row">
-        <div role="cell"><strong>Entry Point</strong></div>
-        <div role="cell">The suggested price level to consider for this trade.</div>
+        <div role="cell"><strong>Reference Level</strong> (may appear as &ldquo;Entry Point&rdquo; in the text)</div>
+        <div role="cell">A price level shown for context with the observed conditions &mdash; not an instruction to enter a trade.</div>
       </div>
       <div class="glossary-row" role="row">
         <div role="cell"><strong>Track Record / History</strong></div>
-        <div role="cell">A quick summary of how this type of alert has done in the past, based on prior examples.</div>
+        <div role="cell">A quick illustrative summary of how similar published alerts related to later market movement in past examples. Not a guarantee.</div>
       </div>
       <div class="glossary-row" role="row">
         <div role="cell"><strong>Live Price</strong></div>
@@ -127,15 +127,15 @@
       </div>
       <div class="glossary-row" role="row">
         <div role="cell"><strong>Confidence Reading</strong></div>
-        <div role="cell">A short snapshot of how favorable current conditions look. Higher generally means more conviction behind the call.</div>
+        <div role="cell">How the model&rsquo;s rules scored condition alignment at send time. Higher means more rules aligned &mdash; not a recommendation.</div>
       </div>
       <div class="glossary-row" role="row">
-        <div role="cell"><strong>Green Light / Caution</strong></div>
-        <div role="cell">Tells you whether this alert is cleared as a strong opportunity right now, or should be treated more cautiously.</div>
+        <div role="cell"><strong>Clearer / Caution</strong></div>
+        <div role="cell">Whether the automated rules marked conditions as clearer or more cautious at send time.</div>
       </div>
       <div class="glossary-row" role="row">
         <div role="cell"><strong>Typical Hold Time</strong></div>
-        <div role="cell">How long this type of move has typically taken to reach its target in the past. This is a guide, not a guarantee.</div>
+        <div role="cell">How long similar observed moves have typically taken in past examples. A historical guide, not a guarantee.</div>
       </div>
     </div>
   </section>
@@ -145,9 +145,9 @@
     <h2>A couple of reminders</h2>
     <div class="disclosure-block">
       <ul class="plain">
-        <li><strong>BULL</strong> means the alert expects price to rise. <strong>BEAR</strong> means it expects price to fall.</li>
+        <li><strong>BULL</strong> / <strong>BEAR</strong> are publication labels for the observed condition set &mdash; not predictions or trade instructions.</li>
         <li>All of the numbers you see are based on historical patterns, not guarantees of what will happen next.</li>
-        <li>These alerts are informational and not personalized financial advice &mdash; always trade within your own comfort level and risk tolerance.</li>
+        <li>These alerts are informational and not personalized financial advice. You alone decide what, if anything, to do.</li>
       </ul>
     </div>
     <p style="margin-top:8px;">

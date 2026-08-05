@@ -939,9 +939,102 @@ footer {
   max-width: 720px;
 }
 
+/* ---------- Pre-checkout consent modal (ToS §3 / §5) ---------- */
+
+body.consent-modal-open { overflow: hidden; }
+
+.consent-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(7, 17, 31, 0.72);
+}
+
+.consent-modal[hidden] { display: none !important; }
+
+.consent-panel {
+  width: min(560px, 100%);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 28px 24px 24px;
+}
+
+.consent-title {
+  font-size: 22px;
+  margin: 0 0 8px;
+}
+
+.consent-lede {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin: 0 0 20px;
+  line-height: 1.55;
+}
+
+.consent-row {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.consent-check {
+  margin-top: 4px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--emerald);
+}
+
+.consent-label {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.consent-label a { color: var(--emerald); }
+
+.consent-error {
+  color: var(--red-flag);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.btn-ghost {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-ghost:hover { color: var(--text); border-color: var(--text-faint); }
+
 @media (max-width: 640px) {
   /* Keep My Account reachable on small screens; hide secondary nav links. */
   nav.top-nav a:not(.nav-account) { display: none; }
   .hero { padding: 48px 0 36px; }
   .two-col { gap: 20px; }
+  .consent-panel { padding: 20px 16px; }
 }
