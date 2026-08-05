@@ -220,6 +220,15 @@ h1.headline {
 @media (max-width: 560px) {
   .plan-grid { grid-template-columns: 1fr; }
 }
+.anchor-offset {
+  display: block;
+  position: relative;
+  top: -72px;
+  height: 0;
+  width: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
 .plan-card {
   display: flex;
   flex-direction: column;
@@ -228,17 +237,6 @@ h1.headline {
   background: var(--bg-elevated);
   border-radius: 8px;
   padding: 18px 16px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.plan-card input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-.plan-card.is-selected {
-  border-color: var(--emerald);
-  box-shadow: 0 0 0 1px var(--emerald);
 }
 .plan-card-label {
   font-family: var(--display);

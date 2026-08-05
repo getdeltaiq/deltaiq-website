@@ -131,11 +131,26 @@
     </div>
   </section>
 
-  <!-- SUBSCRIBE CTA -->
-  <section id="subscribe" class="pay-screen">
-    <p class="section-label">Subscribe</p>
-    <h2>Ready to get started?</h2>
-    <p class="lede">One publication plan, delivered by text. Choose Monthly or Annual on the secure Stripe checkout page. Already subscribed? Use <a href="account.html">My Account</a>.</p>
+  <!-- PRICING / OFFERS (stable #pricing for ToS + site references; #subscribe kept for back-compat) -->
+  <section id="pricing" class="pay-screen">
+    <span id="subscribe" class="anchor-offset" aria-hidden="true"></span>
+    <p class="section-label">Pricing</p>
+    <h2>Offers</h2>
+    <p class="lede">One publication plan, delivered by text. Current list prices below are for reference; the fee that controls is the amount shown at signup and checkout. Already subscribed? Use <a href="account.html">My Account</a>.</p>
+
+    <div class="plan-grid" role="list">
+      <div class="plan-card" role="listitem">
+        <div class="plan-card-label">Monthly</div>
+        <div class="plan-card-price">$69<span>/mo</span></div>
+        <p class="plan-card-blurb">Billed monthly. Cancel anytime.</p>
+      </div>
+      <div class="plan-card" role="listitem">
+        <div class="plan-card-label">Annual</div>
+        <div class="plan-card-price">$690<span>/yr</span></div>
+        <p class="plan-card-blurb">Prepaid annually &mdash; $57.50/mo equivalent.</p>
+      </div>
+    </div>
+    <p class="plan-hint">Plus applicable taxes. Choose Monthly or Annual on the secure Stripe checkout page.</p>
 
     <p class="trial-note">Brand New Customers try it free<span aria-hidden="true">*</span>.</p>
     <p class="trial-footnote">* Brand new customers are eligible for a free 14 calendar day trial period, prior to the start of the subscription. Returning subscribers are not eligible — billing begins immediately.</p>
@@ -167,6 +182,7 @@
   <div class="wrap">
     <div class="footer-links">
       <a href="account.html">My Account</a>
+      <a href="#pricing">Pricing</a>
       <a href="glossary.html">Alert Glossary</a>
       <a href="terms.html">Terms of Service</a>
       <a href="privacy.html">Privacy Policy</a>
