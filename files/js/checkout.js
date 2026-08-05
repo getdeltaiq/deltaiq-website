@@ -79,7 +79,7 @@
     panel.appendChild(
       checkboxRow(
         "ack_sms",
-        'I consent to receive recurring automated <strong>DeltaIQ Alerts</strong> SMS texts about published market-condition observations. Typical frequency is about 2–5 messages on a normal U.S. trading day (0–1 slower; up to ~6–10 more active). Message and data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help, or email <a href="mailto:support@getdeltaiq.com">support@getdeltaiq.com</a>. Consent is required to receive alert Products because alerts are delivered by text. Opting out of SMS does not by itself cancel billing.'
+        'I consent to receive recurring automated <strong>DeltaIQ Alerts</strong> SMS texts about published market-condition observations. Message frequency varies based on market activity. Message and data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help, or email <a href="mailto:support@getdeltaiq.com">support@getdeltaiq.com</a>. Consent is required to receive alert Products because alerts are delivered by text. Opting out of SMS does not by itself cancel billing.'
       )
     );
 
