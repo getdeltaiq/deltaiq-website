@@ -822,6 +822,33 @@ ul.plain li::before {
 .glossary-list { max-width: 640px; }
 .glossary-list strong { color: var(--cloud); font-weight: 600; }
 
+.glossary-sms {
+  margin: 0;
+  max-width: 480px;
+}
+
+.glossary-sms-body {
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--emerald);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--cloud);
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.glossary-sms-caption {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
 .glossary-defs {
   display: grid;
   gap: 12px;
