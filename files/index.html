@@ -7,7 +7,7 @@
 <meta name="description" content="DeltaIQ is a rules-based publisher of observational SPY/SPX market-condition alerts delivered by SMS. Informational and educational only. Not investment advice.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260805c">
+<link rel="stylesheet" href="style.css?v=20260818a">
 </head>
 <body>
 
@@ -138,19 +138,21 @@
     <h2>Offers</h2>
     <p class="lede">One publication plan, delivered by text. Current list prices below are for reference; the fee that controls is the amount shown at signup and checkout. Already subscribed? Use <a href="account.html">My Account</a>.</p>
 
-    <div class="plan-grid" role="list">
-      <div class="plan-card" role="listitem">
-        <div class="plan-card-label">Monthly</div>
-        <div class="plan-card-price">$69<span>/mo</span></div>
-        <p class="plan-card-blurb">Billed monthly. Cancel anytime.</p>
-      </div>
-      <div class="plan-card" role="listitem">
-        <div class="plan-card-label">Annual</div>
-        <div class="plan-card-price">$690<span>/yr</span></div>
-        <p class="plan-card-blurb">Prepaid annually &mdash; $57.50/mo equivalent.</p>
-      </div>
+    <div class="plan-grid" role="radiogroup" aria-label="Subscription plan">
+      <label class="plan-card is-selected" data-plan-card="monthly">
+        <input type="radio" name="plan" value="monthly" checked>
+        <span class="plan-card-label">Monthly</span>
+        <span class="plan-card-price">$69<span>/mo</span></span>
+        <span class="plan-card-blurb">Billed every month</span>
+      </label>
+      <label class="plan-card" data-plan-card="annual">
+        <input type="radio" name="plan" value="annual">
+        <span class="plan-card-label">Annual</span>
+        <span class="plan-card-price">$690<span>/yr</span></span>
+        <span class="plan-card-blurb">Prepaid annually &mdash; $57.50/mo equivalent.</span>
+      </label>
     </div>
-    <p class="plan-hint">Plus applicable taxes. Choose Monthly or Annual on the secure Stripe checkout page.</p>
+    <p class="plan-hint" id="planHint">$69/month</p>
 
     <p class="trial-note">Brand New Customers try it free<span aria-hidden="true">*</span>.</p>
     <p class="trial-footnote">* Brand new customers are eligible for a free 14 calendar day trial period, prior to the start of the subscription. Returning subscribers are not eligible — billing begins immediately.</p>
@@ -192,6 +194,6 @@
   </div>
 </footer>
 
-<script src="js/checkout.js?v=20260805c"></script>
+<script src="js/checkout.js?v=20260818a"></script>
 </body>
 </html>

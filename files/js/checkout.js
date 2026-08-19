@@ -1,7 +1,6 @@
 /**
  * Subscribe Now → consent gate (ToS §3 + §5) → Railway Checkout Session → Stripe.
- * Monthly is the session default; Annual is offered on Stripe Checkout via
- * the Dashboard subscription upsell on the monthly price.
+ * Monthly is the default; Annual can be selected on the Offers cards.
  */
 (function () {
   var API =
@@ -9,6 +8,29 @@
 
   var modalEl = null;
   var pendingBtn = null;
+
+  function selectedPlan() {
+    var checked = document.querySelector('input[name="plan"]:checked');
+    return checked ? checked.value : "monthly";
+  }
+
+  function setPlan(plan) {
+    var input = document.querySelector('input[name="plan"][value="' + plan + '"]');
+    if (input) input.checked = true;
+    document.querySelectorAll("[data-plan-card]").forEach(function (card) {
+      card.classList.toggle(
+        "is-selected",
+        card.getAttribute("data-plan-card") === plan
+      );
+    });
+    var hint = document.getElementById("planHint");
+    if (hint) {
+      hint.textContent =
+        plan === "annual"
+          ? "$690/year (~2 months free vs paying monthly)"
+          : "$69/month";
+    }
+  }
 
   function el(tag, attrs, children) {
     var node = document.createElement(tag);
@@ -177,7 +199,7 @@
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        plan: "monthly",
+        plan: selectedPlan(),
         ack_tos_privacy: !!acks.ack_tos_privacy,
         ack_disclosures: !!acks.ack_disclosures,
         ack_sms: !!acks.ack_sms,
@@ -209,11 +231,18 @@
   }
 
   document.addEventListener("click", function (e) {
+    var card = e.target.closest("[data-plan-card]");
+    if (card) {
+      setPlan(card.getAttribute("data-plan-card") || "monthly");
+      return;
+    }
     var target = e.target.closest("[data-checkout-start]");
     if (!target) return;
     e.preventDefault();
     openModal(target);
   });
+
+  setPlan(selectedPlan());
 
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && modalEl && !modalEl.hasAttribute("hidden")) {
