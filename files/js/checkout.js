@@ -1,5 +1,5 @@
 /**
- * Subscribe Now → consent gate (ToS §3 + §5) → Railway Checkout Session → Stripe.
+ * Subscribe Now → consent gate (required ToS/disclosures; optional SMS) → Checkout.
  * Monthly is the default; Annual can be selected on the Offers cards.
  */
 (function () {
@@ -82,7 +82,7 @@
     );
     panel.appendChild(
       el("p", { className: "consent-lede" }, [
-        "Two acknowledgments and separate SMS consent are required (Terms §§3 and 5). All boxes start unchecked.",
+        "Two acknowledgments are required (Terms §3). SMS alerts are optional and separate (Terms §5). All boxes start unchecked.",
       ])
     );
 
@@ -101,7 +101,7 @@
     panel.appendChild(
       checkboxRow(
         "ack_sms",
-        'I consent to receive recurring automated <strong>DeltaIQ Alerts</strong> SMS texts about published market-condition observations. Message frequency varies based on market activity. Message and data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help, or email <a href="mailto:support@getdeltaiq.com">support@getdeltaiq.com</a>. Consent is required to receive alert Products because alerts are delivered by text. Opting out of SMS does not by itself cancel billing.'
+        'Would you also like to receive <strong>DeltaIQ Alerts</strong> by SMS? Optional. Recurring automated texts about published market-condition observations. Message frequency varies based on market activity. Message and data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help, or email <a href="mailto:support@getdeltaiq.com">support@getdeltaiq.com</a>. You can finish checkout and use the dashboard without SMS. Opting out of SMS does not by itself cancel billing.'
       )
     );
 
@@ -173,11 +173,11 @@
   function onContinue() {
     var acks = readAcks();
     var err = document.getElementById("deltaiq-consent-error");
-    if (!acks.ack_tos_privacy || !acks.ack_disclosures || !acks.ack_sms) {
+    if (!acks.ack_tos_privacy || !acks.ack_disclosures) {
       if (err) {
         err.hidden = false;
         err.textContent =
-          "Please check all three boxes to continue. Each acknowledgment is required.";
+          "Please check the Terms and Disclosures boxes to continue. SMS is optional.";
       }
       return;
     }
