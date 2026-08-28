@@ -7,7 +7,7 @@
 <meta name="description" content="DeltaIQ is a rules-based publisher of observational SPY/SPX market conditions. Subscribers access full publication on the dashboard; optional SMS only notifies you to sign in when new content is available. Informational and educational only. Not investment advice.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260818a">
+<link rel="stylesheet" href="style.css?v=20260828a">
 </head>
 <body>
 
@@ -51,25 +51,45 @@
             <span class="cond-btn cond-btn-2"></span>
             <span class="cond-btn cond-btn-3"></span>
           </div>
-          <div class="deliver-track">
-            <span class="track-line"></span>
-            <div class="button-alert">
-              <span class="button-alert-ring"></span>
-              <span class="button-alert-label">ALERT</span>
+          <div class="deliver-track deliver-track--dashboard">
+            <span class="track-line track-line--primary"></span>
+            <div class="button-publish">
+              <span class="button-publish-ring"></span>
+              <span class="button-publish-label">PUBLISH</span>
             </div>
-            <div class="phone-target">
-              <svg class="phone-icon" viewBox="0 0 32 48" width="32" height="48" aria-hidden="true">
-                <rect x="2" y="1" width="28" height="46" rx="5" fill="#0e2a47" stroke="#8fa1bc" stroke-width="1.5"/>
-                <rect class="phone-screen" x="6" y="7" width="20" height="28" rx="1.5" fill="#07111f"/>
-                <circle cx="16" cy="41" r="2.2" fill="#8fa1bc"/>
-              </svg>
-              <span class="phone-hit-ring"></span>
-              <span class="sms-chip">Notify</span>
+            <div class="dashboard-target">
+              <div class="dashboard-frame">
+                <div class="dashboard-frame-bar">
+                  <span></span><span></span><span></span>
+                  <em>Subscriber dashboard</em>
+                </div>
+                <div class="dashboard-pub dashboard-pub--live">
+                  <strong>SPY | Bull conditions aligned</strong>
+                  <span>Current SPY $692.14</span>
+                  <small>Observational conditions only</small>
+                </div>
+              </div>
+              <span class="dashboard-hit-ring"></span>
             </div>
           </div>
         </div>
+        <div class="notify-branch">
+          <span class="notify-branch-tag">Optional</span>
+          <span class="track-line track-line--notify"></span>
+          <div class="phone-target phone-target--optional">
+            <svg class="phone-icon" viewBox="0 0 32 48" width="32" height="48" aria-hidden="true">
+              <rect x="2" y="1" width="28" height="46" rx="5" fill="#0e2a47" stroke="#8fa1bc" stroke-width="1.5"/>
+              <rect class="phone-screen" x="6" y="7" width="20" height="28" rx="1.5" fill="#07111f"/>
+              <circle cx="16" cy="41" r="2.2" fill="#8fa1bc"/>
+            </svg>
+            <span class="phone-screen-copy">New content — sign in to view</span>
+            <span class="phone-hit-ring"></span>
+            <span class="sms-chip">Sign in</span>
+          </div>
+          <p class="notify-branch-caption">Text notification only — no ticker or price in SMS</p>
+        </div>
       </div>
-      <p class="coil-caption">Multiple market attributes are evaluated independently. When defined conditions are observed together, the full publication appears on your subscriber dashboard. Optional text messages only prompt you to sign in and view new content.</p>
+      <p class="coil-caption">When defined conditions align, the full publication appears on your subscriber dashboard. Optional texts only prompt you to sign in at My Account — they never repeat SPY or alert detail.</p>
     </div>
   </section>
 
