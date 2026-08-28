@@ -82,7 +82,7 @@
     );
     panel.appendChild(
       el("p", { className: "consent-lede" }, [
-        "Two acknowledgments are required (Terms §3). SMS alerts are optional and separate (Terms §5). All boxes start unchecked.",
+        "Two acknowledgments are required (Terms §3). Optional text notifications are separate (Terms §5). All boxes start unchecked.",
       ])
     );
 
@@ -101,7 +101,7 @@
     panel.appendChild(
       checkboxRow(
         "ack_sms",
-        'Would you also like to receive <strong>DeltaIQ Alerts</strong> by SMS? Optional. Recurring automated texts about published market-condition observations. Message frequency varies based on market activity. Message and data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help, or email <a href="mailto:support@getdeltaiq.com">support@getdeltaiq.com</a>. You can finish checkout and use the dashboard without SMS. Opting out of SMS does not by itself cancel billing.'
+        'Would you also like to receive optional <strong>text notifications</strong> when new subscriber dashboard content is available? Optional. Recurring automated texts prompt you to sign in at <a href="account.html" target="_blank" rel="noopener">My Account</a>; they do not include market or ticker detail. Message frequency varies with publication activity. Message and data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help, or email <a href="mailto:support@getdeltaiq.com">support@getdeltaiq.com</a>. You can finish checkout and use the dashboard without SMS. Opting out of SMS does not by itself cancel billing.'
       )
     );
 
