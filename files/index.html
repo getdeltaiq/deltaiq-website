@@ -7,7 +7,7 @@
 <meta name="description" content="DeltaIQ is a rules-based publisher of observational SPY/SPX market conditions. Subscribers access full publication on the dashboard; optional SMS only notifies you to sign in when new content is available. Informational and educational only. Not investment advice.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260828a">
+<link rel="stylesheet" href="style.css?v=20260828b">
 </head>
 <body>
 
@@ -61,12 +61,13 @@
               <div class="dashboard-frame">
                 <div class="dashboard-frame-bar">
                   <span></span><span></span><span></span>
-                  <em>Subscriber dashboard</em>
+                  <em>Analytics Dashboard</em>
                 </div>
-                <div class="dashboard-pub dashboard-pub--live">
-                  <strong>SPY | Bull conditions aligned</strong>
-                  <span>Current SPY $692.14</span>
-                  <small>Observational conditions only</small>
+                <div class="dashboard-body dashboard-body--live">
+                  <div class="dashboard-mini-chart" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span>
+                  </div>
+                  <small>Full detail after sign-in</small>
                 </div>
               </div>
               <span class="dashboard-hit-ring"></span>
@@ -76,15 +77,11 @@
         <div class="notify-branch">
           <span class="notify-branch-tag">Optional</span>
           <span class="track-line track-line--notify"></span>
-          <div class="phone-target phone-target--optional">
-            <svg class="phone-icon" viewBox="0 0 32 48" width="32" height="48" aria-hidden="true">
-              <rect x="2" y="1" width="28" height="46" rx="5" fill="#0e2a47" stroke="#8fa1bc" stroke-width="1.5"/>
-              <rect class="phone-screen" x="6" y="7" width="20" height="28" rx="1.5" fill="#07111f"/>
-              <circle cx="16" cy="41" r="2.2" fill="#8fa1bc"/>
-            </svg>
-            <span class="phone-screen-copy">New content — sign in to view</span>
-            <span class="phone-hit-ring"></span>
-            <span class="sms-chip">Sign in</span>
+          <div class="notify-publish-target">
+            <div class="phone-shell">
+              <span class="phone-shell-btn">PUBLISH</span>
+            </div>
+            <span class="phone-shell-ring"></span>
           </div>
           <p class="notify-branch-caption">Text notification only — no ticker or price in SMS</p>
         </div>
