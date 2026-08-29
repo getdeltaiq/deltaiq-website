@@ -351,13 +351,14 @@ h1.headline {
   overflow: visible;
 }
 
+/* One midline: 4 checks + PUBLISH start; cluster stacks on the right */
 .signal-rail {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   width: 100%;
   min-height: 148px;
-  padding-top: 18px;
+  padding-top: 8px;
 }
 
 .button-row {
@@ -366,6 +367,7 @@ h1.headline {
   gap: 6px;
   flex: 0 0 auto;
   height: 34px;
+  margin-top: 0;
 }
 
 .cond-btn {
@@ -466,44 +468,42 @@ h1.headline {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 148px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  margin-left: 12px;
-  padding-left: 4%;
+  height: 148px;
+  margin-left: 8px;
 }
 
-.deliver-flow {
-  display: flex;
-  align-items: flex-start;
-  gap: 0;
-  flex: 0 0 auto;
-  position: relative;
-  padding-top: 0;
-}
-
-/* Twin dotted forks: PUBLISH → dashboard + phone at the same beat */
-.track-forks {
-  position: relative;
-  flex: 0 0 68px;
-  width: 68px;
-  height: 118px;
-  margin-top: 14px;
-  z-index: 0;
-}
-
-.track-fork {
+/* Rail under PUBLISH travel path */
+.track-line--primary {
   position: absolute;
   left: 0;
-  top: 20px;
-  width: 68px;
+  right: 168px;
+  top: 17px;
+  height: 2px;
+  background: linear-gradient(90deg, #2a4a6d 0%, rgba(16, 185, 129, 0.65) 100%);
+  border-radius: 2px;
+  z-index: 0;
+  opacity: 0;
+  animation: track-reveal 8s linear infinite;
+}
+
+@keyframes track-reveal {
+  0%, 38% { opacity: 0; }
+  42%, 78% { opacity: 1; }
+  86%, 100% { opacity: 0; }
+}
+
+/* Twin dotted forks at the right end → dashboard + phone together */
+.track-fork {
+  position: absolute;
+  right: 148px;
+  top: 17px;
+  width: 36px;
   height: 2px;
   border: none;
   background-image: repeating-linear-gradient(
     90deg,
-    rgba(16, 185, 129, 0.95) 0 5px,
-    transparent 5px 10px
+    rgba(16, 185, 129, 0.95) 0 4px,
+    transparent 4px 8px
   );
   background-size: 100% 2px;
   background-repeat: no-repeat;
@@ -511,37 +511,36 @@ h1.headline {
   transform-origin: left center;
   animation: fork-reveal 8s linear infinite;
   pointer-events: none;
+  z-index: 0;
 }
 
 .track-fork--dash {
-  transform: rotate(-14deg);
+  transform: rotate(-12deg);
 }
 
 .track-fork--phone {
-  top: 22px;
-  transform: rotate(42deg);
+  transform: rotate(38deg);
   background-image: repeating-linear-gradient(
     90deg,
-    rgba(168, 182, 204, 0.95) 0 5px,
-    transparent 5px 10px
+    rgba(168, 182, 204, 0.95) 0 4px,
+    transparent 4px 8px
   );
 }
 
 @keyframes fork-reveal {
-  0%, 38% { opacity: 0; }
-  44%, 80% { opacity: 1; }
+  0%, 54% { opacity: 0; }
+  58%, 80% { opacity: 1; }
   88%, 100% { opacity: 0; }
 }
 
+/* PUBLISH sits on the same midline as the 4 checks, then travels right */
 .button-publish {
-  position: relative;
-  left: auto;
-  top: auto;
+  position: absolute;
+  left: 0;
+  top: 0;
   z-index: 3;
-  flex: 0 0 auto;
   width: 76px;
   height: 34px;
-  margin-top: 17px;
   border-radius: 8px;
   border: 1px solid #2a4a6d;
   background: linear-gradient(180deg, #1a4a7a 0%, #0e2a47 100%);
@@ -549,7 +548,7 @@ h1.headline {
   display: flex;
   align-items: center;
   justify-content: center;
-  transform: scale(1);
+  transform: translate(0, 0) scale(1);
   animation: publish-travel 8s linear infinite;
 }
 
@@ -573,9 +572,10 @@ h1.headline {
   animation: publish-ring-fire 8s linear infinite;
 }
 
-/* PUBLISH fires in place, then twin forks light the cluster */
+/* After all 4 conditions lock (~36%), PUBLISH fires and travels to the right cluster */
 @keyframes publish-travel {
   0%, 38% {
+    left: 0;
     opacity: 1;
     transform: scale(1);
     border-color: #2a4a6d;
@@ -583,34 +583,31 @@ h1.headline {
     box-shadow: 0 3px 0 #07111f, 0 5px 8px rgba(0, 0, 0, 0.3);
   }
   42%, 46% {
+    left: 0;
     opacity: 1;
     transform: scale(1.1);
     border-color: #10b981;
     background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%);
     box-shadow: 0 0 0 3px rgba(16,185,129,.25), 0 0 28px rgba(16,185,129,.7);
   }
-  52%, 56% {
+  54%, 58% {
+    left: calc(100% - 210px);
     opacity: 1;
     transform: scale(1.04);
     border-color: #10b981;
     background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%);
     box-shadow: 0 0 22px rgba(16,185,129,.6);
   }
-  60%, 62% {
-    opacity: 0.35;
-    transform: scale(0.96);
+  62%, 64% {
+    left: calc(100% - 210px);
+    opacity: 0;
+    transform: scale(0.9);
     border-color: #10b981;
     background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%);
     box-shadow: none;
   }
-  70%, 78% {
-    opacity: 0.55;
-    transform: scale(1);
-    border-color: rgba(16,185,129,.55);
-    background: linear-gradient(180deg, #1a4a7a 0%, #0e2a47 100%);
-    box-shadow: 0 3px 0 #07111f, 0 5px 8px rgba(0, 0, 0, 0.3);
-  }
   86%, 100% {
+    left: 0;
     opacity: 1;
     transform: scale(1);
     border-color: #2a4a6d;
@@ -621,7 +618,7 @@ h1.headline {
 
 @keyframes publish-label-fire {
   0%, 38% { color: #8fa1bc; text-shadow: none; }
-  42%, 56% { color: #fff; text-shadow: 0 0 12px rgba(255,255,255,.7), 0 0 16px rgba(16,185,129,.9); }
+  42%, 58% { color: #fff; text-shadow: 0 0 12px rgba(255,255,255,.7), 0 0 16px rgba(16,185,129,.9); }
   62%, 100% { color: #8fa1bc; text-shadow: none; }
 }
 
@@ -630,22 +627,21 @@ h1.headline {
   44% { opacity: 1; transform: scale(1); }
   48% { opacity: .2; transform: scale(1.2); }
   52% { opacity: 1; transform: scale(1); }
-  56% { opacity: .5; transform: scale(1.05); }
+  58% { opacity: .5; transform: scale(1.05); }
   62%, 100% { opacity: 0; transform: scale(.9); }
 }
 
-/* Packed mid cluster — sits next to PUBLISH, not far right */
+/* Dashboard + optional phone anchored on the right */
 .deliver-cluster {
-  position: relative;
-  left: auto;
-  top: auto;
+  position: absolute;
+  right: 0;
+  top: 0;
   width: 168px;
   z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
-  margin-top: 0;
 }
 
 .dashboard-target {
@@ -748,29 +744,29 @@ h1.headline {
 }
 
 @keyframes dashboard-idle {
-  0%, 52% { filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); border-color: #2a4a6d; }
-  56%, 78% { filter: drop-shadow(0 0 18px rgba(16,185,129,.85)); border-color: #10b981; }
+  0%, 54% { filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); border-color: #2a4a6d; }
+  58%, 78% { filter: drop-shadow(0 0 18px rgba(16,185,129,.85)); border-color: #10b981; }
   86%, 100% { filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); border-color: #2a4a6d; }
 }
 
 @keyframes dashboard-pub-reveal {
-  0%, 52% { opacity: 0.35; transform: translateY(2px); }
-  56%, 78% { opacity: 1; transform: translateY(0); }
+  0%, 54% { opacity: 0.35; transform: translateY(2px); }
+  58%, 78% { opacity: 1; transform: translateY(0); }
   86%, 100% { opacity: 0.35; transform: translateY(2px); }
 }
 
 @keyframes dashboard-bars-pulse {
-  0%, 52% { opacity: 0.45; }
-  56%, 64% { opacity: 1; }
+  0%, 54% { opacity: 0.45; }
+  58%, 64% { opacity: 1; }
   70%, 78% { opacity: 0.9; }
   86%, 100% { opacity: 0.45; }
 }
 
 @keyframes dashboard-hit {
-  0%, 52% { opacity: 0; transform: scale(.92); }
-  56% { opacity: 1; transform: scale(1.02); }
-  62% { opacity: .25; transform: scale(1.12); }
-  70%, 78% { opacity: .85; transform: scale(1.02); }
+  0%, 54% { opacity: 0; transform: scale(.92); }
+  58% { opacity: 1; transform: scale(1.02); }
+  64% { opacity: .25; transform: scale(1.12); }
+  72%, 78% { opacity: .85; transform: scale(1.02); }
   86%, 100% { opacity: 0; transform: scale(.92); }
 }
 
@@ -874,24 +870,23 @@ h1.headline {
   pointer-events: none;
 }
 
-/* Phone lights with dashboard (same fork beat) */
 @keyframes phone-shell-idle {
-  0%, 52% { filter: drop-shadow(0 3px 6px rgba(0,0,0,.3)); border-color: rgba(143,161,188,.45); opacity: 0.55; }
-  56%, 78% { filter: drop-shadow(0 0 8px rgba(143,161,188,.35)); border-color: #8fa1bc; opacity: 0.95; }
+  0%, 54% { filter: drop-shadow(0 3px 6px rgba(0,0,0,.3)); border-color: rgba(143,161,188,.45); opacity: 0.55; }
+  58%, 78% { filter: drop-shadow(0 0 8px rgba(143,161,188,.35)); border-color: #8fa1bc; opacity: 0.95; }
   86%, 100% { filter: drop-shadow(0 3px 6px rgba(0,0,0,.3)); border-color: rgba(143,161,188,.45); opacity: 0.55; }
 }
 
 @keyframes phone-publish-pop {
-  0%, 52% { opacity: 0; transform: scale(0.88); }
-  56%, 78% { opacity: 1; transform: scale(1); }
+  0%, 54% { opacity: 0; transform: scale(0.88); }
+  58%, 78% { opacity: 1; transform: scale(1); }
   86%, 100% { opacity: 0; transform: scale(0.88); }
 }
 
 @keyframes phone-shell-hit {
-  0%, 52% { opacity: 0; transform: scale(0.92); }
-  56% { opacity: 0.55; transform: scale(1.03); }
-  62% { opacity: 0.15; transform: scale(1.08); }
-  70%, 78% { opacity: 0.4; transform: scale(1.02); }
+  0%, 54% { opacity: 0; transform: scale(0.92); }
+  58% { opacity: 0.55; transform: scale(1.03); }
+  64% { opacity: 0.15; transform: scale(1.08); }
+  72%, 78% { opacity: 0.4; transform: scale(1.02); }
   86%, 100% { opacity: 0; transform: scale(0.92); }
 }
 
@@ -899,6 +894,7 @@ h1.headline {
   .cond-btn,
   .cond-btn::before,
   .cond-btn::after,
+  .track-line--primary,
   .track-fork,
   .button-publish,
   .button-publish-label,
@@ -917,8 +913,12 @@ h1.headline {
   }
   .cond-btn::before { opacity: 0; }
   .cond-btn::after { opacity: 1; }
+  .track-line--primary,
   .track-fork { opacity: 1; }
-  .button-publish { opacity: 0; }
+  .button-publish {
+    left: calc(100% - 210px);
+    opacity: 0;
+  }
   .phone-shell {
     border-color: #8fa1bc;
     filter: drop-shadow(0 0 8px rgba(143,161,188,.4));
@@ -937,15 +937,15 @@ h1.headline {
 
 @media (max-width: 640px) {
   .viz-card { padding: 14px 12px 12px; }
-  .signal-rail { min-height: 138px; padding-top: 14px; }
-  .deliver-track { min-height: 138px; }
+  .signal-rail { min-height: 138px; padding-top: 6px; }
+  .deliver-track { height: 138px; }
   .cond-btn { width: 26px; height: 26px; border-radius: 6px; }
   .cond-btn::after { font-size: 11px; }
   .button-row { gap: 5px; }
-  .button-publish { width: 66px; height: 30px; margin-top: 15px; }
+  .button-publish { width: 66px; height: 30px; }
   .button-publish-label { font-size: 9px; letter-spacing: 0.08em; }
-  .track-forks { flex-basis: 44px; width: 44px; height: 100px; margin-top: 14px; }
-  .track-fork { width: 44px; }
+  .track-line--primary { right: 148px; top: 15px; }
+  .track-fork { right: 128px; width: 28px; top: 15px; }
   .deliver-cluster { width: 148px; gap: 8px; }
   .dashboard-target { width: 108px; height: 58px; }
   .phone-optional { margin-left: 6px; }
@@ -954,6 +954,13 @@ h1.headline {
   .phone-shell-btn { min-width: 30px; font-size: 4.5px; }
   .phone-optional-tag { font-size: 11px; }
   .phone-mid-caption { font-size: 7px; }
+  @keyframes publish-travel {
+    0%, 38% { left: 0; opacity: 1; transform: scale(1); border-color: #2a4a6d; background: linear-gradient(180deg, #1a4a7a 0%, #0e2a47 100%); box-shadow: 0 3px 0 #07111f, 0 5px 8px rgba(0,0,0,.3); }
+    42%, 46% { left: 0; opacity: 1; transform: scale(1.08); border-color: #10b981; background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%); box-shadow: 0 0 22px rgba(16,185,129,.65); }
+    54%, 58% { left: calc(100% - 180px); opacity: 1; transform: scale(1.03); border-color: #10b981; background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%); box-shadow: 0 0 18px rgba(16,185,129,.55); }
+    62%, 64% { left: calc(100% - 180px); opacity: 0; transform: scale(0.9); border-color: #10b981; background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%); box-shadow: none; }
+    86%, 100% { left: 0; opacity: 1; transform: scale(1); border-color: #2a4a6d; background: linear-gradient(180deg, #1a4a7a 0%, #0e2a47 100%); box-shadow: 0 3px 0 #07111f, 0 5px 8px rgba(0,0,0,.3); }
+  }
 }
 
 /* ---------- Sections ---------- */
