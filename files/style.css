@@ -473,7 +473,8 @@ h1.headline {
 .track-line--primary {
   position: absolute;
   left: 0;
-  right: 118px;
+  /* Stop at phone mid — fan lines continue to dashboard */
+  right: calc(50% + 28px);
   top: 42%;
   height: 2px;
   transform: translateY(-50%);
@@ -487,6 +488,37 @@ h1.headline {
 @keyframes track-reveal {
   0%, 38% { opacity: 0; }
   42%, 78% { opacity: 1; }
+  86%, 100% { opacity: 0; }
+}
+
+/* Two lines from phone center → dashboard top-left / bottom-left corners */
+.track-fan {
+  position: absolute;
+  left: calc(50% + 22px);
+  width: calc(50% - 140px);
+  min-width: 36px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.7) 0%, rgba(16, 185, 129, 0.35) 100%);
+  border-radius: 2px;
+  z-index: 0;
+  opacity: 0;
+  transform-origin: left center;
+  animation: fan-reveal 8s linear infinite;
+}
+
+.track-fan--top {
+  top: 42%;
+  transform: translateY(-50%) rotate(-18deg);
+}
+
+.track-fan--bot {
+  top: 42%;
+  transform: translateY(-50%) rotate(18deg);
+}
+
+@keyframes fan-reveal {
+  0%, 56% { opacity: 0; }
+  60%, 78% { opacity: 1; }
   86%, 100% { opacity: 0; }
 }
 
@@ -814,6 +846,7 @@ h1.headline {
   .cond-btn::before,
   .cond-btn::after,
   .track-line--primary,
+  .track-fan,
   .button-publish,
   .button-publish-label,
   .button-publish-ring,
@@ -832,6 +865,7 @@ h1.headline {
   .cond-btn::before { opacity: 0; }
   .cond-btn::after { opacity: 1; }
   .track-line--primary { opacity: 1; }
+  .track-fan { opacity: 1; }
   .button-publish {
     left: calc(50% - 38px);
     opacity: 0;
@@ -858,7 +892,14 @@ h1.headline {
   .button-row { gap: 5px; }
   .button-publish { width: 66px; height: 30px; }
   .button-publish-label { font-size: 9px; letter-spacing: 0.08em; }
-  .track-line--primary { right: 104px; }
+  .track-line--primary { right: calc(50% + 24px); }
+  .track-fan {
+    left: calc(50% + 20px);
+    width: calc(50% - 124px);
+    min-width: 28px;
+  }
+  .track-fan--top { transform: translateY(-50%) rotate(-20deg); }
+  .track-fan--bot { transform: translateY(-50%) rotate(20deg); }
   .dashboard-target { width: 104px; }
   .phone-mid { width: 48px; }
   .phone-shell { width: 40px; height: 58px; }
