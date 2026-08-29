@@ -11,26 +11,27 @@
   .evidence h2 { font-size: 18px; margin: 32px 0 12px; }
   .evidence img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; }
   .evidence p, .evidence li { color: var(--text-dim); }
+  .evidence code { display: block; padding: 12px 14px; background: var(--bg-elevated); border-radius: 8px; color: var(--cloud); font-size: 13px; line-height: 1.5; }
 </style>
 </head>
 <body>
 <div class="evidence">
   <p class="section-label">Twilio / A2P</p>
   <h1>DeltaIQ optional SMS opt-in evidence</h1>
-  <p>Public screenshots of the live consent flow at <a href="https://getdeltaiq.com/">https://getdeltaiq.com/</a>. SMS is optional and notifies subscribers to sign in at My Account when new dashboard content is available; texts do not include market or ticker detail.</p>
+  <p>Public screenshots of the live consent flow at <a href="https://getdeltaiq.com/">https://getdeltaiq.com/</a>. SMS is optional and notifies subscribers to sign in at My Account when their dashboard has been updated. Texts do not include market, ticker, price, or publication detail.</p>
   <p>Direct image URLs:</p>
   <ul>
     <li><a href="consent-modal.png">https://getdeltaiq.com/sms-opt-in/consent-modal.png</a></li>
     <li><a href="homepage-consent.png">https://getdeltaiq.com/sms-opt-in/homepage-consent.png</a></li>
   </ul>
   <h2>1. Subscribe consent modal (web-form opt-in)</h2>
-  <p>Shown after Subscribe Now. Three checkboxes start unchecked. The third box is separate optional SMS consent for dashboard notification texts.</p>
+  <p>Shown after Subscribe Now. Three checkboxes start unchecked. The third box is separate optional SMS consent for dashboard sign-in notifications.</p>
   <p><img src="consent-modal.png" alt="DeltaIQ Before you subscribe modal with three unchecked consent checkboxes including optional SMS dashboard notifications"></p>
   <h2>2. Homepage pricing and public SMS disclosures</h2>
   <p>Offers section and the public Text notifications — optional SMS disclosures (#consent).</p>
   <p><img src="homepage-consent.png" alt="DeltaIQ homepage pricing and optional SMS dashboard notification disclosures with STOP and HELP"></p>
   <h2>3. Sample notification message (not sent from this page)</h2>
-  <p><code>DeltaIQ: New subscriber content on your dashboard. Sign in: https://www.getdeltaiq.com/account Reply STOP to opt out, HELP for help.</code></p>
+  <p><code>DeltaIQ: Your dashboard has been updated. Sign in to view: https://www.getdeltaiq.com/account Reply STOP to opt out, HELP for help.</code></p>
 </div>
 </body>
 </html>

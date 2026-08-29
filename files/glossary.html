@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alert Glossary &mdash; DeltaIQ</title>
-<meta name="description" content="How to read DeltaIQ observational publications on your subscriber dashboard: MARKET format with Bull or Bear conditions, Current SPY snapshot, and disclaimer. Optional SMS only prompts you to sign in.">
+<title>Publication Glossary &mdash; DeltaIQ</title>
+<meta name="description" content="How to read DeltaIQ observational publications on your Analytics Dashboard. Optional SMS only prompts you to sign in at My Account — texts do not include publication detail.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260805d">
+<link rel="stylesheet" href="style.css?v=20260829a">
 </head>
 <body>
 
@@ -17,7 +17,7 @@
     <a href="index.html" class="brand">delta<span>iq</span></a>
     <nav class="top-nav">
       <a href="index.html#how-it-works">How it works</a>
-      <a href="glossary.html" aria-current="page">Alert glossary</a>
+      <a href="glossary.html" aria-current="page">Publication glossary</a>
       <a href="disclosures.html">Disclosures</a>
       <a href="privacy.html">Privacy Policy</a>
       <a href="account.html" class="nav-account">My Account</a>
@@ -29,35 +29,47 @@
 
   <section class="glossary-hero" style="border-bottom:none; padding-bottom:24px;">
     <p class="section-label">Guide</p>
-    <h1 class="headline" style="font-size:clamp(26px,4.5vw,36px);">Alert Glossary</h1>
-    <p class="lede" style="margin-bottom:20px;">Full observational publications appear on your <a href="account.html">subscriber dashboard</a> in the same MARKET format for every alert. Optional text messages only notify you to sign in when new content is available; they do not repeat this detail. This page explains what you see on the dashboard and how to read it.</p>
-    <p class="past-note" style="margin-bottom:0;"><em>Alerts describe observed conditions and do not guarantee results. Informational only &mdash; not personalized investment advice.</em></p>
+    <h1 class="headline" style="font-size:clamp(26px,4.5vw,36px);">Publication Glossary</h1>
+    <p class="lede" style="margin-bottom:20px;">DeltaIQ publishes observational content on your <a href="account.html">Analytics Dashboard</a> (sign in via My Account). This page explains the dashboard publication format. Optional text messages are a separate sign-in reminder only &mdash; they never include the publication body below.</p>
+    <p class="past-note" style="margin-bottom:0;"><em>Publications describe observed conditions and do not guarantee results. Informational only &mdash; not personalized investment advice.</em></p>
 
     <nav class="glossary-toc" aria-label="On this page">
-      <a href="#example">Example text</a>
+      <a href="#sms">Optional text</a>
+      <a href="#example">Dashboard example</a>
       <a href="#bull-bear">Bull vs Bear</a>
       <a href="#line-by-line">Line by line</a>
       <a href="#reminders">Reminders</a>
     </nav>
   </section>
 
-  <section id="example">
+  <section id="sms">
     <p class="section-label">01</p>
-    <h2>What a text looks like</h2>
-    <p class="lede">Subscribers receive one standardized MARKET alert whenever defined conditions are observed. Multiple internal rules may contribute; the text you get is always the same three-line format.</p>
+    <h2>Optional text notification</h2>
+    <p class="lede">If you opt in, texts only prompt you to sign in when your dashboard has been updated. They do not include ticker, price, direction, or publication detail.</p>
 
-    <figure class="glossary-sms" aria-label="Example DeltaIQ SMS">
+    <figure class="glossary-sms" aria-label="Example DeltaIQ optional SMS">
+      <pre class="glossary-sms-body">DeltaIQ: Your dashboard has been updated. Sign in to view: https://www.getdeltaiq.com/account Reply STOP to opt out, HELP for help.</pre>
+      <figcaption class="glossary-sms-caption">Sample optional SMS. Full publication detail is on the dashboard after sign-in.</figcaption>
+    </figure>
+  </section>
+
+  <section id="example">
+    <p class="section-label">02</p>
+    <h2>What you see on the dashboard</h2>
+    <p class="lede">When defined conditions are observed, subscribers see one standardized MARKET publication on the Analytics Dashboard. Multiple internal rules may contribute; the dashboard format is the same three-line layout.</p>
+
+    <figure class="glossary-sms" aria-label="Example DeltaIQ dashboard publication">
       <pre class="glossary-sms-body">SPY | Bear conditions aligned
 Current SPY $692.14
 Observational conditions only - not a trade recommendation</pre>
-      <figcaption class="glossary-sms-caption">Example only. Price and direction vary with each observation.</figcaption>
+      <figcaption class="glossary-sms-caption">Dashboard example only. Price and direction vary with each observation. Not sent by SMS.</figcaption>
     </figure>
   </section>
 
   <section id="bull-bear">
-    <p class="section-label">02</p>
+    <p class="section-label">03</p>
     <h2>Bull vs Bear</h2>
-    <p class="lede">The headline uses one of two publication labels for the observed condition set. Neither is a prediction or an instruction to buy or sell.</p>
+    <p class="lede">The dashboard headline uses one of two publication labels for the observed condition set. Neither is a prediction or an instruction to buy or sell.</p>
 
     <div class="glossary-defs" role="list">
       <div class="glossary-def" role="listitem">
@@ -72,11 +84,11 @@ Observational conditions only - not a trade recommendation</pre>
   </section>
 
   <section id="line-by-line">
-    <p class="section-label">03</p>
-    <h2>Line by line</h2>
-    <p class="lede">Each text has three lines and nothing else.</p>
+    <p class="section-label">04</p>
+    <h2>Line by line (dashboard)</h2>
+    <p class="lede">Each dashboard publication has three lines and nothing else.</p>
 
-    <div class="glossary-table" role="table" aria-label="Alert line meanings">
+    <div class="glossary-table" role="table" aria-label="Publication line meanings">
       <div class="glossary-row glossary-row-head" role="row">
         <div role="columnheader">What you see</div>
         <div role="columnheader">What it means</div>
@@ -87,27 +99,26 @@ Observational conditions only - not a trade recommendation</pre>
       </div>
       <div class="glossary-row" role="row">
         <div role="cell"><strong>Current SPY $&hellip;</strong></div>
-        <div role="cell">SPY price snapshot at the moment the alert was sent. Observational context only.</div>
+        <div role="cell">SPY price snapshot at the moment of publication. Observational context only.</div>
       </div>
       <div class="glossary-row" role="row">
         <div role="cell"><strong>Observational conditions only&hellip;</strong></div>
-        <div role="cell">Reminder that the alert describes observed conditions and is not a trade recommendation.</div>
+        <div role="cell">Reminder that the publication describes observed conditions and is not a trade recommendation.</div>
       </div>
     </div>
 
-    <p class="past-note" style="margin-top:20px;"><em>Alerts do not specify entry price, exit price, strike, expiration, contract size, position size, or stop-loss levels.</em></p>
+    <p class="past-note" style="margin-top:20px;"><em>Publications do not specify entry price, exit price, strike, expiration, contract size, position size, or stop-loss levels.</em></p>
   </section>
 
   <section id="reminders" style="border-bottom:none;">
-    <p class="section-label">04</p>
+    <p class="section-label">05</p>
     <h2>A couple of reminders</h2>
     <div class="disclosure-block">
       <ul class="plain">
-        <li><strong>Bull</strong> / <strong>Bear</strong> are publication labels &mdash; not predictions or trade instructions.</li>
-        <li>Message frequency varies with market activity. There is no fixed count per day.</li>
-        <li>Subscriber texts are not sent overnight after the late-day quiet window through the next regular-session open.</li>
-        <li>These alerts are informational and not personalized financial advice. You alone decide what, if anything, to do.</li>
-        <li>Reply <strong>STOP</strong> to opt out of SMS. Opting out of texts stops alert delivery but does not by itself cancel billing &mdash; use <a href="account.html">My Account</a> to manage your subscription.</li>
+        <li><strong>Bull</strong> / <strong>Bear</strong> are dashboard publication labels &mdash; not predictions or trade instructions.</li>
+        <li>Optional SMS frequency varies with how often the dashboard is updated. There is no fixed count per day.</li>
+        <li>Dashboard publications and optional texts are informational and not personalized financial advice. You alone decide what, if anything, to do.</li>
+        <li>Reply <strong>STOP</strong> to opt out of SMS. Opting out stops text notifications but does not by itself cancel billing &mdash; use <a href="account.html">My Account</a> to manage your subscription.</li>
       </ul>
     </div>
     <p style="margin-top:8px;">
