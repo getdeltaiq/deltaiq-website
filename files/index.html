@@ -7,7 +7,7 @@
 <meta name="description" content="DeltaIQ is a rules-based publisher of observational SPY/SPX market conditions. Subscribers access full publication on the dashboard; optional SMS only notifies you to sign in when new content is available. Informational and educational only. Not investment advice.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260828b">
+<link rel="stylesheet" href="style.css?v=20260828c">
 </head>
 <body>
 
@@ -41,7 +41,7 @@
     <div class="viz-card">
       <div class="coil-label">
         <span>SPY · LIVE CONCEPT</span>
-        <span>CONDITIONS → DASHBOARD</span>
+        <span>CONDITIONS → NOTIFY → DASHBOARD</span>
       </div>
       <div class="button-stage" aria-hidden="true">
         <div class="signal-rail">
@@ -51,11 +51,18 @@
             <span class="cond-btn cond-btn-2"></span>
             <span class="cond-btn cond-btn-3"></span>
           </div>
-          <div class="deliver-track deliver-track--dashboard">
+          <div class="deliver-track">
             <span class="track-line track-line--primary"></span>
             <div class="button-publish">
               <span class="button-publish-ring"></span>
               <span class="button-publish-label">PUBLISH</span>
+            </div>
+            <div class="phone-mid">
+              <div class="phone-shell">
+                <span class="phone-shell-btn">PUBLISH</span>
+              </div>
+              <span class="phone-shell-ring"></span>
+              <span class="phone-mid-caption">Text notify only</span>
             </div>
             <div class="dashboard-target">
               <div class="dashboard-frame">
@@ -74,19 +81,8 @@
             </div>
           </div>
         </div>
-        <div class="notify-branch">
-          <span class="notify-branch-tag">Optional</span>
-          <span class="track-line track-line--notify"></span>
-          <div class="notify-publish-target">
-            <div class="phone-shell">
-              <span class="phone-shell-btn">PUBLISH</span>
-            </div>
-            <span class="phone-shell-ring"></span>
-          </div>
-          <p class="notify-branch-caption">Text notification only — no ticker or price in SMS</p>
-        </div>
       </div>
-      <p class="coil-caption">When defined conditions align, the full publication appears on your subscriber dashboard. Optional texts only prompt you to sign in at My Account — they never repeat SPY or alert detail.</p>
+      <p class="coil-caption">When all conditions align, a text notifies you to sign in. Full analytical publication appears on your Analytics Dashboard — texts never include ticker or price detail.</p>
     </div>
   </section>
 
