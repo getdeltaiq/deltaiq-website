@@ -347,16 +347,16 @@ h1.headline {
 }
 
 .button-stage {
-  padding: 12px 0 8px;
-  overflow: hidden;
+  padding: 14px 0 22px;
+  overflow: visible;
 }
 
 .signal-rail {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   width: 100%;
-  min-height: 96px;
+  min-height: 72px;
 }
 
 .button-row {
@@ -364,6 +364,7 @@ h1.headline {
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
+  height: 34px;
 }
 
 .cond-btn {
@@ -464,18 +465,18 @@ h1.headline {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
-  height: 96px;
+  height: 72px;
   display: flex;
   align-items: center;
-  margin-left: 2px;
+  margin-left: 4px;
 }
 
 .track-line--primary {
   position: absolute;
   left: 0;
-  /* Stop at phone mid — fan lines continue to dashboard */
-  right: calc(50% + 28px);
-  top: 42%;
+  /* Stop at left edge of mid-rail phone */
+  right: calc(50% + 26px);
+  top: 50%;
   height: 2px;
   transform: translateY(-50%);
   background: linear-gradient(90deg, #2a4a6d 0%, rgba(16, 185, 129, 0.55) 100%);
@@ -494,9 +495,9 @@ h1.headline {
 /* Two lines from phone center → dashboard top-left / bottom-left corners */
 .track-fan {
   position: absolute;
-  left: calc(50% + 22px);
-  width: calc(50% - 140px);
-  min-width: 36px;
+  left: calc(50% + 24px);
+  width: calc(50% - 150px);
+  min-width: 40px;
   height: 2px;
   background: linear-gradient(90deg, rgba(16, 185, 129, 0.7) 0%, rgba(16, 185, 129, 0.35) 100%);
   border-radius: 2px;
@@ -507,13 +508,13 @@ h1.headline {
 }
 
 .track-fan--top {
-  top: 42%;
-  transform: translateY(-50%) rotate(-18deg);
+  top: 50%;
+  transform: translateY(-50%) rotate(-16deg);
 }
 
 .track-fan--bot {
-  top: 42%;
-  transform: translateY(-50%) rotate(18deg);
+  top: 50%;
+  transform: translateY(-50%) rotate(16deg);
 }
 
 @keyframes fan-reveal {
@@ -525,7 +526,7 @@ h1.headline {
 .button-publish {
   position: absolute;
   left: 0;
-  top: 42%;
+  top: 50%;
   z-index: 3;
   width: 76px;
   height: 34px;
@@ -619,17 +620,15 @@ h1.headline {
   62%, 100% { opacity: 0; transform: scale(.9); }
 }
 
-/* Phone sits mid-rail; lights after PUBLISH arrives */
+/* Phone sits mid-rail on the same midline as conditions + dashboard */
 .phone-mid {
   position: absolute;
   left: 50%;
-  top: 42%;
+  top: 50%;
   transform: translate(-50%, -50%);
-  width: 54px;
+  width: 44px;
+  height: 64px;
   z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
 .phone-shell {
@@ -689,7 +688,10 @@ h1.headline {
 }
 
 .phone-mid-caption {
-  margin-top: 6px;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
   font-family: var(--display);
   font-size: 8px;
   font-weight: 500;
@@ -697,6 +699,7 @@ h1.headline {
   color: #8fa1bc;
   white-space: nowrap;
   opacity: 0.75;
+  pointer-events: none;
 }
 
 @keyframes phone-shell-idle {
@@ -725,16 +728,20 @@ h1.headline {
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  width: 118px;
+  width: 120px;
+  height: 64px;
   z-index: 1;
 }
 
 .dashboard-frame {
+  height: 100%;
   border: 1px solid #2a4a6d;
   border-radius: 8px;
   background: linear-gradient(180deg, #0e2a47 0%, #07111f 100%);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   animation: dashboard-idle 8s linear infinite;
 }
 
@@ -742,9 +749,10 @@ h1.headline {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 7px;
+  padding: 4px 7px;
   border-bottom: 1px solid rgba(143, 161, 188, 0.2);
   background: rgba(255, 255, 255, 0.04);
+  flex: 0 0 auto;
 }
 
 .dashboard-frame-bar span {
@@ -767,9 +775,13 @@ h1.headline {
 }
 
 .dashboard-body {
-  padding: 10px 8px 9px;
+  padding: 6px 8px 5px;
   opacity: 0.35;
   transform: translateY(2px);
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   animation: dashboard-pub-reveal 8s linear infinite;
 }
 
@@ -778,8 +790,8 @@ h1.headline {
   align-items: flex-end;
   justify-content: center;
   gap: 4px;
-  height: 28px;
-  margin-bottom: 6px;
+  height: 22px;
+  margin-bottom: 4px;
 }
 
 .dashboard-mini-chart span {
@@ -900,11 +912,11 @@ h1.headline {
   }
   .track-fan--top { transform: translateY(-50%) rotate(-20deg); }
   .track-fan--bot { transform: translateY(-50%) rotate(20deg); }
-  .dashboard-target { width: 104px; }
-  .phone-mid { width: 48px; }
+  .dashboard-target { width: 108px; height: 58px; }
+  .phone-mid { width: 40px; height: 58px; }
   .phone-shell { width: 40px; height: 58px; }
   .phone-shell-btn { min-width: 30px; font-size: 4.5px; }
-  .phone-mid-caption { font-size: 7px; }
+  .phone-mid-caption { font-size: 7px; top: calc(100% + 6px); }
   @keyframes publish-travel {
     0%, 38% { left: 0; opacity: 1; transform: translate(0, -50%) scale(1); border-color: #2a4a6d; background: linear-gradient(180deg, #1a4a7a 0%, #0e2a47 100%); box-shadow: 0 3px 0 #07111f, 0 5px 8px rgba(0,0,0,.3); }
     42%, 46% { left: 0; opacity: 1; transform: translate(0, -50%) scale(1.08); border-color: #10b981; background: linear-gradient(180deg, #2affc0 0%, #10b981 50%, #0b8f64 100%); box-shadow: 0 0 22px rgba(16,185,129,.65); }
