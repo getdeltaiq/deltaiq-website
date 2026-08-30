@@ -95,7 +95,7 @@
     panel.appendChild(
       checkboxRow(
         "ack_disclosures",
-        'I have read and understand the <a href="disclosures.html" target="_blank" rel="noopener">Important Disclosures</a> and the “We Are Not” disclosures (including that DeltaIQ is a publisher, not an investment adviser, and alerts are not personalized recommendations).'
+        'I have read and understand the <a href="disclosures.html" target="_blank" rel="noopener">Important Disclosures</a> and the “We Are Not” disclosures (including that DeltaIQ is a publisher, not an investment adviser, and publications that analyze market conditions are not personalized recommendations).'
       )
     );
     panel.appendChild(
