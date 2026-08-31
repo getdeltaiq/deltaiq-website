@@ -30,8 +30,20 @@
   <h2>2. Homepage pricing and public SMS disclosures</h2>
   <p>Offers section and the public Text notifications — optional SMS disclosures (#consent).</p>
   <p><img src="homepage-consent.png" alt="DeltaIQ homepage pricing and optional SMS dashboard notification disclosures with STOP and HELP"></p>
-  <h2>3. Sample notification message (not sent from this page)</h2>
-  <p><code>DeltaIQ: New publication available. Sign in to view: https://www.getdeltaiq.com/account Reply STOP to opt out, HELP for help.</code></p>
+  <h2>3. Welcome / confirmation SMS (sent once on opt-in)</h2>
+  <p>Automated outbound text immediately after affirmative opt-in at checkout or in My Account. Includes program description, message frequency, Msg&amp;data rates, STOP, and HELP.</p>
+  <p><code>DeltaIQ: Welcome! You'll receive occasional texts prompting you to sign in when new dashboard content is available. Frequency varies with publication activity. Msg&amp;data rates may apply. Reply STOP to opt out, HELP for help. Account: https://www.getdeltaiq.com/account</code></p>
+  <h2>4. Publication notification SMS (recurring)</h2>
+  <p>Dashboard call-to-action only — no market, ticker, price, or publication detail in the text.</p>
+  <p><code>DeltaIQ: New publication available. Sign in to view: https://www.getdeltaiq.com/account Msg&amp;data rates may apply. Reply STOP to opt out, HELP for help.</code></p>
+  <h2>5. Inbound STOP auto-reply</h2>
+  <p>Subscriber texts STOP (or UNSUBSCRIBE, etc.). Opts out of texts only; subscription billing continues until cancel in My Account.</p>
+  <p><code>DeltaIQ: You're unsubscribed from texts. Subscription billing is unchanged — cancel anytime at https://www.getdeltaiq.com/account</code></p>
+  <h2>6. Inbound HELP auto-reply</h2>
+  <p>Subscriber texts HELP. Auto-reply includes review message and support contact; support also receives an email at support@getdeltaiq.com.</p>
+  <p><code>DeltaIQ: We are currently reviewing your question/concern. Dashboard sign-in alerts only. Support: support@getdeltaiq.com Account: https://www.getdeltaiq.com/account Reply STOP to opt out.</code></p>
+  <h2>7. Inbound webhook (production)</h2>
+  <p>Twilio POSTs inbound SMS to <code>https://deltaiq-signal-engine-production.up.railway.app/api/twilio/inbound</code> (configured on the sending long code).</p>
 </div>
 </body>
 </html>
