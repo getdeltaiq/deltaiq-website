@@ -101,7 +101,7 @@
     panel.appendChild(
       checkboxRow(
         "ack_sms",
-        'Would you also like to receive optional <strong>text notifications</strong> when new subscriber dashboard content is available? Optional. Recurring automated texts prompt you to sign in at <a href="account.html" target="_blank" rel="noopener">My Account</a>; they do not include market or ticker detail. Message frequency varies with publication activity. Message and data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help, or email <a href="mailto:support@getdeltaiq.com">support@getdeltaiq.com</a>. You can finish checkout and use the dashboard without SMS. Opting out of SMS does not by itself cancel billing.'
+        'Would you also like to receive optional <strong>text notifications</strong> when new subscriber dashboard content is available? Optional. Recurring automated texts prompt you to sign in at <a href="account.html" target="_blank" rel="noopener">My Account</a>; they do not include market or ticker detail. Message frequency varies with publication activity. Message and data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help, or email <a href="mailto:support@getdeltaiq.com">support@getdeltaiq.com</a>. No mobile information or SMS consent is shared with third parties or affiliates for marketing or promotional purposes. <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a>. You can finish checkout and use the dashboard without SMS. Opting out of SMS does not by itself cancel billing.'
       )
     );
 
@@ -243,6 +243,11 @@
   });
 
   setPlan(selectedPlan());
+
+  // Public reviewer URL: https://getdeltaiq.com/?sms-consent=1 opens the live modal.
+  if (/(?:^|[?&])sms-consent=1(?:&|$)/.test(location.search) || location.hash === "#sms-consent") {
+    openModal(document.querySelector("[data-checkout-start]"));
+  }
 
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && modalEl && !modalEl.hasAttribute("hidden")) {
