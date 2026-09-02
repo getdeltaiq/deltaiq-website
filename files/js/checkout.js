@@ -8,6 +8,8 @@
 
   var modalEl = null;
   var pendingBtn = null;
+  var SMS_PHONE_KEY = "deltaiq_sms_phone";
+  var SMS_ACK_KEY = "deltaiq_ack_sms";
 
   function selectedPlan() {
     var checked = document.querySelector('input[name="plan"]:checked');
@@ -38,6 +40,7 @@
       Object.keys(attrs).forEach(function (k) {
         if (k === "className") node.className = attrs[k];
         else if (k === "html") node.innerHTML = attrs[k];
+        else if (k === "style") node.style.cssText = attrs[k];
         else if (k.slice(0, 2) === "on") node.addEventListener(k.slice(2).toLowerCase(), attrs[k]);
         else node.setAttribute(k, attrs[k]);
       });
@@ -101,9 +104,24 @@
     panel.appendChild(
       checkboxRow(
         "ack_sms",
-        'Would you also like to receive optional <strong>text notifications</strong> when new subscriber dashboard content is available? Optional. Recurring automated texts prompt you to sign in at <a href="account.html" target="_blank" rel="noopener">My Account</a>; they do not include market or ticker detail. Message frequency varies with publication activity. Message and data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help, or email <a href="mailto:support@getdeltaiq.com">support@getdeltaiq.com</a>. You can finish checkout and use the dashboard without SMS. Opting out of SMS does not by itself cancel billing.'
+        'By providing your number, you agree to receive automated publication reminders via SMS from DeltaIQ. Optional. Recurring texts prompt you to sign in at <a href="account.html" target="_blank" rel="noopener">My Account</a> when new dashboard content is available; they do not include market or ticker detail. Message frequency varies. Msg &amp; data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help. No mobile information will be shared with third parties/affiliates for marketing/promotional purposes. <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a>. You can finish checkout without SMS.'
       )
     );
+
+    var phoneWrap = el("div", { className: "sms-form", style: "margin:0 0 16px;max-width:none;" });
+    phoneWrap.appendChild(el("label", { className: "sms-label", for: "sms_phone" }, ["Mobile phone number"]));
+    phoneWrap.appendChild(
+      el("input", {
+        className: "pay-input",
+        type: "tel",
+        id: "sms_phone",
+        name: "sms_phone",
+        autocomplete: "tel",
+        inputmode: "tel",
+        placeholder: "(555) 555-5555",
+      })
+    );
+    panel.appendChild(phoneWrap);
 
     var err = el("p", { className: "consent-error", id: "deltaiq-consent-error", hidden: "hidden" });
     panel.appendChild(err);
@@ -138,8 +156,30 @@
     return modalEl;
   }
 
+  function storedPhone() {
+    var field = document.getElementById("sms-phone");
+    if (field && field.value.trim()) return field.value.trim();
+    try {
+      return sessionStorage.getItem(SMS_PHONE_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function persistSmsFromPageForm() {
+    var form = document.querySelector("[data-sms-signup-form]");
+    if (!form) return;
+    var phone = form.querySelector('[name="phone"]');
+    var box = form.querySelector('[name="sms_consent"]');
+    try {
+      if (phone && phone.value.trim()) sessionStorage.setItem(SMS_PHONE_KEY, phone.value.trim());
+      sessionStorage.setItem(SMS_ACK_KEY, box && box.checked ? "1" : "0");
+    } catch (e) {}
+  }
+
   function openModal(btn) {
     pendingBtn = btn;
+    persistSmsFromPageForm();
     var m = ensureModal();
     m.removeAttribute("hidden");
     document.body.classList.add("consent-modal-open");
@@ -152,6 +192,15 @@
       var box = document.getElementById(id);
       if (box) box.checked = false;
     });
+    var homeSms = document.getElementById("sms-consent-box");
+    var smsBox = document.getElementById("ack_sms");
+    var phone = document.getElementById("sms_phone");
+    var fromForm = !!(homeSms && homeSms.checked);
+    try {
+      fromForm = fromForm || sessionStorage.getItem(SMS_ACK_KEY) === "1";
+    } catch (e) {}
+    if (smsBox && fromForm) smsBox.checked = true;
+    if (phone) phone.value = storedPhone();
   }
 
   function closeModal() {
@@ -162,11 +211,13 @@
   }
 
   function readAcks() {
+    var phoneEl = document.getElementById("sms_phone");
     return {
       ack_tos_privacy: !!(document.getElementById("ack_tos_privacy") || {}).checked,
       ack_disclosures: !!(document.getElementById("ack_disclosures") || {}).checked,
       ack_sms: !!(document.getElementById("ack_sms") || {}).checked,
       ack_age_us: !!(document.getElementById("ack_tos_privacy") || {}).checked,
+      phone: phoneEl ? String(phoneEl.value || "").trim() : storedPhone(),
     };
   }
 
@@ -178,6 +229,14 @@
         err.hidden = false;
         err.textContent =
           "Please check the Terms and Disclosures boxes to continue. SMS is optional.";
+      }
+      return;
+    }
+    if (acks.ack_sms && !acks.phone) {
+      if (err) {
+        err.hidden = false;
+        err.textContent =
+          "Enter your mobile number to opt in to SMS, or leave the SMS box unchecked.";
       }
       return;
     }
@@ -204,6 +263,7 @@
         ack_disclosures: !!acks.ack_disclosures,
         ack_sms: !!acks.ack_sms,
         ack_age_us: !!acks.ack_age_us,
+        phone: acks.phone || "",
       }),
     })
       .then(function (res) {
@@ -242,7 +302,34 @@
     openModal(target);
   });
 
+  document.addEventListener("submit", function (e) {
+    var form = e.target.closest("[data-sms-signup-form]");
+    if (!form) return;
+    e.preventDefault();
+    var phone = (form.querySelector('[name="phone"]') || {}).value || "";
+    var box = form.querySelector('[name="sms_consent"]');
+    if (!box || !box.checked) {
+      alert("Check the SMS box to opt in, or use Subscribe Now without SMS.");
+      return;
+    }
+    if (!String(phone).trim()) {
+      alert("Enter your mobile phone number to opt in to SMS.");
+      return;
+    }
+    try {
+      sessionStorage.setItem(SMS_PHONE_KEY, String(phone).trim());
+      sessionStorage.setItem(SMS_ACK_KEY, "1");
+    } catch (err) {}
+    var start = document.querySelector("[data-checkout-start]");
+    openModal(start || null);
+  });
+
   setPlan(selectedPlan());
+
+  // Public reviewer URL: https://getdeltaiq.com/?sms-consent=1 opens the live modal.
+  if (/(?:^|[?&])sms-consent=1(?:&|$)/.test(location.search) || location.hash === "#sms-consent") {
+    openModal(document.querySelector("[data-checkout-start]"));
+  }
 
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && modalEl && !modalEl.hasAttribute("hidden")) {

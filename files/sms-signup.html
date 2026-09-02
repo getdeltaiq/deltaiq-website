@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMS signup &mdash; DeltaIQ publication reminders</title>
+<meta name="description" content="Opt in to optional DeltaIQ SMS publication reminders. Enter your mobile number and check the unchecked consent box. Privacy Policy and Terms of Service are linked under the form.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=20260902c">
+</head>
+<body>
+
+<div class="chrome-bar">
+  <div class="chrome-inner">
+    <div class="chrome-dots"><span></span><span></span><span></span></div>
+    <a href="index.html" class="brand">delta<span>iq</span></a>
+    <nav class="top-nav">
+      <a href="index.html#how-it-works">How it works</a>
+      <a href="glossary.html">Publication glossary</a>
+      <a href="disclosures.html">Disclosures</a>
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="account.html" class="nav-account">My Account</a>
+    </nav>
+  </div>
+</div>
+
+<div class="wrap">
+  <section style="border-bottom:none;">
+    <p class="section-label">Optional SMS</p>
+    <h1 class="headline" style="font-size:clamp(26px,4.5vw,36px);">Publication SMS signup</h1>
+    <p class="lede">This is the public subscription page for optional DeltaIQ text reminders. Enter your mobile number and check the box (it starts unchecked). Then continue to subscribe. SMS is not required to buy or use the dashboard.</p>
+
+    <div class="disclosure-block">
+      <form class="sms-form" id="sms-opt-in-form" data-sms-signup-form action="index.html#pricing" method="get">
+        <label class="sms-label" for="sms-phone">Mobile phone number</label>
+        <input class="pay-input" type="tel" id="sms-phone" name="phone" required autocomplete="tel" inputmode="tel" placeholder="(555) 555-5555">
+        <div class="sms-check-row">
+          <input type="checkbox" id="sms-consent-box" name="sms_consent" value="1" required>
+          <label for="sms-consent-box">By providing your number, you agree to receive automated publication reminders via SMS from DeltaIQ. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help.</label>
+        </div>
+        <p class="sms-under"><a href="privacy.html">Privacy Policy</a> &middot; <a href="terms.html">Terms of Service</a> are displayed directly underneath this form. No mobile information will be shared with third parties/affiliates for marketing/promotional purposes. Text messaging originator opt-in data and consent will not be shared with any third parties.</p>
+        <button type="submit" class="btn-primary">Continue to subscribe</button>
+      </form>
+    </div>
+
+    <p class="past-note">Already subscribed? Enable SMS in <a href="account.html">My Account</a>. Program evidence for carriers: <a href="sms-opt-in/">sms-opt-in</a>.</p>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-links">
+      <a href="account.html">My Account</a>
+      <a href="index.html#pricing">Pricing</a>
+      <a href="sms-signup.html">SMS signup</a>
+      <a href="terms.html">Terms of Service</a>
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="disclosures.html">Disclosures</a>
+    </div>
+    <p class="disclaimer">DeltaIQ is a publisher of market-condition information and is not a registered investment adviser. Operated by DeltaIQ, LLC.</p>
+  </div>
+</footer>
+
+<script src="js/checkout.js?v=20260902c"></script>
+</body>
+</html>

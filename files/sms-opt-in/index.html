@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMS opt-in evidence &mdash; DeltaIQ</title>
-<link rel="stylesheet" href="../style.css">
+<meta name="description" content="Public A2P 10DLC evidence for DeltaIQ optional SMS: website URL, Privacy Policy, Terms of Service, hosted screenshots, and message_flow.">
+<link rel="stylesheet" href="../style.css?v=20260902c">
 <style>
   .evidence { max-width: 960px; margin: 0 auto; padding: 32px 24px 80px; }
   .evidence h1 { font-size: 28px; margin: 8px 0 12px; }
@@ -12,80 +13,108 @@
   .evidence h3 { font-size: 15px; margin: 20px 0 8px; color: var(--cloud); }
   .evidence img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; }
   .evidence p, .evidence li { color: var(--text-dim); line-height: 1.55; }
-  .evidence code { display: block; padding: 12px 14px; background: var(--bg-elevated); border-radius: 8px; color: var(--cloud); font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+  .evidence code, .evidence pre {
+    display: block; padding: 12px 14px; background: var(--bg-elevated);
+    border-radius: 8px; color: var(--cloud); font-size: 13px; line-height: 1.5;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
   .flow-steps { counter-reset: step; list-style: none; padding: 0; margin: 0 0 24px; }
   .flow-steps li { counter-increment: step; margin: 0 0 14px; padding-left: 2.2em; position: relative; }
-  .flow-steps li::before { content: counter(step); position: absolute; left: 0; font-weight: 600; color: var(--accent); }
+  .flow-steps li::before { content: counter(step); position: absolute; left: 0; font-weight: 600; color: var(--emerald); }
   .mock-panel { border: 1px solid var(--border); border-radius: 10px; padding: 20px; background: var(--bg-elevated); margin: 16px 0; }
   .mock-title { font-size: 18px; font-weight: 600; margin: 0 0 8px; color: var(--cloud); }
   .mock-row { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0; font-size: 14px; color: var(--text-dim); }
   .mock-row input { margin-top: 4px; flex-shrink: 0; }
   .legal-links { margin: 16px 0; padding: 14px; border-radius: 8px; background: var(--bg-elevated); border: 1px solid var(--border); }
-  .legal-links a { color: var(--accent); }
+  .legal-links a { color: var(--emerald); }
+  .check-grid { display: grid; gap: 10px; margin: 16px 0 24px; }
+  .check-item { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); font-size: 14px; }
+  .check-item strong { color: var(--cloud); }
+  .ok { color: var(--emerald); }
 </style>
 </head>
 <body>
 <div class="evidence">
-  <p class="section-label">Twilio / A2P</p>
+  <p class="section-label">Twilio / A2P 10DLC &mdash; Error 30896 evidence</p>
   <h1>DeltaIQ optional SMS opt-in evidence</h1>
-  <p>Public documentation of the live web-form opt-in flow. SMS is optional, separate from purchase, and notifies subscribers to sign in at My Account when new dashboard content is available. Texts do not include market, ticker, price, or publication detail.</p>
+  <p>Public, no-login documentation of how end users consent to DeltaIQ SMS. SMS is <strong>optional</strong>, separate from purchase, and sends automated publication reminders that prompt subscribers to sign in at My Account. Texts do not include market, ticker, price, or publication detail. There is <strong>no keyword / text-to-join</strong> path and no paper form.</p>
 
   <div class="legal-links">
-    <strong style="color:var(--cloud)">Legal pages (required disclosures)</strong>
+    <strong style="color:var(--cloud)">30896 required links (all public, no login)</strong>
     <ul class="plain">
-      <li><a href="https://getdeltaiq.com/privacy.html">Privacy Policy</a> — mobile numbers not sold/shared for third-party marketing; message frequency; Msg&amp;data rates may apply</li>
-      <li><a href="https://getdeltaiq.com/terms.html">Terms of Service</a> — Section 5 SMS Notifications</li>
-      <li><a href="https://getdeltaiq.com/#consent">Homepage SMS disclosures</a></li>
+      <li>Publication subscription page (visible phone field + unchecked SMS box): <a href="https://getdeltaiq.com/sms-signup.html">https://getdeltaiq.com/sms-signup.html</a></li>
+      <li>Same form on the homepage: <a href="https://getdeltaiq.com/#consent">https://getdeltaiq.com/#consent</a></li>
+      <li>Live consent modal (Terms + phone field): <a href="https://getdeltaiq.com/?sms-consent=1">https://getdeltaiq.com/?sms-consent=1</a></li>
+      <li>Privacy Policy: <a href="https://getdeltaiq.com/privacy.html">https://getdeltaiq.com/privacy.html</a> &mdash; Text Messaging Data includes the CTIA mobile non-sharing clause</li>
+      <li>Terms of Service: <a href="https://getdeltaiq.com/terms.html">https://getdeltaiq.com/terms.html</a> &mdash; Section 5 SMS Notifications</li>
+      <li>This evidence page: <a href="https://getdeltaiq.com/sms-opt-in/">https://getdeltaiq.com/sms-opt-in/</a></li>
     </ul>
   </div>
 
-  <h2>End-to-end opt-in flow (web form only — no keyword/text-to-join)</h2>
+  <h2>Twilio <code style="display:inline;padding:2px 6px;">message_flow</code> (paste into campaign)</h2>
+  <p>Use this exact text in the campaign Message Flow / Call to Action field. It follows the CTIA step-by-step blueprint: website URL, subscription page, phone field, unchecked box, Privacy Policy and Terms under the form.</p>
+  <pre id="message-flow">End users opt-in by visiting our website at https://getdeltaiq.com/ and navigating to the publication subscription page at https://getdeltaiq.com/sms-signup.html (the same digital form is also displayed on the homepage at https://getdeltaiq.com/#consent). They enter their phone number into a digital form and check an un-checked box explicitly agreeing to receive automated publication reminders via SMS from DeltaIQ. A link to our Privacy Policy (https://getdeltaiq.com/privacy.html) and Terms of Service (https://getdeltaiq.com/terms.html) is displayed directly underneath this form. The form states: “By providing your number, you agree to receive automated publication reminders via SMS from DeltaIQ. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out.” The SMS checkbox cannot be pre-checked. SMS is optional and is not required to purchase. There is no keyword, text-to-join, or offline paper form. After submitting the website form, the user continues to subscribe (required Terms and Disclosures acknowledgments, then Stripe Checkout). Paid subscribers who declined SMS at signup may enable it later in My Account (login required) using the same disclosures; hosted replica: https://getdeltaiq.com/sms-opt-in/my-account-sms.html. Hosted screenshots: subscription form https://getdeltaiq.com/sms-opt-in/sms-signup.png ; homepage form https://getdeltaiq.com/sms-opt-in/homepage-consent.png ; consent modal https://getdeltaiq.com/sms-opt-in/consent-modal.png ; Stripe checkout https://getdeltaiq.com/sms-opt-in/stripe-checkout.png ; My Account enable path https://getdeltaiq.com/sms-opt-in/my-account-sms.png.</pre>
+
+  <h2>30896 / CTIA pre-submission checklist</h2>
+  <div class="check-grid">
+    <div class="check-item"><span class="ok">Covered.</span> <strong>message_flow</strong> is granular: visit website → publication subscription page → enter phone number → check an unchecked box → Privacy Policy and Terms under the form.</div>
+    <div class="check-item"><span class="ok">Covered.</span> <strong>Phone number field</strong> is visible on the public website (no login): https://getdeltaiq.com/sms-signup.html and https://getdeltaiq.com/#consent.</div>
+    <div class="check-item"><span class="ok">Covered.</span> <strong>Consent disclosure</strong> on the form: DeltaIQ brand name, automated publication reminders, message frequency varies, Msg &amp; data rates may apply, Reply STOP to opt out.</div>
+    <div class="check-item"><span class="ok">Covered.</span> <strong>Unchecked box</strong> — the SMS consent checkbox is not pre-checked.</div>
+    <div class="check-item"><span class="ok">Covered.</span> <strong>Privacy Policy</strong> includes: “No mobile information will be shared with third parties/affiliates for marketing/promotional purposes. All the above categories exclude text messaging originator opt-in data and consent; this information will not be shared with any third parties.”</div>
+    <div class="check-item"><span class="ok">Covered.</span> <strong>Sample messages</strong> include the DeltaIQ brand name and Reply STOP to unsubscribe.</div>
+    <div class="check-item"><span class="ok">Covered.</span> Only website opt-in is used. Keyword / text-to-join is not offered, so opt-in keywords stay empty.</div>
+  </div>
+
+  <h2>End-to-end opt-in flow (website form only)</h2>
   <ol class="flow-steps">
-    <li>User visits <a href="https://getdeltaiq.com/">https://getdeltaiq.com/</a> and clicks <strong>Subscribe Now</strong>.</li>
-    <li>A consent modal appears (<strong>Step 1 below</strong>). Three checkboxes start <strong>unchecked</strong>. The third is optional SMS only. User may complete checkout without checking SMS.</li>
-    <li>User continues to Stripe-hosted checkout (<strong>Step 2 below</strong>) and enters email, billing address, and <strong>mobile phone number</strong>. The submit line on Stripe reflects whether SMS was selected on the prior page (Msg&amp;data rates, STOP/HELP).</li>
-    <li>If SMS was selected, DeltaIQ stores <code>ack_sms=true</code> in checkout metadata and sends a one-time welcome SMS after successful checkout.</li>
-    <li>Alternatively, paid subscribers who declined at checkout may enable SMS later in My Account (<strong>Step 3 below</strong>) with the same disclosures.</li>
+    <li>User visits <a href="https://getdeltaiq.com/">https://getdeltaiq.com/</a> and navigates to the publication subscription page <a href="https://getdeltaiq.com/sms-signup.html">https://getdeltaiq.com/sms-signup.html</a> (or the homepage form at <a href="https://getdeltaiq.com/#consent">#consent</a>).</li>
+    <li>User enters a mobile phone number into the digital form. The phone field is visible without login.</li>
+    <li>User checks an <strong>unchecked</strong> box agreeing to receive automated publication reminders via SMS from DeltaIQ. Privacy Policy and Terms of Service links sit directly underneath the form.</li>
+    <li>User continues to subscribe. Required Terms and Disclosures boxes (also unchecked) appear, then Stripe Checkout completes payment. SMS is not required to purchase.</li>
+    <li>Alternatively, paid subscribers who declined SMS at signup may enable it later in My Account (<strong>login-gated</strong>; hosted replica below).</li>
   </ol>
 
-  <h2>Step 1 — Subscribe consent modal (exact live copy)</h2>
-  <p>Rendered on getdeltaiq.com before Stripe. All boxes start unchecked.</p>
-  <div class="mock-panel" role="img" aria-label="Replica of live consent modal">
+  <h2>Step 1 &mdash; Publication subscription page (visible phone field)</h2>
+  <p>Public page reviewers can open with no login: <a href="https://getdeltaiq.com/sms-signup.html">https://getdeltaiq.com/sms-signup.html</a>. Direct screenshot: <a href="https://getdeltaiq.com/sms-opt-in/sms-signup.png">https://getdeltaiq.com/sms-opt-in/sms-signup.png</a></p>
+  <p><img src="sms-signup.png" alt="Screenshot: DeltaIQ publication SMS signup page with mobile phone number field, unchecked SMS consent checkbox, and Privacy Policy and Terms of Service links under the form"></p>
+
+  <h2>Step 1b &mdash; Homepage public form (always visible)</h2>
+  <p>Same digital form at <a href="https://getdeltaiq.com/#consent">https://getdeltaiq.com/#consent</a>. Direct screenshot: <a href="https://getdeltaiq.com/sms-opt-in/homepage-consent.png">https://getdeltaiq.com/sms-opt-in/homepage-consent.png</a></p>
+  <p><img src="homepage-consent.png" alt="Screenshot: homepage Text notifications form with phone number field, unchecked SMS consent checkbox, STOP, HELP, message frequency, message and data rates, Privacy Policy, and Terms of Service"></p>
+
+  <h2>Step 2 &mdash; Subscribe consent modal (exact live copy)</h2>
+  <p>Rendered on getdeltaiq.com before Stripe. All boxes start unchecked. Includes a mobile phone number field. Direct screenshot: <a href="https://getdeltaiq.com/sms-opt-in/consent-modal.png">https://getdeltaiq.com/sms-opt-in/consent-modal.png</a> Live: <a href="https://getdeltaiq.com/?sms-consent=1">https://getdeltaiq.com/?sms-consent=1</a></p>
+  <div class="mock-panel">
     <p class="mock-title">Before you subscribe</p>
     <p style="margin:0 0 14px;font-size:14px;color:var(--text-dim)">Two acknowledgments are required (Terms §3). Optional text notifications are separate (Terms §5). All boxes start unchecked.</p>
-    <div class="mock-row"><input type="checkbox" disabled aria-hidden="true"><span>I agree to the Terms of Service and Privacy Policy, and confirm I am 18+ and a US resident.</span></div>
-    <div class="mock-row"><input type="checkbox" disabled aria-hidden="true"><span>I have read and understand the Important Disclosures and the “We Are Not” disclosures.</span></div>
-    <div class="mock-row"><input type="checkbox" disabled aria-hidden="true"><span><strong>Optional SMS:</strong> Would you also like to receive optional text notifications when new subscriber dashboard content is available? Recurring automated texts prompt you to sign in at My Account; they do not include market or ticker detail. Message frequency varies with publication activity. Message and data rates may apply. Reply STOP to opt out, HELP for help. You can finish checkout without SMS. Opting out of SMS does not cancel billing.</span></div>
+    <div class="mock-row"><input type="checkbox" disabled aria-hidden="true"><span>I have read and agree to the <a href="https://getdeltaiq.com/terms.html">Terms of Service</a> and <a href="https://getdeltaiq.com/privacy.html">Privacy Policy</a>, and I confirm I am at least 18 and a U.S. resident.</span></div>
+    <div class="mock-row"><input type="checkbox" disabled aria-hidden="true"><span>I have read and understand the <a href="https://getdeltaiq.com/disclosures.html">Important Disclosures</a> and the “We Are Not” disclosures (including that DeltaIQ is a publisher, not an investment adviser, and publications that analyze market conditions are not personalized recommendations).</span></div>
+    <div class="mock-row"><input type="checkbox" disabled aria-hidden="true"><span>By providing your number, you agree to receive automated publication reminders via SMS from DeltaIQ. Optional. Recurring texts prompt you to sign in at My Account when new dashboard content is available; they do not include market or ticker detail. Message frequency varies. Msg &amp; data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help. No mobile information will be shared with third parties/affiliates for marketing/promotional purposes. <a href="https://getdeltaiq.com/privacy.html">Privacy Policy</a> · <a href="https://getdeltaiq.com/terms.html">Terms of Service</a>. You can finish checkout without SMS.</span></div>
+    <p style="margin:12px 0 0;font-size:14px;color:var(--cloud)">Mobile phone number</p>
+    <p style="margin:6px 0 0;font-size:13px;color:var(--text-dim)">(555) 555-5555</p>
   </div>
-  <p><img src="consent-modal.png" alt="Screenshot: DeltaIQ consent modal with three unchecked checkboxes"></p>
+  <p><img src="consent-modal.png" alt="Screenshot: DeltaIQ Subscribe Now consent modal with three unchecked checkboxes, optional SMS publication-reminder language, and a mobile phone number field"></p>
 
-  <h2>Step 2 — Stripe checkout (phone number collection)</h2>
-  <p>After the modal, the user is redirected to Stripe Checkout (hosted on <strong>checkout.stripe.com</strong>). The left panel describes the subscription as a rules-based observational SPY/SPX <strong>dashboard publication</strong>; optional SMS is described as a sign-in notification only (no market, ticker, price, or publication detail in texts). Mobile phone number is collected on the right panel.</p>
-  <p>When the user selected optional SMS on getdeltaiq.com, the submit line states: <em>“Start 14-day free trial (brand-new customers). You opted into optional SMS on getdeltaiq.com. Msg&amp;data rates may apply. Reply STOP to opt out, HELP for help.”</em> A separate Stripe checkbox requires agreement to Terms of Service and Privacy Policy (18+, US resident).</p>
-  <p>Direct screenshot: <a href="stripe-checkout.png">https://getdeltaiq.com/sms-opt-in/stripe-checkout.png</a></p>
-  <p><img src="stripe-checkout.png" alt="Screenshot: Stripe Checkout showing DeltaIQ Publication dashboard copy, phone number field, Terms checkbox, and optional SMS submit-line disclosure with Msg and data rates, STOP, and HELP"></p>
+  <h2>Step 3 &mdash; Stripe checkout</h2>
+  <p>After the website form and modal, the user is redirected to Stripe Checkout. Direct screenshot: <a href="https://getdeltaiq.com/sms-opt-in/stripe-checkout.png">https://getdeltaiq.com/sms-opt-in/stripe-checkout.png</a></p>
+  <p>When the user selected optional SMS on getdeltaiq.com, the submit line states: <em>“Start 14-day free trial (brand-new customers). You opted into optional SMS on getdeltaiq.com. Msg&amp;data rates may apply. Reply STOP to opt out, HELP for help.”</em></p>
+  <p><img src="stripe-checkout.png" alt="Screenshot: Stripe Checkout for DeltaIQ showing phone number field, Terms and Privacy checkbox, and optional SMS submit-line disclosure with message and data rates, STOP, and HELP"></p>
 
-  <h2>Step 2b — Homepage public SMS disclosures (always visible)</h2>
-  <p>Public disclosures at <a href="https://getdeltaiq.com/#consent">getdeltaiq.com/#consent</a> (screenshot below).</p>
-  <p><img src="homepage-consent.png" alt="Screenshot: homepage Text notifications optional SMS disclosures with STOP and HELP"></p>
-
-  <h2>Step 3 — My Account SMS enable (secondary web-form path)</h2>
-  <p>Paid subscribers who declined SMS at checkout may opt in later at <a href="https://www.getdeltaiq.com/account">My Account</a> (login required). Profile section shows:</p>
-  <div class="mock-panel" role="img" aria-label="Replica of My Account SMS controls">
-    <p class="mock-title">Text notifications</p>
-    <p style="margin:0 0 10px;font-size:14px;color:var(--text-dim)">Optional SMS notifies you to sign in when new dashboard content is available. Reply STOP on any message to opt out of texts (billing continues until you cancel).</p>
-    <p style="margin:0;font-size:14px;color:var(--text-dim)"><strong>Enable text notifications</strong> — confirmation prompt: “Message frequency varies with market activity. Message and data rates may apply. Reply STOP to opt out, HELP for help.”</p>
-  </div>
+  <h2>Step 4 &mdash; My Account SMS enable (login-gated; hosted screenshot)</h2>
+  <p>Paid subscribers who declined SMS at signup may opt in later at <a href="https://www.getdeltaiq.com/account">https://www.getdeltaiq.com/account</a> (login required). Because reviewers cannot access that page, the exact enable UI is hosted here: <a href="https://getdeltaiq.com/sms-opt-in/my-account-sms.png">https://getdeltaiq.com/sms-opt-in/my-account-sms.png</a> and the public replica <a href="https://getdeltaiq.com/sms-opt-in/my-account-sms.html">https://getdeltaiq.com/sms-opt-in/my-account-sms.html</a>.</p>
+  <p><img src="my-account-sms.png" alt="Screenshot: My Account Text notifications enable control with unchecked SMS consent, message frequency, message and data rates, STOP, HELP, Privacy Policy, and Terms of Service"></p>
 
   <h2>Sample outbound messages</h2>
+  <p>Samples include the DeltaIQ brand name and Reply STOP. They match the publication-reminder use case (not promotional blasts).</p>
   <h3>Welcome (once on opt-in)</h3>
-  <code>DeltaIQ: Welcome! You'll receive occasional texts prompting you to sign in when new dashboard content is available. Frequency varies with publication activity. Msg&data rates may apply. Reply STOP to opt out, HELP for help. Account: https://www.getdeltaiq.com/account</code>
+  <code>DeltaIQ: Welcome! You'll receive occasional texts when your updated publication is ready to read. Frequency varies. Msg&amp;data rates may apply. Reply STOP to unsubscribe. View: https://www.getdeltaiq.com/account</code>
   <h3>Publication notification (recurring)</h3>
-  <code>DeltaIQ: New publication available. Sign in to view: https://www.getdeltaiq.com/account Msg&data rates may apply. Reply STOP to opt out, HELP for help.</code>
+  <code>DeltaIQ: Hello! Your updated publication is now available to read. View it here: https://www.getdeltaiq.com/account Reply STOP to unsubscribe.</code>
   <h3>STOP auto-reply</h3>
-  <code>DeltaIQ: You're unsubscribed from texts. Subscription billing is unchanged — cancel anytime at https://www.getdeltaiq.com/account</code>
+  <code>DeltaIQ: You're unsubscribed from texts. Reply STOP to unsubscribe is confirmed. Subscription billing is unchanged — cancel anytime at https://www.getdeltaiq.com/account</code>
   <h3>HELP auto-reply</h3>
-  <code>DeltaIQ: We are currently reviewing your question/concern. Dashboard sign-in alerts only. Support: support@getdeltaiq.com Account: https://www.getdeltaiq.com/account Reply STOP to opt out.</code>
+  <code>DeltaIQ: Publication reminder texts only. Support: support@getdeltaiq.com Account: https://www.getdeltaiq.com/account Reply STOP to unsubscribe.</code>
 </div>
 </body>
 </html>

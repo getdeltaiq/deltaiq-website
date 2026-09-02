@@ -1337,6 +1337,47 @@ body.consent-modal-open { overflow: hidden; }
 
 .btn-ghost:hover { color: var(--text); border-color: var(--text-faint); }
 
+/* ---------- Public SMS signup form (CTIA / 10DLC visible phone field) ---------- */
+
+.sms-form {
+  margin-top: 18px;
+  max-width: 520px;
+}
+.sms-form .sms-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+}
+.sms-form .pay-input { margin-bottom: 14px; }
+.sms-check-row {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 12px;
+  align-items: start;
+  margin: 0 0 12px;
+}
+.sms-check-row input[type="checkbox"] {
+  margin-top: 4px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--emerald);
+}
+.sms-check-row label {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.sms-under {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.55;
+  margin: 0 0 16px;
+}
+.sms-under a { color: var(--emerald); }
+
 @media (max-width: 640px) {
   /* Keep My Account reachable on small screens; hide secondary nav links. */
   nav.top-nav a:not(.nav-account) { display: none; }
