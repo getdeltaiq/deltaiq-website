@@ -1235,6 +1235,15 @@ ul.plain li::before {
   color: var(--emerald);
 }
 
+.founder-links {
+  margin: 12px 0 0;
+  font-size: 14px;
+}
+
+.founder-links a {
+  color: var(--emerald);
+}
+
 @media (max-width: 640px) {
   .founder-bio {
     flex-direction: column;
