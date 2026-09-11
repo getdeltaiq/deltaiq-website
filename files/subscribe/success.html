@@ -13,9 +13,9 @@
 <div class="chrome-bar">
   <div class="chrome-inner">
     <div class="chrome-dots"><span></span><span></span><span></span></div>
-    <div class="brand"><a href="../index.html" style="color:inherit;text-decoration:none;">delta<span>iq</span></a></div>
+    <div class="brand"><a href="/" style="color:inherit;text-decoration:none;">delta<span>iq</span></a></div>
     <nav class="top-nav">
-      <a href="../account.html" class="nav-account">My Account</a>
+      <a href="/account.html" class="nav-account">My Account</a>
     </nav>
   </div>
 </div>
@@ -26,11 +26,13 @@
     <p class="subhead" id="subhead">Payment details are on file. Continue to choose a password for My Account — you will be signed in automatically after that.</p>
     <div class="cta-row">
       <a class="btn-primary" id="accountCta" href="https://deltaiq-signal-engine-production.up.railway.app/account/login?set_password=1">Create password</a>
-      <a class="link-secondary" href="../index.html">Back to home</a>
+      <a class="link-secondary" href="/">Back to home</a>
     </div>
     <p class="subhead" id="ctaHint" style="margin-top:18px;font-size:.9rem;">A welcome email with the same link is also sent when email delivery is configured.</p>
   </section>
 </div>
+<script src="../js/site-config.js"></script>
+<script src="../js/analytics.js"></script>
 <script>
 (function () {
   var base = "https://deltaiq-signal-engine-production.up.railway.app/account/login";
@@ -41,8 +43,19 @@
     var next = base + "?set_password=1&session_id=" + encodeURIComponent(sid);
     a.href = next;
     hint.textContent = "Continuing to Create password…";
-    // Land on Create password immediately (session_id proves this checkout).
-    location.replace(next);
+    var go = function () {
+      location.replace(next);
+    };
+    if (typeof window.deltaiqTrack === "function") {
+      window.deltaiqTrack("trial_signup", {
+        method: "stripe_checkout",
+        session_present: true,
+      });
+      // Brief delay so GA4 can queue the conversion before redirect.
+      setTimeout(go, 250);
+    } else {
+      go();
+    }
   } else {
     hint.textContent = "Missing checkout session in the URL. Use the Create password link in your welcome email, or contact support@getdeltaiq.com.";
   }

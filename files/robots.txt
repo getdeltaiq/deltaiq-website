@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Account and checkout confirmation pages are intentionally noindex in HTML.
+Disallow: /account.html
+Disallow: /subscribe/
+Disallow: /signup.html
+
+Sitemap: https://getdeltaiq.com/sitemap.xml

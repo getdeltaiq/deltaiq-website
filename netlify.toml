@@ -3,6 +3,13 @@
   publish = "files"
   command = "echo 'static site'"
 
+# Prefer the clean homepage URL over /index.html (duplicate content).
+[[redirects]]
+  from = "/index.html"
+  to = "/"
+  status = 301
+  force = true
+
 [[headers]]
   for = "/js/*"
   [headers.values]
