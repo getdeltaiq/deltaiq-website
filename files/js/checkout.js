@@ -211,6 +211,14 @@
           if (!res.ok || !data.ok || !data.url) {
             throw new Error((data && data.error) || "Checkout unavailable");
           }
+          var plan = selectedPlan();
+          if (typeof window.deltaiqTrack === "function") {
+            window.deltaiqTrack("begin_checkout", {
+              currency: "USD",
+              value: plan === "annual" ? 690 : 69,
+              items: [{ item_id: plan, item_name: "DeltaIQ " + plan }],
+            });
+          }
           window.location.href = data.url;
         });
       })

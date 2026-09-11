@@ -1205,6 +1205,57 @@ ul.plain li::before {
 
 .disclosure-block h3 { margin-bottom: 12px; }
 
+/* ---------- Founder / About ---------- */
+
+.founder-bio {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  margin-top: 8px;
+}
+
+.founder-photo {
+  width: 140px;
+  height: 140px;
+  border-radius: 8px;
+  object-fit: cover;
+  object-position: center 18%;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.founder-role {
+  margin: 0 0 10px;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--emerald);
+}
+
+.founder-links {
+  margin: 12px 0 0;
+  font-size: 14px;
+}
+
+.founder-links a {
+  color: var(--emerald);
+}
+
+@media (max-width: 640px) {
+  .founder-bio {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .founder-photo {
+    width: 120px;
+    height: 120px;
+  }
+}
+
 /* ---------- Legal pages ---------- */
 
 .legal-body h2 {

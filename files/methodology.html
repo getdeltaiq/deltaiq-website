@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Methodology &mdash; How DeltaIQ Evaluates Market Conditions</title>
+<meta name="description" content="High-level overview of DeltaIQ’s rules-based evaluation process for SPY/SPX observational publications — what the model looks at, without proprietary rules.">
+<link rel="canonical" href="https://getdeltaiq.com/methodology.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=20260911a">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "DeltaIQ",
+  "legalName": "DeltaIQ, LLC",
+  "url": "https://getdeltaiq.com/",
+  "email": "support@getdeltaiq.com",
+  "sameAs": [
+    "https://www.linkedin.com/company/deltaiqllc/"
+  ]
+}
+</script>
+</head>
+<body>
+
+<div class="chrome-bar">
+  <div class="chrome-inner">
+    <div class="chrome-dots"><span></span><span></span><span></span></div>
+    <a href="/" class="brand">delta<span>iq</span></a>
+    <nav class="top-nav">
+      <a href="/#how-it-works">How it works</a>
+      <a href="/about.html">About</a>
+      <a href="/glossary.html">Publication glossary</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/account.html" class="nav-account">My Account</a>
+    </nav>
+  </div>
+</div>
+
+<div class="wrap">
+  <section style="border-bottom:none;">
+    <p class="section-label">Methodology</p>
+    <h1 class="headline" style="font-size:clamp(26px,4.5vw,36px);">How DeltaIQ evaluates conditions</h1>
+    <p class="lede">This page describes the evaluation process at a high level. It does not disclose proprietary thresholds, scoring weights, or rule parameters. Publications remain observational &mdash; not recommendations.</p>
+  </section>
+
+  <section>
+    <p class="section-label">Scope</p>
+    <h2>What the model watches</h2>
+    <p class="lede">DeltaIQ focuses on intraday and next-session option market structure in <strong>SPY</strong> and <strong>SPX</strong> (including 0DTE / 1DTE context). The system evaluates observable market attributes on a fixed, automated cycle.</p>
+    <div class="two-col">
+      <div class="card">
+        <h3>Inputs (category level)</h3>
+        <ul class="plain">
+          <li>Price and related spot conditions in the underlyings we cover</li>
+          <li>Market-structure attributes relevant to short-dated option context</li>
+          <li>Third-party market data feeds believed to be reliable</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What we do not do</h3>
+        <ul class="plain">
+          <li>No discretionary override of publication output</li>
+          <li>No personalized rules per subscriber</li>
+          <li>No published &ldquo;buy/sell&rdquo; instructions, strikes, or sizes</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-label">Process</p>
+    <h2>From conditions to publication</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div>
+          <h3>Observe</h3>
+          <p>The system continuously reads defined market attributes from configured data sources.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div>
+          <h3>Evaluate</h3>
+          <p>A fixed ruleset determines when market conditions meet the criteria for a new observational publication.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div>
+          <h3>Publish</h3>
+          <p>The same publication is posted to every subscriber&rsquo;s Analytics Dashboard at the same time. Optional SMS may notify you to sign in; texts do not include market detail.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <div>
+          <h3>Interpret</h3>
+          <p>You read the observation in context. DeltaIQ does not tell you what to trade. See the <a href="/glossary.html">Publication glossary</a> for how to read the dashboard format.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-label">Limits</p>
+    <h2>Important limits</h2>
+    <div class="disclosure-block">
+      <ul class="plain">
+        <li>Rules and thresholds are proprietary and are not published here</li>
+        <li>Historical pattern language, when used, is educational context only</li>
+        <li>Past conditions do not guarantee future results</li>
+        <li>Full legal limitations: <a href="/disclosures.html">Important Disclosures</a></li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-links">
+      <a href="/about.html">About</a>
+      <a href="/methodology.html">Methodology</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/#pricing">Pricing</a>
+      <a href="/glossary.html">Publication glossary</a>
+      <a href="/terms.html">Terms of Service</a>
+      <a href="/privacy.html">Privacy Policy</a>
+      <a href="/disclosures.html">Disclosures</a>
+    </div>
+    <p class="disclaimer">DeltaIQ is a publisher of market-condition information and is not a registered investment adviser, broker-dealer, financial adviser, or investment firm. Content is provided for informational and educational purposes only, does not constitute tax, legal, insurance, or investment advice, and is not an offer or solicitation with respect to any security. Use of DeltaIQ does not create a client, advisory, or fiduciary relationship. You alone are responsible for evaluating the suitability of any investment decision. Options trading involves substantial risk of loss and is not suitable for all investors. Past performance is no guarantee of future results. Market and performance data may be supplied by third parties; DeltaIQ does not guarantee completeness or accuracy. Operated by DeltaIQ, LLC.</p>
+  </div>
+</footer>
+
+<script src="js/site-config.js"></script>
+<script src="js/analytics.js"></script>
+<!-- Cloudflare Web Analytics -->
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "03d72a0962314e1684699e1ff61dcb83"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</body>
+</html>
