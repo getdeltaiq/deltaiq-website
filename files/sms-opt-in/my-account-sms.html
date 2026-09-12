@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Account SMS opt-in (hosted evidence) &mdash; DeltaIQ</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="../style.css?v=20260902c">
+<style>
+  .acct { max-width: 560px; margin: 40px auto; padding: 0 20px 80px; }
+  .acct-card {
+    background: #152238;
+    border: 1px solid #243552;
+    border-radius: 14px;
+    padding: 24px;
+  }
+  .acct-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #8fa3bf; margin: 0 0 8px; }
+  .acct-card h1 { font-size: 22px; margin: 0 0 8px; }
+  .acct-card p { color: #8fa3bf; font-size: 14px; line-height: 1.5; }
+  .sms-row { display: flex; gap: 12px; align-items: flex-start; margin: 18px 0 0; }
+  .sms-row input { margin-top: 4px; width: 16px; height: 16px; flex-shrink: 0; }
+  .sms-row label { font-size: 14px; color: #c5d4ea; line-height: 1.55; }
+  .note { margin-top: 28px; font-size: 13px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="acct">
+  <p class="acct-kicker">Hosted screenshot equivalent &mdash; login-gated My Account path</p>
+  <div class="acct-card" id="sms-enable">
+    <p class="acct-kicker">Text notifications</p>
+    <h1>Enable optional SMS</h1>
+    <p>Optional SMS notifies you to sign in when new dashboard content is available. Texts do not include market, ticker, price, or publication detail. You can use the dashboard without SMS.</p>
+    <label class="sms-label" for="acct-phone" style="display:block;margin:16px 0 8px;font-size:13px;color:#8fa3bf;">Mobile phone number</label>
+    <input class="pay-input" type="tel" id="acct-phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="(555) 555-5555" style="width:100%;box-sizing:border-box;">
+    <div class="sms-row">
+      <input type="checkbox" id="acct-sms" name="acct-sms">
+      <label for="acct-sms">By providing your number, you agree to receive automated publication reminders via SMS from DeltaIQ. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help. No mobile information will be shared with third parties/affiliates for marketing/promotional purposes. <a href="https://getdeltaiq.com/privacy.html">Privacy Policy</a> · <a href="https://getdeltaiq.com/terms.html">Terms of Service</a>. Opting out of SMS does not cancel billing.</label>
+    </div>
+    <p style="margin:12px 0 0;font-size:13px;">Privacy Policy and Terms of Service links are displayed with this form. The SMS checkbox starts unchecked.</p>
+  </div>
+  <p class="note">This page is public evidence for A2P reviewers. The live control appears after sign-in at <a href="https://www.getdeltaiq.com/account">getdeltaiq.com/account</a>. Checkbox starts unchecked. See also <a href="index.html">the full opt-in evidence page</a>.</p>
+</div>
+</body>
+</html>

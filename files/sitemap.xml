@@ -46,6 +46,16 @@
     <priority>0.85</priority>
   </url>
   <url>
+    <loc>https://getdeltaiq.com/sms-signup.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://getdeltaiq.com/sms-opt-in/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://getdeltaiq.com/contact.html</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
