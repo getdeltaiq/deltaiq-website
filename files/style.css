@@ -178,6 +178,21 @@ h1.headline {
   margin-bottom: 56px;
 }
 
+.cta-primary-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.cta-hint {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-faint);
+  letter-spacing: 0.01em;
+}
+
 .btn-primary {
   font-family: var(--display);
   font-size: 14px;
