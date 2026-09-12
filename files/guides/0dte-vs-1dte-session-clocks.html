@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0DTE vs 1DTE: Same-Day vs Next-Session Clocks | DeltaIQ</title>
+<meta name="description" content="How 0DTE and 1DTE differ as calendars for SPY/SPX options — intraday vs next-session context and why labels are not strategies. Educational only — not investment advice.">
+<link rel="canonical" href="https://getdeltaiq.com/guides/0dte-vs-1dte-session-clocks.html">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="DeltaIQ">
+<meta property="og:title" content="0DTE vs 1DTE: same-day vs next-session clocks | DeltaIQ">
+<meta property="og:description" content="How 0DTE and 1DTE differ as calendars for SPY/SPX options — intraday vs next-session context and why labels are not strategies. Educational only — not investment advice.">
+<meta property="og:url" content="https://getdeltaiq.com/guides/0dte-vs-1dte-session-clocks.html">
+<meta property="og:image" content="https://getdeltaiq.com/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="0DTE vs 1DTE: same-day vs next-session clocks | DeltaIQ">
+<meta name="twitter:description" content="How 0DTE and 1DTE differ as calendars for SPY/SPX options — intraday vs next-session context and why labels are not strategies. Educational only — not investment advice.">
+<meta name="twitter:image" content="https://getdeltaiq.com/assets/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css?v=20260912e">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization","name":"DeltaIQ","legalName":"DeltaIQ, LLC","url":"https://getdeltaiq.com/","logo":"https://getdeltaiq.com/apple-touch-icon.png","email":"support@getdeltaiq.com","sameAs":["https://www.linkedin.com/company/deltaiqllc/","https://x.com/getdeltaiq"]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article","headline":"0DTE vs 1DTE: same-day vs next-session clocks","description":"How 0DTE and 1DTE differ as calendars for SPY/SPX options — intraday vs next-session context and why labels are not strategies. Educational only — not investment advice.","url":"https://getdeltaiq.com/guides/0dte-vs-1dte-session-clocks.html","datePublished":"2026-09-12","dateModified":"2026-09-12","author":{"@type":"Person","name":"Timothy Ong","url":"https://getdeltaiq.com/about.html"},"publisher":{"@type":"Organization","name":"DeltaIQ, LLC","url":"https://getdeltaiq.com/"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://getdeltaiq.com/guides/0dte-vs-1dte-session-clocks.html"}}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://getdeltaiq.com/"},{"@type":"ListItem","position":2,"name":"Guides","item":"https://getdeltaiq.com/guides/"},{"@type":"ListItem","position":3,"name":"0DTE vs 1DTE clocks","item":"https://getdeltaiq.com/guides/0dte-vs-1dte-session-clocks.html"}]}
+</script>
+</head>
+<body>
+
+<div class="chrome-bar">
+  <div class="chrome-inner">
+    <div class="chrome-dots"><span></span><span></span><span></span></div>
+    <a href="/" class="brand">delta<span>iq</span></a>
+    <nav class="top-nav">
+      <a href="/#how-it-works">How it works</a>
+      <a href="/about.html">About</a>
+      <a href="/guides/">Guides</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/account.html" class="nav-account">My Account</a>
+    </nav>
+  </div>
+</div>
+
+<div class="wrap">
+  <section style="border-bottom:none; padding-bottom:24px;">
+    <p class="section-label">Guide</p>
+    <h1 class="headline" style="font-size:clamp(26px,4.5vw,36px);">0DTE vs 1DTE: same-day vs next-session clocks</h1>
+    <p class="lede" style="margin-bottom:12px;">Zero-day and one-day labels are calendars. This guide separates the clocks &mdash; and the confusion that often follows &mdash; without turning clocks into trade instructions.</p>
+    <p class="past-note" style="margin-bottom:0;"><em>Educational and informational only. Not investment advice.</em></p>
+    <nav class="glossary-toc" aria-label="On this page">
+      <a href="#calendars">Calendars</a>
+      <a href="#intraday">Intraday vs overnight</a>
+      <a href="#why-both">Why both appear</a>
+      <a href="#time">Time scarcity</a>
+      <a href="#not-calls">Not trade calls</a>
+    </nav>
+  </section>
+
+  <section id="calendars">
+    <p class="section-label">01</p>
+    <h2>Calendar definitions</h2>
+    <div class="two-col">
+      <div class="card"><h3>0DTE</h3><p>Expires on the <strong>same trading day</strong>. The label is a countdown, not a strategy.</p></div>
+      <div class="card"><h3>1DTE</h3><p>Expires on the <strong>next trading session</strong>. Still short-dated; the clock includes an overnight/next-open interval.</p></div>
+    </div>
+    <p>For fuller definitions, see <a href="/guides/what-is-0dte.html">What is 0DTE (and 1DTE)?</a>.</p>
+  </section>
+  <section id="intraday">
+    <p class="section-label">02</p>
+    <h2>Intraday vs overnight / next-open talk</h2>
+    <p class="lede">Because 1DTE still has a session boundary ahead, conversations often mention gap or next-open context. That is a calendar fact people discuss &mdash; not a recommendation to hold or flatten anything.</p>
+  </section>
+  <section id="why-both">
+    <p class="section-label">03</p>
+    <h2>Why both clocks show up in condition language</h2>
+    <p class="lede">Publishers may monitor <strong>intraday and next-session</strong> option market structure because both calendars are active in modern SPY/SPX listings. Referring to both clocks describes the field of observation.</p>
+  </section>
+  <section id="time">
+    <p class="section-label">04</p>
+    <h2>What changes as the clock runs down</h2>
+    <p class="lede">Less time to expiration is a mechanical feature of short-dated options. Educational material often mentions time decay near expiration as a reason for caution and clarity &mdash; not timing cues. See <a href="/guides/short-dated-options-risk-basics.html">Short-dated options risk basics</a>.</p>
+  </section>
+  <section id="not-calls">
+    <p class="section-label">05</p>
+    <h2>Conditions still are not trade calls</h2>
+    <p class="lede">Knowing which clock is in play does not tell you what to buy or sell. See <a href="/guides/market-conditions-vs-trade-alerts.html">Market conditions vs trade alerts</a>.</p>
+  </section>
+
+  <section>
+    <p class="section-label">Related</p>
+    <h2>Keep reading</h2>
+    <ul class="plain">
+      <li><a href="/guides/what-is-0dte.html">What is 0DTE (and 1DTE)?</a></li>
+      <li><a href="/guides/short-dated-options-risk-basics.html">Short-dated options risk basics</a></li>
+      <li><a href="/guides/spy-spx-option-market-structure.html">Option market structure</a></li>
+      <li><a href="/guides/">All guides</a></li>
+      <li><a href="/glossary.html">Publication glossary</a></li>
+      <li><a href="/methodology.html">Methodology</a></li>
+      <li><a href="/disclosures.html">Important disclosures</a></li>
+    </ul>
+    <div class="cta-row" style="margin-top:28px;">
+      <div class="cta-primary-wrap">
+        <a class="btn-primary" href="/#pricing">Start 14-Day Free Trial</a>
+        <p class="cta-hint">New customers · Cancel anytime · Educational only</p>
+      </div>
+      <a href="/guides/" class="link-secondary">All guides →</a>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-links">
+      <a href="/about.html">About</a>
+      <a href="/guides/">Guides</a>
+      <a href="/methodology.html">Methodology</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/#pricing">Pricing</a>
+      <a href="/glossary.html">Publication glossary</a>
+      <a href="/terms.html">Terms of Service</a>
+      <a href="/privacy.html">Privacy Policy</a>
+      <a href="/disclosures.html">Disclosures</a>
+    </div>
+    <p class="disclaimer">DeltaIQ is a publisher of market-condition information and is not a registered investment adviser, broker-dealer, financial adviser, or investment firm. Content is provided for informational and educational purposes only, does not constitute tax, legal, insurance, or investment advice, and is not an offer or solicitation with respect to any security. Use of DeltaIQ does not create a client, advisory, or fiduciary relationship. You alone are responsible for evaluating the suitability of any investment decision. Options trading involves substantial risk of loss and is not suitable for all investors. Past performance is no guarantee of future results. Market and performance data may be supplied by third parties; DeltaIQ does not guarantee completeness or accuracy. Operated by DeltaIQ, LLC.</p>
+  </div>
+</footer>
+
+<script src="../js/site-config.js"></script>
+<script src="../js/analytics.js"></script>
+<!-- Cloudflare Web Analytics -->
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "03d72a0962314e1684699e1ff61dcb83"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</body>
+</html>
