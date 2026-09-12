@@ -21,6 +21,16 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://getdeltaiq.com/guides/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://getdeltaiq.com/guides/spy-vs-spx-0dte.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
     <loc>https://getdeltaiq.com/contact.html</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
