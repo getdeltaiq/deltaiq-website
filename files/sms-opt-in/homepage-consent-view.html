@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Homepage SMS disclosures (hosted screenshot source) &mdash; DeltaIQ</title>
+<link rel="stylesheet" href="../style.css?v=20260902c">
+<style>
+  body { padding: 24px 0 40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="consent" style="border-bottom:none;">
+    <p class="section-label">Consent</p>
+    <h2>Text notifications &mdash; optional SMS</h2>
+    <div class="disclosure-block">
+      <p>SMS is optional and separate from purchase. You can subscribe and use the subscriber dashboard without texting. To opt in, enter your mobile number in the form below and check the unchecked box. You may receive recurring automated texts that notify you when new subscriber dashboard content is available and prompt you to sign in at <a href="../account.html">My Account</a>. Text messages do not include market, ticker, price, or publication detail.</p>
+      <form class="sms-form" id="sms-opt-in-form" action="#" method="get">
+        <label class="sms-label" for="sms-phone">Mobile phone number</label>
+        <input class="pay-input" type="tel" id="sms-phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="(555) 555-5555">
+        <div class="sms-check-row">
+          <input type="checkbox" id="sms-consent-box" name="sms_consent" value="1">
+          <label for="sms-consent-box">By providing your number, you agree to receive automated publication reminders via SMS from DeltaIQ. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help.</label>
+        </div>
+        <p class="sms-under"><a href="../privacy.html">Privacy Policy</a> &middot; <a href="../terms.html">Terms of Service</a> are displayed with this form. No mobile information will be shared with third parties/affiliates for marketing/promotional purposes. Text messaging originator opt-in data and consent will not be shared with any third parties.</p>
+        <button type="button" class="btn-primary">Continue to subscribe</button>
+      </form>
+      <ul class="plain" style="margin-top:18px;">
+        <li>Reply <strong>STOP</strong> at any time to unsubscribe from all messages.</li>
+        <li>Reply <strong>HELP</strong> for assistance, or contact us at <a href="mailto:support@getdeltaiq.com">support@getdeltaiq.com</a>.</li>
+        <li>The SMS checkbox starts unchecked. Declining SMS does not block checkout or dashboard access.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+</body>
+</html>
