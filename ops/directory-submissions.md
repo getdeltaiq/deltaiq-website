@@ -19,7 +19,14 @@ DeltaIQ is a rules-based publisher of observational SPY/SPX market-condition inf
 
 Rules-based SPY/SPX market-condition publisher for 0DTE/1DTE context. Educational only — not investment advice. https://getdeltaiq.com/
 
-## Target directories (operator login required)
+## Submitted (2026-09-12)
+
+| Directory | Status | Notes |
+|-----------|--------|-------|
+| SaaSHub | Submitted — pending free review (up to ~32 days) | Manage: https://www.saashub.com/manage/deltaiq · Expected page after approval: https://www.saashub.com/deltaiq-alternatives |
+| Startup Stash | Submitted — awaiting reply | https://startupstash.com/add-listing/ |
+
+## Remaining (operator login / CAPTCHA usually required)
 
 | Directory | URL | Notes |
 |-----------|-----|-------|
@@ -27,12 +34,11 @@ Rules-based SPY/SPX market-condition publisher for 0DTE/1DTE context. Educationa
 | Capterra | https://www.capterra.com/vendors/sign-up | Software listing |
 | Product Hunt | https://www.producthunt.com/posts/new | Launch listing |
 | AlternativeTo | https://alternativeto.net/account/register | Add alternative |
-| SaaSHub | https://www.saashub.com/submit | Product submit |
 | SourceForge | https://sourceforge.net/software/create-project/ | Software directory |
 | BetaList | https://betalist.com/submit | Startup listing |
 | Indie Hackers | https://www.indiehackers.com/products | Product page |
-| There's An AI For That | N/A | Skip — not an AI tool primary |
 | Curlie | https://curlie.org/docs/en/add.html | Editorial directory |
+| There's An AI For That | N/A | Skip — not an AI-tool primary |
 
 ## Do not claim
 
