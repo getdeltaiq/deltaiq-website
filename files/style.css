@@ -326,7 +326,51 @@ h1.headline {
 .link-secondary:hover { color: var(--emerald); }
 
 
-/* ---------- Hero visual: conditions → phone mid → Analytics Dashboard ---------- */
+/* ---------- Hero: full subscriber dashboard preview ---------- */
+
+.dashboard-preview {
+  margin: 28px 0 8px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+}
+.dashboard-preview-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  background: rgba(14, 42, 71, 0.55);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.dashboard-preview-link {
+  display: block;
+  line-height: 0;
+  text-decoration: none;
+}
+.dashboard-preview-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #0c1222;
+}
+.dashboard-preview-caption {
+  margin: 0;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+/* ---------- Legacy hero visual (kept for other pages if referenced) ---------- */
 
 .viz-card {
   position: relative;

@@ -23,7 +23,7 @@
 <meta name="twitter:image" content="https://getdeltaiq.com/assets/og-image.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260912d">
+<link rel="stylesheet" href="style.css?v=20260912e">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -108,6 +108,7 @@
     <a href="/" class="brand">delta<span>iq</span></a>
     <nav class="top-nav">
       <a href="#how-it-works">How it works</a>
+      <a href="#dashboard-preview">Dashboard</a>
       <a href="/about.html">About</a>
       <a href="/guides/">Guides</a>
       <a href="/glossary.html">Publication glossary</a>
@@ -133,59 +134,28 @@
       <a href="/account.html" class="link-secondary">My Account →</a>
     </div>
 
-    <div class="viz-card">
-      <div class="coil-label">
-        <span>SPY · LIVE CONCEPT</span>
-        <span>CONDITIONS → DASHBOARD</span>
+    <figure class="dashboard-preview" id="dashboard-preview">
+      <div class="dashboard-preview-bar">
+        <span>Subscriber dashboard preview</span>
+        <span>Active publication · Direction + price visible</span>
       </div>
-      <div class="button-stage" aria-hidden="true">
-        <div class="signal-rail">
-          <div class="button-row">
-            <span class="cond-btn cond-btn-0"></span>
-            <span class="cond-btn cond-btn-1"></span>
-            <span class="cond-btn cond-btn-2"></span>
-            <span class="cond-btn cond-btn-3"></span>
-          </div>
-          <div class="deliver-track">
-            <span class="track-line track-line--primary"></span>
-            <span class="track-fork track-fork--dash"></span>
-            <span class="track-fork track-fork--phone"></span>
-            <div class="button-publish">
-              <span class="button-publish-ring"></span>
-              <span class="button-publish-label">PUBLISH</span>
-            </div>
-            <div class="deliver-cluster">
-              <div class="dashboard-target">
-                <div class="dashboard-frame">
-                  <div class="dashboard-frame-bar">
-                    <span></span><span></span><span></span>
-                    <em>Analytics Dashboard</em>
-                  </div>
-                  <div class="dashboard-body dashboard-body--live">
-                    <div class="dashboard-mini-chart" aria-hidden="true">
-                      <span></span><span></span><span></span><span></span>
-                    </div>
-                    <small>Full publication here</small>
-                  </div>
-                </div>
-                <span class="dashboard-hit-ring"></span>
-              </div>
-              <div class="phone-optional">
-                <div class="phone-shell-wrap">
-                  <div class="phone-shell">
-                    <span class="phone-shell-btn">Sign in</span>
-                  </div>
-                  <span class="phone-shell-ring"></span>
-                </div>
-                <em class="phone-optional-tag">Optional</em>
-                <span class="phone-mid-caption">Text ping → My Account</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <p class="coil-caption">When market conditions occur, the full publication appears on your Analytics Dashboard. Optionally, a short text can also ping your phone to sign in at My Account.</p>
-    </div>
+      <a class="dashboard-preview-link" href="/assets/subscriber-dashboard-preview.png" target="_blank" rel="noopener">
+        <img
+          class="dashboard-preview-img"
+          src="/assets/subscriber-dashboard-preview.png"
+          width="1440"
+          height="1100"
+          alt="DeltaIQ subscriber Analytics Dashboard preview showing an active SPY Currently Bull publication with live price. Top alert wording is blurred for this public preview."
+          loading="eager"
+          decoding="async"
+        >
+      </a>
+      <figcaption class="dashboard-preview-caption">
+        Full-page view of the subscriber Analytics Dashboard during an active market-condition publication.
+        Direction and price stay visible; proprietary alert wording at the top is blurred in this preview.
+        Illustrative layout for prospective subscribers &mdash; not a live feed and not investment advice.
+      </figcaption>
+    </figure>
   </section>
 
   <!-- WHAT IS DELTAIQ -->
@@ -277,7 +247,7 @@
     <span id="subscribe" class="anchor-offset" aria-hidden="true"></span>
     <p class="section-label">Pricing</p>
     <h2>Offers</h2>
-    <p class="lede">One publication plan. Subscriber dashboard included; optional text notifications when new content posts. Current list prices below are for reference; the fee that controls is the amount shown at signup and checkout. Already subscribed? Use <a href="/account.html">My Account</a>.</p>
+    <p class="lede">One publication plan. Subscriber dashboard included; optional text notifications when new content posts. Preview the dashboard layout <a href="#dashboard-preview">above</a> before you trial. Current list prices below are for reference; the fee that controls is the amount shown at signup and checkout. Already subscribed? Use <a href="/account.html">My Account</a>.</p>
 
     <div class="plan-grid" role="radiogroup" aria-label="Subscription plan">
       <label class="plan-card is-selected" data-plan-card="monthly">
