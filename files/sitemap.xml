@@ -46,6 +46,31 @@
     <priority>0.85</priority>
   </url>
   <url>
+    <loc>https://getdeltaiq.com/guides/spy-spx-option-market-structure.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://getdeltaiq.com/guides/0dte-vs-1dte-session-clocks.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://getdeltaiq.com/guides/spy-spx-settlement-and-exercise.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://getdeltaiq.com/guides/bull-bear-market-condition-labels.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://getdeltaiq.com/guides/rules-based-vs-discretionary-signals.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
     <loc>https://getdeltaiq.com/sms-signup.html</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>

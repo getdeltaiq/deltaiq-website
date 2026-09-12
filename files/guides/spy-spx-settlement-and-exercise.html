@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPY vs SPX Settlement & Exercise Basics | DeltaIQ</title>
+<meta name="description" content="Educational overview of cash-settled European-style SPX options vs American-style SPY options — settlement and early-exercise concepts. Not investment or tax advice.">
+<link rel="canonical" href="https://getdeltaiq.com/guides/spy-spx-settlement-and-exercise.html">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="DeltaIQ">
+<meta property="og:title" content="Cash settlement vs share delivery: SPX and SPY basics | DeltaIQ">
+<meta property="og:description" content="Educational overview of cash-settled European-style SPX options vs American-style SPY options — settlement and early-exercise concepts. Not investment or tax advice.">
+<meta property="og:url" content="https://getdeltaiq.com/guides/spy-spx-settlement-and-exercise.html">
+<meta property="og:image" content="https://getdeltaiq.com/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Cash settlement vs share delivery: SPX and SPY basics | DeltaIQ">
+<meta name="twitter:description" content="Educational overview of cash-settled European-style SPX options vs American-style SPY options — settlement and early-exercise concepts. Not investment or tax advice.">
+<meta name="twitter:image" content="https://getdeltaiq.com/assets/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css?v=20260912e">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization","name":"DeltaIQ","legalName":"DeltaIQ, LLC","url":"https://getdeltaiq.com/","logo":"https://getdeltaiq.com/apple-touch-icon.png","email":"support@getdeltaiq.com","sameAs":["https://www.linkedin.com/company/deltaiqllc/","https://x.com/getdeltaiq"]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article","headline":"Cash settlement vs share delivery: SPX and SPY basics","description":"Educational overview of cash-settled European-style SPX options vs American-style SPY options — settlement and early-exercise concepts. Not investment or tax advice.","url":"https://getdeltaiq.com/guides/spy-spx-settlement-and-exercise.html","datePublished":"2026-09-12","dateModified":"2026-09-12","author":{"@type":"Person","name":"Timothy Ong","url":"https://getdeltaiq.com/about.html"},"publisher":{"@type":"Organization","name":"DeltaIQ, LLC","url":"https://getdeltaiq.com/"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://getdeltaiq.com/guides/spy-spx-settlement-and-exercise.html"}}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://getdeltaiq.com/"},{"@type":"ListItem","position":2,"name":"Guides","item":"https://getdeltaiq.com/guides/"},{"@type":"ListItem","position":3,"name":"Settlement & exercise","item":"https://getdeltaiq.com/guides/spy-spx-settlement-and-exercise.html"}]}
+</script>
+</head>
+<body>
+
+<div class="chrome-bar">
+  <div class="chrome-inner">
+    <div class="chrome-dots"><span></span><span></span><span></span></div>
+    <a href="/" class="brand">delta<span>iq</span></a>
+    <nav class="top-nav">
+      <a href="/#how-it-works">How it works</a>
+      <a href="/about.html">About</a>
+      <a href="/guides/">Guides</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/account.html" class="nav-account">My Account</a>
+    </nav>
+  </div>
+</div>
+
+<div class="wrap">
+  <section style="border-bottom:none; padding-bottom:24px;">
+    <p class="section-label">Guide</p>
+    <h1 class="headline" style="font-size:clamp(26px,4.5vw,36px);">Cash settlement vs share delivery: SPX and SPY basics</h1>
+    <p class="lede" style="margin-bottom:12px;">SPY and SPX options reference a related equity-index complex but can resolve differently at expiration. Settlement and exercise concepts only &mdash; not tax or trading advice.</p>
+    <p class="past-note" style="margin-bottom:0;"><em>Educational and informational only. Not investment advice.</em></p>
+    <nav class="glossary-toc" aria-label="On this page">
+      <a href="#why">Why it matters</a>
+      <a href="#spx">SPX cash settlement</a>
+      <a href="#spy">SPY share delivery</a>
+      <a href="#clocks">Settlement clocks</a>
+      <a href="#tax">Tax note</a>
+      <a href="#across">Across products</a>
+    </nav>
+  </section>
+
+  <section id="why">
+    <p class="section-label">01</p>
+    <h2>Why settlement shows up in 0DTE searches</h2>
+    <p class="lede">Same broad index complex, different product packaging. Settlement and exercise style are part of that packaging &mdash; and a frequent source of confusion when people compare SPY and SPX.</p>
+  </section>
+  <section id="spx">
+    <p class="section-label">02</p>
+    <h2>Cash-settled index options (SPX)</h2>
+    <p class="lede">SPX options are typically discussed as <strong>cash-settled</strong> and <strong>European-style</strong> (exercise at expiration rather than early). At settlement, the contract resolves to cash rather than delivery of ETF shares.</p>
+    <p>Exchange specifications can change; verify current contract specs with your broker or the exchange.</p>
+  </section>
+  <section id="spy">
+    <p class="section-label">03</p>
+    <h2>ETF options (SPY)</h2>
+    <p class="lede">SPY options are typically discussed as <strong>American-style</strong> on an ETF, which means early exercise is possible in concept and settlement can involve share-delivery mechanics.</p>
+    <p>Orientation language only &mdash; not a recommendation to exercise, assign, or trade either product.</p>
+  </section>
+  <section id="clocks">
+    <p class="section-label">04</p>
+    <h2>Settlement clock vs last-print intuition</h2>
+    <p class="lede">People sometimes mix &ldquo;last trade print&rdquo; intuition with official settlement/fix values. Those can differ by product. Educational takeaway: know which clock a conversation is using.</p>
+  </section>
+  <section id="tax">
+    <p class="section-label">05</p>
+    <h2>Tax note (not advice)</h2>
+    <p class="lede">Tax treatment of index options vs ETF options can differ. This site does not provide tax advice. Consult a qualified tax professional.</p>
+  </section>
+  <section id="across">
+    <p class="section-label">06</p>
+    <h2>Reading conditions across products</h2>
+    <p class="lede">An observational publication about one product&rsquo;s conditions is not automatically the same risk package in another product. See <a href="/guides/spy-vs-spx-0dte.html">SPY vs SPX for 0DTE</a>.</p>
+  </section>
+
+  <section>
+    <p class="section-label">Related</p>
+    <h2>Keep reading</h2>
+    <ul class="plain">
+      <li><a href="/guides/spy-vs-spx-0dte.html">SPY vs SPX for 0DTE options</a></li>
+      <li><a href="/guides/short-dated-options-risk-basics.html">Short-dated options risk basics</a></li>
+      <li><a href="/guides/spy-spx-option-market-structure.html">Option market structure</a></li>
+      <li><a href="/guides/">All guides</a></li>
+      <li><a href="/glossary.html">Publication glossary</a></li>
+      <li><a href="/methodology.html">Methodology</a></li>
+      <li><a href="/disclosures.html">Important disclosures</a></li>
+    </ul>
+    <div class="cta-row" style="margin-top:28px;">
+      <div class="cta-primary-wrap">
+        <a class="btn-primary" href="/#pricing">Start 14-Day Free Trial</a>
+        <p class="cta-hint">New customers · Cancel anytime · Educational only</p>
+      </div>
+      <a href="/guides/" class="link-secondary">All guides →</a>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-links">
+      <a href="/about.html">About</a>
+      <a href="/guides/">Guides</a>
+      <a href="/methodology.html">Methodology</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/#pricing">Pricing</a>
+      <a href="/glossary.html">Publication glossary</a>
+      <a href="/terms.html">Terms of Service</a>
+      <a href="/privacy.html">Privacy Policy</a>
+      <a href="/disclosures.html">Disclosures</a>
+    </div>
+    <p class="disclaimer">DeltaIQ is a publisher of market-condition information and is not a registered investment adviser, broker-dealer, financial adviser, or investment firm. Content is provided for informational and educational purposes only, does not constitute tax, legal, insurance, or investment advice, and is not an offer or solicitation with respect to any security. Use of DeltaIQ does not create a client, advisory, or fiduciary relationship. You alone are responsible for evaluating the suitability of any investment decision. Options trading involves substantial risk of loss and is not suitable for all investors. Past performance is no guarantee of future results. Market and performance data may be supplied by third parties; DeltaIQ does not guarantee completeness or accuracy. Operated by DeltaIQ, LLC.</p>
+  </div>
+</footer>
+
+<script src="../js/site-config.js"></script>
+<script src="../js/analytics.js"></script>
+<!-- Cloudflare Web Analytics -->
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "03d72a0962314e1684699e1ff61dcb83"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</body>
+</html>
