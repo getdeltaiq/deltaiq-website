@@ -24,7 +24,7 @@ Rules-based SPY/SPX market-condition publisher for 0DTE/1DTE context. Educationa
 | Directory | Status | Notes |
 |-----------|--------|-------|
 | SaaSHub | Submitted — pending free review (up to ~32 days) | Manage: https://www.saashub.com/manage/deltaiq · Expected page after approval: https://www.saashub.com/deltaiq-alternatives |
-| Startup Stash | Submitted — awaiting reply | https://startupstash.com/add-listing/ |
+| Startup Stash | Submitted — awaiting reply | Applied via https://startupstash.com/add-listing/ |
 
 ## Remaining (operator login / CAPTCHA usually required)
 
