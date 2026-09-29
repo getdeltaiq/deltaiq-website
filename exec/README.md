@@ -25,6 +25,10 @@ Railway is not the source of this logic. **`engine/` is.** This directory is a c
 | 16-lot held to −$336 | `envelope_hit` on **broker qty**; STC ladder → **market** |
 | Halt cleared on flatten | `on_flatten` refreshes halt; does not clear it |
 | Size | `starter_qty = min(floor(2000 / (ask * 100)), 16)` never cap 8 |
+| CHOPPY / weak / chase still bought | `quality_skip_reason` in `before_bto`; fail closed if fields missing; `chop_size=False` |
+| Trail held 16-lot to −$336 | `apply_manage_result` sets `disable_trail`; `engine_exit_mode=ladder_to_market` |
+| consumed_send_ts [] after flatten | `persist=` INSERT ON CONFLICT; `load_consumed` at boot; never DELETE |
+| 0-for-N never halted until a lift | first-line halt: −$500 or 4 FAILs without `halt_lifted` |
 
 ## Halt (rest of a blown session)
 

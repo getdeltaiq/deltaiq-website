@@ -16,6 +16,7 @@ Direction = Literal["BULL", "BEAR"]
 HaltReason = Literal[
     "none",
     "operator_halt",
+    "session_loss",
     "session_loss_after_lift",
     "consecutive_fail",
 ]
@@ -45,6 +46,33 @@ CONSECUTIVE_FAIL_HALT = 4
 COOLDOWN_AFTER_FAIL_SEC = 480.0
 # Cover-us exits are STC ladder → market. Do not hold a loser on trail.
 ENGINE_EXIT_MODE = "ladder_to_market"
+CHOP_SIZE = False  # 9/29 sized into CHOPPY; refuse instead.
+
+# 2026-09-29 learn (exec still traded these): weak pre-move 1/9 −$160,
+# pre-move 0.50+ 0/5 −$256, chase ≥ $0.50, CHOPPY 0/8 −$297.
+# Overlay skipped some; BTO never saw the flags. Refuse at before_bto.
+PRE_MOVE_WEAK_LO = 0.15
+PRE_MOVE_WEAK_HI = 0.29
+PRE_MOVE_STRONG = 0.50
+CHASE_SPY = 0.50
+SAME_DIR_LOCK_SEC = 1080.0
+
+CONSUMED_CREATE_SQL = """\
+CREATE TABLE IF NOT EXISTS consumed_sends (
+  session_date date NOT NULL,
+  send_ts double precision NOT NULL,
+  dir text NOT NULL,
+  consumed_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (session_date, send_ts)
+);
+"""
+CONSUMED_INSERT_SQL = (
+    "INSERT INTO consumed_sends (session_date, send_ts, dir) "
+    "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING"
+)
+CONSUMED_LOAD_SQL = (
+    "SELECT send_ts, dir FROM consumed_sends WHERE session_date = %s"
+)
 
 
 def starter_qty(ask: float) -> int:
@@ -57,6 +85,38 @@ def starter_qty(ask: float) -> int:
 
 def hhmm_in_window(hhmm: str, start: str, end: str) -> bool:
     return start <= hhmm <= end
+
+
+def quality_skip_reason(
+    *,
+    choppy: bool = False,
+    on_arm_bar: bool = False,
+    pre_move_spy: float | None = None,
+    chase_spy: float | None = None,
+    regime: str | None = None,
+    same_dir_age_sec: float | None = None,
+) -> str | None:
+    """Return a skip code if this send is in a 9/29 losing slice. None = ok to size.
+
+    Missing pre_move/chase is a refuse (skip_quality_unknown). 9/29 BTO
+    defaulted those kwargs off and bought the overlay-skipped tape.
+    """
+    if choppy or (regime or "").strip().upper() == "CHOPPY":
+        return "skip_choppy"
+    if on_arm_bar:
+        return "skip_arm_bar"
+    if pre_move_spy is None or chase_spy is None:
+        return "skip_quality_unknown"
+    mag = abs(pre_move_spy)
+    if PRE_MOVE_WEAK_LO <= mag <= PRE_MOVE_WEAK_HI:
+        return "skip_weak_pre_move"
+    if mag >= PRE_MOVE_STRONG:
+        return "skip_strong_pre_move"
+    if chase_spy >= CHASE_SPY:
+        return "skip_chase"
+    if same_dir_age_sec is not None and same_dir_age_sec < SAME_DIR_LOCK_SEC:
+        return "skip_same_dir_lock"
+    return None
 
 
 def bounce_against(
@@ -145,6 +205,7 @@ class SessionState:
     consumed: dict[float, str] = field(default_factory=dict)
     skipped_dup_submit_n: int = 0
     skip_bounce_n: int = 0
+    skip_quality_n: int = 0
     session_starters_n: int = 0
     pending_entry: bool = False
     inflight: bool = False
@@ -180,19 +241,41 @@ class SessionState:
         return True
 
     def try_consume(
-        self, send_ts: float, direction: Direction, *, count_starter: bool = True
+        self,
+        send_ts: float,
+        direction: Direction,
+        *,
+        count_starter: bool = True,
+        persist=None,
     ) -> bool:
-        """INSERT ON CONFLICT DO NOTHING. Never delete on flatten."""
+        """INSERT ON CONFLICT DO NOTHING. Never delete on flatten.
+
+        persist(session_date, send_ts, direction) -> bool must run
+        CONSUMED_INSERT_SQL and return True only when the row is new.
+        Live 9/29 had consumed_send_ts=[] after a full session.
+        """
         if send_ts in self.consumed:
             self.skipped_dup_submit_n += 1
             self.last_action = "skip_dup_send_ts"
             return False
+        if persist is not None:
+            inserted = persist(self.session_date, send_ts, direction)
+            if not inserted:
+                self.consumed[send_ts] = direction
+                self.skipped_dup_submit_n += 1
+                self.last_action = "skip_dup_send_ts"
+                return False
         self.consumed[send_ts] = direction
         if count_starter:
             self.session_starters_n += 1
             self.last_bto_client_key = f"{send_ts}:{direction}"
             self.pending_entry = True
         return True
+
+    def load_consumed(self, rows) -> None:
+        """Boot: SELECT send_ts, dir FROM consumed_sends WHERE session_date = today."""
+        for send_ts, direction in rows:
+            self.consumed[float(send_ts)] = direction
 
     def on_flatten(self, realized_delta: float, phase: str) -> None:
         """Flatten must NOT un-consume send_ts."""
@@ -209,6 +292,11 @@ class SessionState:
             self.consecutive_fail_n = 0
         self.refresh_halt()
 
+    def _trip_halt(self, reason: HaltReason) -> None:
+        self.session_halt = True
+        self.session_lost_blocks_send = True
+        self.session_halt_reason = reason
+
     def refresh_halt(self) -> None:
         # Once halted this ET date, stay halted. Dashboard flatten must not clear it.
         if self.session_halt or self.session_lost_blocks_send or self.operator_halt:
@@ -217,18 +305,22 @@ class SessionState:
             if self.operator_halt:
                 self.session_halt_reason = "operator_halt"
             elif self.session_halt_reason == "none":
-                self.session_halt_reason = "session_loss_after_lift"
+                self.session_halt_reason = "session_loss"
             return
-        if self.halt_lifted and self.additional_loss_usd() <= -SESSION_LOSS_HALT_USD:
-            self.session_halt = True
-            self.session_lost_blocks_send = True
-            self.session_halt_reason = "session_loss_after_lift"
+        if self.halt_lifted:
+            if self.additional_loss_usd() <= -SESSION_LOSS_HALT_USD:
+                self._trip_halt("session_loss_after_lift")
+                return
+            if self.fails_after_lift_n >= CONSECUTIVE_FAIL_HALT:
+                self._trip_halt("consecutive_fail")
             return
-        if self.halt_lifted and self.fails_after_lift_n >= CONSECUTIVE_FAIL_HALT:
-            self.session_halt = True
-            self.session_lost_blocks_send = True
-            self.session_halt_reason = "consecutive_fail"
+        # 9/29: 0-for-N never tripped halt until a prior lift. First-line stop:
+        # −$500 session cash or 4 consecutive FAILs, no lift required.
+        if self.session_realized_usd <= -SESSION_LOSS_HALT_USD:
+            self._trip_halt("session_loss")
             return
+        if self.consecutive_fail_n >= CONSECUTIVE_FAIL_HALT:
+            self._trip_halt("consecutive_fail")
 
     def apply_broker_session_cash(self, realized_usd: float) -> None:
         """Halt accounting from Tradier option cash (STC proceeds − BTO cost), not engine book."""
@@ -270,26 +362,46 @@ def decide_starter(
     bar_low: float,
     et_hhmm: str,
     ask: float,
+    choppy: bool = False,
+    on_arm_bar: bool = False,
+    pre_move_spy: float | None = None,
+    chase_spy: float | None = None,
+    regime: str | None = None,
+    same_dir_age_sec: float | None = None,
+    persist=None,
 ) -> dict:
     """Single entry point before any Tradier buy_to_open."""
     if not ledger_ok_placeholder():
         pass
     state.refresh_halt()
+    q = quality_skip_reason(
+        choppy=choppy,
+        on_arm_bar=on_arm_bar,
+        pre_move_spy=pre_move_spy,
+        chase_spy=chase_spy,
+        regime=regime,
+        same_dir_age_sec=same_dir_age_sec,
+    )
+    if q is not None:
+        state.try_consume(send_ts, direction, count_starter=False, persist=persist)
+        state.skip_quality_n += 1
+        state.last_action = q
+        return {"action": q, "qty": 0, "post": False}
     if bounce_against(direction, send_spy, spy, bar_high, bar_low, et_hhmm):
-        state.try_consume(send_ts, direction, count_starter=False)
+        state.try_consume(send_ts, direction, count_starter=False, persist=persist)
         state.skip_bounce_n += 1
         state.last_action = "skip_bounce_against"
         return {"action": "skip_bounce_against", "qty": 0, "post": False}
     if not state.may_starter_bto():
         # Consume so an illicit halt lift cannot fire this send later the same day.
-        state.try_consume(send_ts, direction, count_starter=False)
+        state.try_consume(send_ts, direction, count_starter=False, persist=persist)
         state.last_action = "skip_halt_or_inflight"
         return {"action": "skip_halt_or_inflight", "qty": 0, "post": False}
     if send_ts in state.consumed:
         state.skipped_dup_submit_n += 1
         state.last_action = "skip_dup_send_ts"
         return {"action": "skip_dup_send_ts", "qty": 0, "post": False}
-    if not state.try_consume(send_ts, direction):
+    if not state.try_consume(send_ts, direction, persist=persist):
         return {"action": "skip_dup_send_ts", "qty": 0, "post": False}
     qty = starter_qty(ask)
     return {
@@ -324,12 +436,16 @@ def decide_manage(
         ticket_phase=ticket_phase,
     )
     if reason is None:
-        return {
-            "action": "hold",
-            "flatten": False,
-            "override_trail": False,
-            "engine_exit_mode": ENGINE_EXIT_MODE,
-        }
+        return apply_manage_result(
+            state,
+            {
+                "action": "hold",
+                "flatten": False,
+                "override_trail": False,
+                "ignore_trail": False,
+                "engine_exit_mode": ENGINE_EXIT_MODE,
+            },
+        )
     if reason == "protective":
         state.protect_fills_n += 1
     elif reason == "ticket_risk":
@@ -339,17 +455,37 @@ def decide_manage(
     state.last_action = f"flatten_{reason}"
     ladder = stc_ladder_prices(bid)
     state.last_stc_ladder = "market"
+    return apply_manage_result(
+        state,
+        {
+            "action": "flatten",
+            "flatten": True,
+            "reason": reason,
+            "ladder": ladder,
+            "last_stc_ladder": "market",
+            "override_trail": True,
+            "engine_exit_mode": ENGINE_EXIT_MODE,
+            "ignore_trail": True,
+        },
+    )
+
+
+def apply_manage_result(state: SessionState, m: dict) -> dict:
+    """Force cover-us flatten off trail. Live 9/29 still advertised engine_exit_mode=trail."""
     state.engine_exit_mode = ENGINE_EXIT_MODE
-    return {
-        "action": "flatten",
-        "flatten": True,
-        "reason": reason,
-        "ladder": ladder,
-        "last_stc_ladder": "market",
-        "override_trail": True,
-        "engine_exit_mode": ENGINE_EXIT_MODE,
-        "ignore_trail": True,
-    }
+    m["engine_exit_mode"] = ENGINE_EXIT_MODE
+    m["chop_size"] = CHOP_SIZE
+    if m.get("flatten") or m.get("override_trail") or m.get("ignore_trail"):
+        m["use_trail"] = False
+        m["disable_trail"] = True
+        m["trail_armed"] = False
+        m["ignore_trail"] = True
+        m["override_trail"] = True
+        m["take_exit"] = "ladder_to_market"
+    else:
+        m.setdefault("use_trail", False)
+        m.setdefault("disable_trail", False)
+    return m
 
 
 def new_session(session_date: str) -> SessionState:

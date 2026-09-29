@@ -10,8 +10,10 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from engine.shared.gates import (
+    CHOP_SIZE,
     ENGINE_EXIT_MODE,
     SessionState,
+    apply_manage_result,
     decide_manage,
     decide_starter,
     new_session,
@@ -56,7 +58,7 @@ def on_manage(state: SessionState, **kwargs) -> dict:
     If flatten is True, ignore trail and walk STC ladder to market.
     """
     enforce_keep_halt(state)
-    return decide_manage(state, **kwargs)
+    return apply_manage_result(state, decide_manage(state, **kwargs))
 
 
 def before_extra_bto(state: SessionState, **kwargs) -> dict:
@@ -82,8 +84,10 @@ def health_overlay(state: SessionState) -> dict:
         "on_manage": True,
         "bto_requires_new_send": True,
         "skip_bounce_n": state.skip_bounce_n,
+        "skip_quality_n": state.skip_quality_n,
         "consumed_send_ts": list(state.consumed.keys()),
         "consumed_survives_flatten": True,
+        "consumed_never_delete": True,
         "session_starters_n": state.session_starters_n,
         "skipped_dup_submit_n": state.skipped_dup_submit_n,
         "protect_fills_n": state.protect_fills_n,
@@ -91,6 +95,9 @@ def health_overlay(state: SessionState) -> dict:
         "last_stc_ladder": state.last_stc_ladder,
         "engine_exit_mode": ENGINE_EXIT_MODE,
         "override_trail": True,
+        "use_trail": False,
+        "chop_size": CHOP_SIZE,
+        "skip_choppy_is_refuse": True,
         "session_halt": state.session_halt,
         "session_halt_reason": state.session_halt_reason,
         "session_lost_blocks_send": state.session_lost_blocks_send,

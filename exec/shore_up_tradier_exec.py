@@ -37,7 +37,10 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from gates import (
+    CHOP_SIZE,
+    ENGINE_EXIT_MODE,
     SessionState,
+    apply_manage_result,
     decide_manage,
     decide_starter,
     new_session,
@@ -59,6 +62,8 @@ def boot_state(loaded: SessionState | None = None) -> SessionState:
         st.session_lost_blocks_send = True
         st.halt_lifted = True
         st.session_halt_reason = "session_loss_after_lift"
+    st.engine_exit_mode = ENGINE_EXIT_MODE
+    st.refresh_halt()
     return st
 
 
@@ -68,22 +73,34 @@ def before_bto(state: SessionState, **kwargs) -> dict:
 
 
 def on_manage(state: SessionState, **kwargs) -> dict:
-    """Call every manage tick with broker_qty, not intended qty."""
-    return decide_manage(state, **kwargs)
+    """Call every manage tick with broker_qty, not intended qty.
+
+    If flatten is True, ignore trail and walk STC ladder to market.
+    """
+    return apply_manage_result(state, decide_manage(state, **kwargs))
 
 
 def health_overlay(state: SessionState) -> dict:
     return {
         "gates_module": "exec/gates.py",
         "decide_starter": True,
+        "before_bto": True,
+        "on_manage": True,
         "skip_bounce_n": state.skip_bounce_n,
+        "skip_quality_n": state.skip_quality_n,
         "consumed_send_ts": list(state.consumed.keys()),
         "consumed_survives_flatten": True,
+        "consumed_never_delete": True,
         "session_starters_n": state.session_starters_n,
         "skipped_dup_submit_n": state.skipped_dup_submit_n,
         "protect_fills_n": state.protect_fills_n,
         "ticket_risk_hits_n": state.ticket_risk_hits_n,
         "last_stc_ladder": state.last_stc_ladder,
+        "engine_exit_mode": ENGINE_EXIT_MODE,
+        "override_trail": True,
+        "use_trail": False,
+        "chop_size": CHOP_SIZE,
+        "skip_choppy_is_refuse": True,
         "session_halt": state.session_halt,
         "session_halt_reason": state.session_halt_reason,
         "session_lost_blocks_send": state.session_lost_blocks_send,
@@ -109,22 +126,31 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    session_halt = True and session_lost_blocks_send = True while session_date == 2026-09-29.
    No buy_to_open, including recover_lost.
 
-2) BEFORE every starter BTO
+2) BEFORE every starter BTO — pass 9/29 quality fields or it refuses
    from cover_us_hooks import before_bto
    d = before_bto(state,
        send_ts=send_ts, direction=dir, send_spy=send_spy,
        spy=spy_last, bar_high=bar_high, bar_low=bar_low,
-       et_hhmm=et.strftime("%H:%M"), ask=option_ask)
+       et_hhmm=et.strftime("%H:%M"), ask=option_ask,
+       choppy=send.choppy, on_arm_bar=send.on_arm_bar,
+       pre_move_spy=send.pre_move_spy, chase_spy=send.chase_spy,
+       regime=send.regime, same_dir_age_sec=send.same_dir_age_sec,
+       persist=lambda date, ts, direction: _insert_consumed(date, ts, direction))
    if not d["post"]:
        log last_action; return
    place ONE limit BTO qty=d["qty"] client_order_id=d["client_order_id"]
+   Missing pre_move_spy or chase_spy => skip_quality_unknown (fail closed).
+   CHOPPY / weak 0.15–0.29 / strong pre-move ≥0.50 / chase ≥0.50 => no BTO.
+   chop_size must be False. Do not resize into CHOPPY.
 
 3) EVERY manage tick
    from cover_us_hooks import on_manage
    m = on_manage(state, fill_px=fill, mark_bid=bid, qty=BROKER_QTY,
                  spy_adverse=spy_adverse, seconds_since_fill=age,
                  ticket_phase=phase, bid=bid)
-   if m["flatten"]:
+   engine_exit_mode = m["engine_exit_mode"]  # MUST be ladder_to_market, never trail
+   if m["flatten"] or m.get("override_trail") or m.get("ignore_trail"):
+       trail_armed = False
        STC ladder: bid, bid-0.05, bid-0.10, MARKET
        then state.on_flatten(realized, phase)  # MUST NOT delete consumed_sends
 
@@ -134,17 +160,27 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
 5) extra BTO
    only if state.extra_bto_ok(add_qty, mfe, mark_bid, avg_fill)
 
-6) Postgres
-   INSERT INTO consumed_sends ON CONFLICT DO NOTHING inside try_consume.
-   Boot: SELECT send_ts, dir WHERE session_date = today_et.
+6) Postgres (9/29 live consumed_send_ts was [])
+   CREATE TABLE from consumed_sends.sql
+   INSERT INTO consumed_sends ON CONFLICT DO NOTHING inside try_consume persist=.
+   Boot: SELECT send_ts, dir WHERE session_date = today_et; state.load_consumed(rows).
    New ET date: new_session(today); do not carry halt from yesterday unless operator_halt.
+   NEVER DELETE except session_date rollover.
 
-7) /health must include health_overlay(state)
+7) Halt first-line (9/29 0-for-N never waited for a lift)
+   −$500 session cash OR 4 consecutive FAILs halt even if halt_lifted is False.
+   After a lift, additional −$500 / 4 fails-after-lift re-halt.
+   apply_broker_session_cash(tradier option cash) every flatten.
+
+8) /health must include health_overlay(state)
+   engine_exit_mode == ladder_to_market (not trail).
    After a real starter: consumed_send_ts nonempty and still nonempty after flatten.
    skip_bounce_n increments on $0.30-against with zero BTO.
+   skip_quality_n increments on CHOPPY / weak / chase / unknown.
    last_stc_ladder == "market" on envelope hit.
+   chop_size == false. protect_fills_n increments on $0.15 down.
 
-8) Size stays min(floor(2000/(ask*100)), 16). NEVER session_starter_cap 8.
+9) Size stays min(floor(2000/(ask*100)), 16). NEVER session_starter_cap 8.
    SMS/exec consume sub_alert_send only. admin_n >= sub_n.
 """
 

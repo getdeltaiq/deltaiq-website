@@ -26,11 +26,13 @@ PUBLISH_ARM_SPY = 0.20
 PUBLISH_ARM_SEC = 180.0
 PRE_MOVE_WEAK_LO = 0.15
 PRE_MOVE_WEAK_HI = 0.29
+PRE_MOVE_STRONG = 0.50
 CHASE_SPY = 0.50
 SAME_DIR_LOCK_SEC = 1080.0
 SKIP_ARM_BAR = True
 SKIP_CHOPPY = True
 SKIP_WEAK_PRE_MOVE = True
+SKIP_STRONG_PRE_MOVE = True
 SKIP_CHASE = True
 MORNING_WINDOW = ("09:36", "09:40")
 MIDDAY_WINDOW = ("10:00", "15:50")
@@ -82,6 +84,10 @@ def skip_reason(c: Candidate) -> str | None:
         mag = abs(c.pre_move_spy)
         if PRE_MOVE_WEAK_LO <= mag <= PRE_MOVE_WEAK_HI:
             return "skip_weak_pre_move"
+        if SKIP_STRONG_PRE_MOVE and mag >= PRE_MOVE_STRONG:
+            return "skip_strong_pre_move"
+    elif SKIP_STRONG_PRE_MOVE and abs(c.pre_move_spy) >= PRE_MOVE_STRONG:
+        return "skip_strong_pre_move"
     if SKIP_CHASE and c.chase_spy >= CHASE_SPY:
         return "skip_chase"
     if c.same_dir_age_sec is not None and c.same_dir_age_sec < SAME_DIR_LOCK_SEC:
@@ -153,5 +159,7 @@ class PublishLedgers:
             "skip_choppy": SKIP_CHOPPY,
             "skip_chase": SKIP_CHASE,
             "chase_spy": CHASE_SPY,
+            "skip_strong_pre_move": SKIP_STRONG_PRE_MOVE,
+            "pre_move_strong": PRE_MOVE_STRONG,
             "same_dir_lock_sec": SAME_DIR_LOCK_SEC,
         }

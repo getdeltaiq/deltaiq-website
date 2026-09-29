@@ -12,8 +12,19 @@ from exec.gates import (
     envelope_hit,
     ledger_invariant,
     new_session,
+    quality_skip_reason,
     starter_qty,
     stc_ladder_prices,
+)
+
+# 9/29 fail-closed: missing pre_move/chase is a refuse. Tests that should
+# reach bounce/halt/BTO must pass a clean quality slice (0.30–0.49 pre-move).
+CLEAN_Q = dict(
+    choppy=False,
+    on_arm_bar=False,
+    pre_move_spy=0.40,
+    chase_spy=0.10,
+    regime="TREND",
 )
 
 
@@ -45,6 +56,7 @@ class ConsumeTests(unittest.TestCase):
             bar_low=764.68,
             et_hhmm="10:03",
             ask=1.42,
+            **CLEAN_Q,
         )
         self.assertTrue(a["post"])
         self.assertEqual(a["qty"], 14)
@@ -63,6 +75,7 @@ class ConsumeTests(unittest.TestCase):
             bar_low=764.70,
             et_hhmm="10:13",
             ask=1.57,
+            **CLEAN_Q,
         )
         self.assertFalse(b["post"])
         self.assertEqual(b["action"], "skip_dup_send_ts")
@@ -81,6 +94,7 @@ class ConsumeTests(unittest.TestCase):
             bar_low=764.60,
             et_hhmm="10:03",
             ask=1.42,
+            **CLEAN_Q,
         )
         self.assertTrue(a["post"])
         s.inflight = True
@@ -96,6 +110,7 @@ class ConsumeTests(unittest.TestCase):
             bar_low=764.60,
             et_hhmm="10:03",
             ask=1.39,
+            **CLEAN_Q,
         )
         self.assertFalse(b["post"])
 
@@ -118,6 +133,7 @@ class BounceTests(unittest.TestCase):
             bar_low=764.68,
             et_hhmm="10:00",
             ask=1.42,
+            **CLEAN_Q,
         )
         self.assertEqual(d["action"], "skip_bounce_against")
         self.assertFalse(d["post"])
@@ -134,6 +150,7 @@ class BounceTests(unittest.TestCase):
             bar_low=764.70,
             et_hhmm="10:13",
             ask=1.57,
+            **CLEAN_Q,
         )
         self.assertFalse(again["post"])
 
@@ -149,6 +166,7 @@ class BounceTests(unittest.TestCase):
             bar_low=764.20,
             et_hhmm="11:02",
             ask=1.50,
+            **CLEAN_Q,
         )
         self.assertTrue(d["post"])
         self.assertEqual(d["qty"], 13)
@@ -232,9 +250,13 @@ class EnvelopeTests(unittest.TestCase):
         self.assertEqual(r["last_stc_ladder"], "market")
         self.assertEqual(r["engine_exit_mode"], "ladder_to_market")
         self.assertTrue(r["override_trail"])
+        self.assertTrue(r["ignore_trail"])
+        self.assertTrue(r["disable_trail"])
+        self.assertFalse(r["use_trail"])
         self.assertEqual(r["ladder"][-1][0], "market")
         self.assertEqual(s.protect_fills_n, 1)
         self.assertEqual(s.last_stc_ladder, "market")
+        self.assertEqual(s.engine_exit_mode, "ladder_to_market")
 
     def test_ladder_order(self):
         steps = stc_ladder_prices(1.25)
@@ -293,6 +315,7 @@ class HaltTests(unittest.TestCase):
             bar_low=764.00,
             et_hhmm="15:44",
             ask=2.59,
+            **CLEAN_Q,
         )
         self.assertFalse(d["post"])
         self.assertEqual(d["action"], "skip_halt_or_inflight")
@@ -310,6 +333,7 @@ class HaltTests(unittest.TestCase):
             bar_low=764.00,
             et_hhmm="15:45",
             ask=2.59,
+            **CLEAN_Q,
         )
         self.assertFalse(again["post"])
 
@@ -329,6 +353,129 @@ class HaltTests(unittest.TestCase):
         s.apply_broker_session_cash(-1652.98)
         self.assertTrue(s.session_halt)
         self.assertEqual(s.session_halt_reason, "session_loss_after_lift")
+
+    def test_first_line_session_loss_halts_without_lift(self):
+        s = new_session("2026-09-29")
+        s.on_flatten(-500.0, "FAIL")
+        self.assertTrue(s.session_halt)
+        self.assertEqual(s.session_halt_reason, "session_loss")
+        self.assertFalse(s.may_starter_bto())
+
+    def test_four_fails_halt_without_lift(self):
+        s = new_session("2026-09-29")
+        for _ in range(3):
+            s.on_flatten(-40.0, "FAIL")
+        self.assertFalse(s.session_halt)
+        s.on_flatten(-40.0, "FAIL")
+        self.assertTrue(s.session_halt)
+        self.assertEqual(s.session_halt_reason, "consecutive_fail")
+
+
+class QualityLearnTests(unittest.TestCase):
+    """2026-09-29: overlay skipped these; Tradier still bought them."""
+
+    def _base(self, s, **kw):
+        args = dict(
+            send_ts=50.0,
+            direction="BEAR",
+            send_spy=764.05,
+            spy=764.05,
+            bar_high=764.10,
+            bar_low=764.00,
+            et_hhmm="11:02",
+            ask=2.59,
+            **CLEAN_Q,
+        )
+        args.update(kw)
+        return decide_starter(s, **args)
+
+    def test_choppy_regime_is_not_a_starter(self):
+        s = new_session("2026-09-29")
+        d = self._base(s, regime="CHOPPY")
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_choppy")
+        self.assertEqual(s.skip_quality_n, 1)
+        self.assertEqual(s.session_starters_n, 0)
+
+    def test_weak_pre_move_is_not_a_starter(self):
+        s = new_session("2026-09-29")
+        d = self._base(s, pre_move_spy=0.22)
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_weak_pre_move")
+
+    def test_strong_pre_move_is_not_a_starter(self):
+        s = new_session("2026-09-29")
+        d = self._base(s, pre_move_spy=0.55)
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_strong_pre_move")
+
+    def test_chase_is_not_a_starter(self):
+        s = new_session("2026-09-29")
+        d = self._base(s, chase_spy=0.55)
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_chase")
+
+    def test_missing_quality_fields_are_not_a_starter(self):
+        s = new_session("2026-09-29")
+        d = self._base(s, pre_move_spy=None, chase_spy=None)
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_quality_unknown")
+
+    def test_clean_send_still_posts(self):
+        s = new_session("2026-09-29")
+        d = self._base(s, pre_move_spy=0.40, chase_spy=0.10, choppy=False)
+        self.assertTrue(d["post"])
+        self.assertIsNone(
+            quality_skip_reason(choppy=False, pre_move_spy=0.40, chase_spy=0.10)
+        )
+
+
+class PersistConsumeTests(unittest.TestCase):
+    def test_sql_conflict_is_dup_not_second_bto(self):
+        s = new_session("2026-09-29")
+        store = {(s.session_date, 7.0)}
+
+        def persist(session_date, send_ts, _direction):
+            key = (session_date, send_ts)
+            if key in store:
+                return False
+            store.add(key)
+            return True
+
+        d = decide_starter(
+            s,
+            send_ts=7.0,
+            direction="BEAR",
+            send_spy=764.05,
+            spy=764.05,
+            bar_high=764.10,
+            bar_low=764.00,
+            et_hhmm="11:02",
+            ask=2.59,
+            persist=persist,
+            **CLEAN_Q,
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_dup_send_ts")
+        self.assertEqual(s.session_starters_n, 0)
+
+    def test_boot_load_consumed_blocks_recycle(self):
+        s = new_session("2026-09-29")
+        s.load_consumed([(11.0, "BEAR")])
+        d = decide_starter(
+            s,
+            send_ts=11.0,
+            direction="BEAR",
+            send_spy=764.58,
+            spy=764.41,
+            bar_high=764.57,
+            bar_low=764.20,
+            et_hhmm="11:02",
+            ask=1.50,
+            **CLEAN_Q,
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_dup_send_ts")
 
 
 class ExtraBtoTests(unittest.TestCase):
