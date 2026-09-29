@@ -53,5 +53,6 @@ starter, skip_quality_n, chop_size=false, protect_fills_n on $0.15 down.
 ## Test
 
 ```bash
-python3 -m unittest engine.overlay.tests.test_publish exec.tests.test_gates
+python3 -m unittest engine.overlay.tests.test_publish exec.tests.test_gates engine.tradier_exec.tests.test_runtime
+python3 -m engine.tradier_exec.replay
 ```
