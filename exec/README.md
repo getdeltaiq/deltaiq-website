@@ -29,3 +29,16 @@ Keep `session_halt` on after `session_loss_after_lift`. New session date (Americ
 ```bash
 python3 -m unittest exec.tests.test_gates
 ```
+
+## Tradier / Cursor exec agent (run this, do not lift halt)
+
+Copy `exec/gates.py` and `exec/shore_up_tradier_exec.py` into the tradier_exec repo, then:
+
+```bash
+python3 shore_up_tradier_exec.py --apply --dest .
+python3 shore_up_tradier_exec.py --test
+python3 shore_up_tradier_exec.py --find-bto --dest .
+psql "$DATABASE_URL" -f consumed_sends.sql
+```
+
+Keep `session_halt` on for `2026-09-29`. Wire `before_bto` / `on_manage` from `cover_us_hooks.py` at every BTO and manage tick. Details in `WIRE_CONTRACT.txt` after `--apply`.
