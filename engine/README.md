@@ -16,7 +16,9 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 
 - `admin_n >= sub_n`. Plot `sub_alert_send`. `admin_rows=admin_alert_ledger`. `aligned_copy=false`.
 - Starter BTO only after `before_bto` returns `post=True`.
-- `/health` after deploy must show `gates_module=engine.shared.gates` and `overlay.git_sha` = this commit.
+- Envelope flatten sets `override_trail=True` and `engine_exit_mode=ladder_to_market` (never hold a loser on trail).
+- Halt is sticky for the ET date; `recover_lost` never BTOs. `/health` must not show `engine_exit_mode=trail`.
+- Live Railway repo is `getdeltaiq/deltaiq-signal-engine` branch `production`. Copy these files there to ship.
 
 ## Test
 
