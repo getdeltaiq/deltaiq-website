@@ -92,6 +92,40 @@ class HookHaltTests(unittest.TestCase):
         self.assertTrue(h["decide_starter"])
         self.assertEqual(h["skip_bounce_n"], 0)
 
+    def test_health_advertises_ladder_not_trail(self):
+        from engine.shared.gates import ENGINE_EXIT_MODE, new_session
+        from engine.tradier_exec.hooks import health_overlay
+
+        st = new_session("2026-09-29")
+        h = health_overlay(st)
+        self.assertEqual(h["engine_exit_mode"], ENGINE_EXIT_MODE)
+        self.assertEqual(h["engine_exit_mode"], "ladder_to_market")
+        self.assertTrue(h["override_trail"])
+        self.assertTrue(h["before_bto"])
+        self.assertTrue(h["on_manage"])
+        self.assertTrue(h["bto_requires_new_send"])
+
+    def test_before_bto_blocks_on_keep_halt_date(self):
+        from engine.shared.gates import new_session
+        from engine.tradier_exec.hooks import SESSION_KEEP_HALT_DATE, before_bto, today_et
+
+        if today_et() != SESSION_KEEP_HALT_DATE:
+            return
+        st = new_session(today_et())
+        d = before_bto(
+            st,
+            send_ts=99.0,
+            direction="BEAR",
+            send_spy=764.05,
+            spy=764.05,
+            bar_high=764.10,
+            bar_low=764.00,
+            et_hhmm="16:40",
+            ask=2.59,
+        )
+        self.assertFalse(d["post"])
+        self.assertTrue(st.session_halt)
+
 
 if __name__ == "__main__":
     unittest.main()

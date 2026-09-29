@@ -43,6 +43,8 @@ EXTRA_BTO_MFE_USD = 0.20
 SESSION_LOSS_HALT_USD = 500.0
 CONSECUTIVE_FAIL_HALT = 4
 COOLDOWN_AFTER_FAIL_SEC = 480.0
+# Cover-us exits are STC ladder → market. Do not hold a loser on trail.
+ENGINE_EXIT_MODE = "ladder_to_market"
 
 
 def starter_qty(ask: float) -> int:
@@ -151,6 +153,7 @@ class SessionState:
     last_bto_client_key: str | None = None
     last_action: str | None = None
     last_stc_ladder: str | None = None
+    engine_exit_mode: str = ENGINE_EXIT_MODE
     protect_fills_n: int = 0
     ticket_risk_hits_n: int = 0
     cata_fills_n: int = 0
@@ -207,10 +210,14 @@ class SessionState:
         self.refresh_halt()
 
     def refresh_halt(self) -> None:
-        if self.operator_halt:
+        # Once halted this ET date, stay halted. Dashboard flatten must not clear it.
+        if self.session_halt or self.session_lost_blocks_send or self.operator_halt:
             self.session_halt = True
             self.session_lost_blocks_send = True
-            self.session_halt_reason = "operator_halt"
+            if self.operator_halt:
+                self.session_halt_reason = "operator_halt"
+            elif self.session_halt_reason == "none":
+                self.session_halt_reason = "session_loss_after_lift"
             return
         if self.halt_lifted and self.additional_loss_usd() <= -SESSION_LOSS_HALT_USD:
             self.session_halt = True
@@ -223,8 +230,14 @@ class SessionState:
             self.session_halt_reason = "consecutive_fail"
             return
 
+    def apply_broker_session_cash(self, realized_usd: float) -> None:
+        """Halt accounting from Tradier option cash (STC proceeds − BTO cost), not engine book."""
+        self.session_realized_usd = round(float(realized_usd), 2)
+        self.refresh_halt()
+
     def recover_lost(self, broker_qty: int) -> str:
-        """Adopt existing longs only. Never BTO."""
+        """Adopt existing longs only. Never BTO. Never clear halt."""
+        self.refresh_halt()
         if broker_qty > 0:
             self.broker_qty = broker_qty
             self.last_action = "recover_lost_adopt_stc_only"
@@ -233,6 +246,8 @@ class SessionState:
         return "flat"
 
     def extra_bto_ok(self, add_qty: int, mfe_usd: float, mark_bid: float, avg_fill: float) -> bool:
+        if self.operator_halt or self.session_halt or self.session_lost_blocks_send:
+            return False
         if self.ticket_phase != "RUN" or self.broker_qty <= 0:
             return False
         if mfe_usd < EXTRA_BTO_MFE_USD:
@@ -259,12 +274,15 @@ def decide_starter(
     """Single entry point before any Tradier buy_to_open."""
     if not ledger_ok_placeholder():
         pass
+    state.refresh_halt()
     if bounce_against(direction, send_spy, spy, bar_high, bar_low, et_hhmm):
         state.try_consume(send_ts, direction, count_starter=False)
         state.skip_bounce_n += 1
         state.last_action = "skip_bounce_against"
         return {"action": "skip_bounce_against", "qty": 0, "post": False}
     if not state.may_starter_bto():
+        # Consume so an illicit halt lift cannot fire this send later the same day.
+        state.try_consume(send_ts, direction, count_starter=False)
         state.last_action = "skip_halt_or_inflight"
         return {"action": "skip_halt_or_inflight", "qty": 0, "post": False}
     if send_ts in state.consumed:
@@ -306,7 +324,12 @@ def decide_manage(
         ticket_phase=ticket_phase,
     )
     if reason is None:
-        return {"action": "hold", "flatten": False}
+        return {
+            "action": "hold",
+            "flatten": False,
+            "override_trail": False,
+            "engine_exit_mode": ENGINE_EXIT_MODE,
+        }
     if reason == "protective":
         state.protect_fills_n += 1
     elif reason == "ticket_risk":
@@ -316,12 +339,16 @@ def decide_manage(
     state.last_action = f"flatten_{reason}"
     ladder = stc_ladder_prices(bid)
     state.last_stc_ladder = "market"
+    state.engine_exit_mode = ENGINE_EXIT_MODE
     return {
         "action": "flatten",
         "flatten": True,
         "reason": reason,
         "ladder": ladder,
         "last_stc_ladder": "market",
+        "override_trail": True,
+        "engine_exit_mode": ENGINE_EXIT_MODE,
+        "ignore_trail": True,
     }
 
 

@@ -230,6 +230,8 @@ class EnvelopeTests(unittest.TestCase):
         )
         self.assertTrue(r["flatten"])
         self.assertEqual(r["last_stc_ladder"], "market")
+        self.assertEqual(r["engine_exit_mode"], "ladder_to_market")
+        self.assertTrue(r["override_trail"])
         self.assertEqual(r["ladder"][-1][0], "market")
         self.assertEqual(s.protect_fills_n, 1)
         self.assertEqual(s.last_stc_ladder, "market")
@@ -265,6 +267,68 @@ class HaltTests(unittest.TestCase):
         s.on_flatten(0.0, "FAIL")
         self.assertTrue(s.session_halt)
         self.assertFalse(s.may_starter_bto())
+
+    def test_halt_stays_on_after_accounting_reset(self):
+        s = new_session("2026-09-29")
+        s.halt_lifted = True
+        s.halt_baseline_usd = 0.0
+        s.on_flatten(-500.0, "FAIL")
+        self.assertTrue(s.session_halt)
+        s.session_realized_usd = 0.0
+        s.refresh_halt()
+        self.assertTrue(s.session_halt)
+        self.assertFalse(s.may_starter_bto())
+
+    def test_halt_skip_consumes_send_so_lift_cannot_recycle(self):
+        s = new_session("2026-09-29")
+        s.session_halt = True
+        s.session_lost_blocks_send = True
+        d = decide_starter(
+            s,
+            send_ts=15.44,
+            direction="BEAR",
+            send_spy=764.05,
+            spy=764.05,
+            bar_high=764.10,
+            bar_low=764.00,
+            et_hhmm="15:44",
+            ask=2.59,
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_halt_or_inflight")
+        self.assertIn(15.44, s.consumed)
+        self.assertEqual(s.session_starters_n, 0)
+        s.session_halt = False
+        s.session_lost_blocks_send = False
+        again = decide_starter(
+            s,
+            send_ts=15.44,
+            direction="BEAR",
+            send_spy=764.05,
+            spy=764.05,
+            bar_high=764.10,
+            bar_low=764.00,
+            et_hhmm="15:45",
+            ask=2.59,
+        )
+        self.assertFalse(again["post"])
+
+    def test_recover_lost_does_not_clear_halt_or_bto(self):
+        s = new_session("2026-09-29")
+        s.session_halt = True
+        s.session_lost_blocks_send = True
+        s.session_halt_reason = "session_loss_after_lift"
+        self.assertEqual(s.recover_lost(0), "flat")
+        self.assertTrue(s.session_halt)
+        self.assertFalse(s.may_starter_bto())
+
+    def test_broker_cash_trips_halt(self):
+        s = new_session("2026-09-29")
+        s.halt_lifted = True
+        s.halt_baseline_usd = 0.0
+        s.apply_broker_session_cash(-1652.98)
+        self.assertTrue(s.session_halt)
+        self.assertEqual(s.session_halt_reason, "session_loss_after_lift")
 
 
 class ExtraBtoTests(unittest.TestCase):

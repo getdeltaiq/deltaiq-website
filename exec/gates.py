@@ -6,6 +6,7 @@ from engine.shared.gates import (  # noqa: F401
     CATASTROPHIC_OPTION_USD,
     CATASTROPHIC_SPY,
     CONSECUTIVE_FAIL_HALT,
+    ENGINE_EXIT_MODE,
     EXTRA_BTO_MFE_USD,
     FAIL_SEC,
     OPEN_REVERSAL_WINDOW,
