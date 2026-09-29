@@ -1,10 +1,12 @@
-# Exec cover-us gates
+# Overlay + Tradier exec (GitHub source of truth)
 
 on:
   pull_request:
   push:
     paths:
+      - "engine/**"
       - "exec/**"
+      - ".github/workflows/engine.yml"
       - ".github/workflows/exec-gates.yml"
 
 jobs:
@@ -15,5 +17,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Run gate unit tests
-        run: python3 -m unittest engine.overlay.tests.test_publish exec.tests.test_gates
+      - name: Run engine + exec unit tests
+        run: |
+          python3 -m unittest engine.overlay.tests.test_publish exec.tests.test_gates

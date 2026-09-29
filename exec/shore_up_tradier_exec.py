@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Shore-up tradier_exec to GitHub cover-us gates.
 
-Cursor Tradier/exec agent: copy this file AND exec/gates.py into the tradier_exec
-repo (same directory), then run:
+Canonical source: engine/shared/gates.py and engine/tradier_exec/hooks.py.
+Prefer importing engine.* on Railway. This script is the copy fallback:
 
     python3 shore_up_tradier_exec.py --apply
     python3 shore_up_tradier_exec.py --test
@@ -22,7 +22,10 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-GATES_SRC = HERE / "gates.py"
+ROOT = HERE.parent
+GATES_SRC = ROOT / "engine" / "shared" / "gates.py"
+if not GATES_SRC.exists():
+    GATES_SRC = HERE / "gates.py"
 HOOKS_NAME = "cover_us_hooks.py"
 SQL_NAME = "consumed_sends.sql"
 
@@ -149,7 +152,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
 def apply(dest: Path) -> None:
     dest.mkdir(parents=True, exist_ok=True)
     if not GATES_SRC.exists():
-        raise SystemExit(f"missing {GATES_SRC} — copy exec/gates.py next to this script")
+        raise SystemExit(f"missing {GATES_SRC} — engine/shared/gates.py is required")
     shutil.copy2(GATES_SRC, dest / "gates.py")
     (dest / HOOKS_NAME).write_text(HOOKS_PY.lstrip("\n"), encoding="utf-8")
     (dest / SQL_NAME).write_text(SQL, encoding="utf-8")

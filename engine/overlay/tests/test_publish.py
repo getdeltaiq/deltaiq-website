@@ -1,0 +1,97 @@
+"""Admin is the full set. Sub is the actionable subset."""
+
+from __future__ import annotations
+
+import unittest
+
+from engine.overlay.publish import Candidate, PublishLedgers, decide_sub_send
+
+
+def _c(**kwargs) -> Candidate:
+    base = dict(
+        ts=1.0,
+        direction="BEAR",
+        spy=764.05,
+        pre_move_spy=0.40,
+        armed=True,
+        choppy=False,
+        on_arm_bar=False,
+        chase_spy=0.10,
+        et_hhmm="11:02",
+        copy="armed_rip",
+        same_dir_age_sec=None,
+    )
+    base.update(kwargs)
+    return Candidate(**base)
+
+
+class LedgerHierarchyTests(unittest.TestCase):
+    def test_admin_gets_every_candidate_sub_is_subset(self):
+        p = PublishLedgers("2026-09-29")
+        p.ingest(_c(ts=1, pre_move_spy=0.22, armed=True))  # weak → admin only
+        p.ingest(_c(ts=2, pre_move_spy=0.40, armed=True))  # send
+        p.ingest(_c(ts=3, choppy=True))  # admin only
+        self.assertEqual(p.admin_n, 3)
+        self.assertEqual(p.sub_n, 1)
+        self.assertTrue(p.admin_n >= p.sub_n)
+        h = p.health()
+        self.assertEqual(h["admin_rows"], "admin_alert_ledger")
+        self.assertEqual(h["plot"], "sub_alert_send")
+        self.assertEqual(h["sms_from"], "sub_alert_send")
+        self.assertFalse(h["aligned_copy"])
+        self.assertTrue(h["invariant_ok"])
+
+    def test_unarmed_is_admin_only(self):
+        d = decide_sub_send(_c(armed=False))
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_not_armed")
+
+    def test_weak_pre_move_admin_only(self):
+        d = decide_sub_send(_c(pre_move_spy=0.22))
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_weak_pre_move")
+
+    def test_chase_admin_only(self):
+        d = decide_sub_send(_c(chase_spy=0.55))
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_chase")
+
+    def test_arm_bar_admin_only(self):
+        d = decide_sub_send(_c(on_arm_bar=True))
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_arm_bar")
+
+    def test_choppy_admin_only(self):
+        d = decide_sub_send(_c(choppy=True))
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_choppy")
+
+    def test_same_dir_lock_admin_only(self):
+        d = decide_sub_send(_c(same_dir_age_sec=300))
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_same_dir_lock")
+
+    def test_quality_rip_is_sub_send(self):
+        d = decide_sub_send(_c())
+        self.assertTrue(d["send"])
+        self.assertEqual(d["reason"], "sub_alert_send")
+
+    def test_outside_window_admin_only(self):
+        d = decide_sub_send(_c(et_hhmm="09:20"))
+        self.assertFalse(d["send"])
+
+
+class HookHaltTests(unittest.TestCase):
+    def test_health_names_github_module(self):
+        from engine.shared.gates import new_session
+        from engine.tradier_exec.hooks import health_overlay
+
+        st = new_session("2026-09-29")
+        h = health_overlay(st)
+        self.assertEqual(h["gates_module"], "engine.shared.gates")
+        self.assertTrue(h["decide_starter"])
+        self.assertEqual(h["skip_bounce_n"], 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

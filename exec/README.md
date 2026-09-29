@@ -1,6 +1,12 @@
 # Exec cover-us gates (GitHub source of truth)
 
-Railway is not the source of this logic. **This directory is.** `tradier_exec` on Railway must import or vendor `exec/gates.py` and call `decide_starter` / `decide_manage` before any Tradier order. Do not keep a second knob-only copy on Railway.
+Railway is not the source of this logic. **`engine/` is.** This directory is a compatibility shim.
+
+- Overlay (admin vs sub): `engine/overlay/publish.py`
+- Tradier entry/exit: `engine/shared/gates.py` + `engine/tradier_exec/hooks.py`
+- `exec/gates.py` re-exports `engine.shared.gates` for existing tests.
+
+`tradier_exec` on Railway must import `engine.tradier_exec.hooks` (`before_bto` / `on_manage`) or vendor `engine/shared/gates.py`. Do not keep a second knob-only copy on Railway.
 
 ## Contract
 
