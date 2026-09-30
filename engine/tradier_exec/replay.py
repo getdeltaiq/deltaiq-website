@@ -23,6 +23,7 @@ CLEAN_Q = dict(
     plot="sub_alert_send",
     overlay_queued=True,
     is_opposite=False,
+    option_symbol="SPY260929P00765000",
 )
 
 

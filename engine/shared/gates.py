@@ -58,6 +58,37 @@ TAKE_EXIT = "ladder_to_market"  # never rest a loser on bid
 CHOP_SIZE = False  # 9/29 sized into CHOPPY; refuse instead.
 BTO_SOURCE = "sub_alert_send"  # never BTO from admin_alert_ledger
 QUEUE_OPPOSITE = False  # exec must not invent opposite rips
+# Rec scenario (9/15–9/29 replay): envelope + 0DTE halt + extra BTO to 16
+# + 1DTE skip unless TREND. Railway must advertise this dict on /health
+# and ignore leftover knobs (queue_opposite=true, take_exit=bid).
+REC_BOOK_SHIP = "2026-09-30-rec"
+
+
+def rec_book() -> dict:
+    """Production book that matched the Rec column. Do not fork these knobs."""
+    return {
+        "rec_book": True,
+        "rec_book_ship": REC_BOOK_SHIP,
+        "engine_exit_mode": ENGINE_EXIT_MODE,
+        "take_exit": TAKE_EXIT,
+        "bto_source": BTO_SOURCE,
+        "queue_opposite": QUEUE_OPPOSITE,
+        "chop_size": CHOP_SIZE,
+        "fail_streak_0dte_only": FAIL_STREAK_0DTE_ONLY,
+        "extra_bto": True,
+        "extra_bto_fill_to": RISK_QTY_CAP,
+        "extra_bto_mfe_usd": EXTRA_BTO_MFE_USD,
+        "skip_1dte_not_trend": True,
+        "cooldown_after_fail_sec": COOLDOWN_AFTER_FAIL_SEC,
+        "session_loss_halt_usd": SESSION_LOSS_HALT_USD,
+        "consecutive_fail_halt": CONSECUTIVE_FAIL_HALT,
+        "protective_stop_usd": PROTECTIVE_STOP_USD,
+        "ticket_risk_usd": TICKET_RISK_USD,
+        "risk_qty_cap": RISK_QTY_CAP,
+        "starter_notional_usd": STARTER_NOTIONAL_USD,
+        "override_trail": True,
+        "use_trail": False,
+    }
 
 # 2026-09-29 learn (exec still traded these): weak pre-move 1/9 −$160,
 # pre-move 0.50+ 0/5 −$256, chase ≥ $0.50, CHOPPY 0/8 −$297.
@@ -330,6 +361,7 @@ class SessionState:
     consecutive_fail_n: int = 0
     operator_halt: bool = False
     last_fail_hhmm: str | None = None
+    last_option_symbol: str | None = None
 
     def additional_loss_usd(self) -> float:
         return self.session_realized_usd - self.halt_baseline_usd
@@ -519,6 +551,12 @@ def decide_starter(
         state.last_action = q
         return {"action": q, "qty": 0, "post": False}
     dte_val = dte if dte is not None else option_dte(option_symbol, state.session_date)
+    if dte_val is None:
+        # Rec 1DTE skip cannot fire without OCC expiry. Fail closed.
+        state.try_consume(send_ts, direction, count_starter=False, persist=persist)
+        state.skip_misfire_n += 1
+        state.last_action = "skip_dte_unknown"
+        return {"action": "skip_dte_unknown", "qty": 0, "post": False}
     mf = misfire_skip_reason(
         dte=dte_val,
         regime=regime,
@@ -547,11 +585,14 @@ def decide_starter(
     if not state.try_consume(send_ts, direction, persist=persist):
         return {"action": "skip_dup_send_ts", "qty": 0, "post": False}
     qty = starter_qty(ask)
+    state.last_option_symbol = option_symbol
     return {
         "action": "bto",
         "qty": qty,
         "post": True,
         "client_order_id": state.last_bto_client_key,
+        "dte": dte_val,
+        "option_symbol": option_symbol,
     }
 
 
@@ -570,6 +611,8 @@ def decide_manage(
     ticket_phase: str | None,
     bid: float,
 ) -> dict:
+    if qty > 0:
+        state.broker_qty = int(qty)
     reason = envelope_hit(
         fill_px=fill_px,
         mark_bid=mark_bid,
@@ -580,17 +623,23 @@ def decide_manage(
     )
     if reason is None:
         mfe = round(mark_bid - fill_px, 4)
+        extra_ok = False
+        extra = 0
         if mfe >= EXTRA_BTO_MFE_USD:
             state.ticket_phase = "RUN"
+            extra = extra_bto_qty(state.broker_qty)
+            extra_ok = extra > 0 and state.extra_bto_ok(extra, mfe, mark_bid, fill_px)
         return apply_manage_result(
             state,
             {
-                "action": "hold",
+                "action": "extra_bto" if extra_ok else "hold",
                 "flatten": False,
                 "override_trail": False,
                 "ignore_trail": False,
                 "engine_exit_mode": ENGINE_EXIT_MODE,
                 "ticket_phase": state.ticket_phase,
+                "extra_bto": extra_ok,
+                "extra_bto_qty": extra if extra_ok else 0,
             },
         )
     if reason == "protective":

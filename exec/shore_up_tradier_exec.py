@@ -26,6 +26,9 @@ ROOT = HERE.parent
 GATES_SRC = ROOT / "engine" / "shared" / "gates.py"
 if not GATES_SRC.exists():
     GATES_SRC = HERE / "gates.py"
+HOOKS_SRC = ROOT / "engine" / "tradier_exec" / "hooks.py"
+if not HOOKS_SRC.exists():
+    HOOKS_SRC = HERE / "hooks.py"
 HOOKS_NAME = "cover_us_hooks.py"
 SQL_NAME = "consumed_sends.sql"
 
@@ -157,8 +160,11 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
 4) recover_lost
    state.recover_lost(broker_qty)  # STC only. NEVER BTO.
 
-5) extra BTO
-   only if state.extra_bto_ok(add_qty, mfe, mark_bid, avg_fill)
+5) Rec extra BTO (fill remaining room to 16 on RUN, MFE ≥ $0.20)
+   Disable Railway extra_bto_on_run native path. Use gates only.
+   if m.get("extra_bto") and m.get("extra_bto_qty"):
+       place ONE extra BTO qty=m["extra_bto_qty"]  # same send, not a new starter
+   Do not call decide_starter for the add. Do not consume a new send_ts.
 
 6) Postgres (9/29 live consumed_send_ts was [])
    CREATE TABLE from consumed_sends.sql
@@ -169,20 +175,30 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
 
 7) Halt first-line (9/29 0-for-N never waited for a lift)
    −$500 session cash OR 4 consecutive 0DTE FAILs halt even if halt_lifted is False.
-   1DTE FAILs do not increment consecutive_fail_n. Call before_extra_bto on RUN.
+   1DTE FAILs do not increment consecutive_fail_n.
+   Pass option_symbol into before_bto (missing is skip_dte_unknown).
+   1DTE without overlay TREND is skip_1dte_not_trend.
+   on_flatten(realized, phase, dte=option_dte(symbol, session_date), et_hhmm=).
    After a lift, additional −$500 / 4 fails-after-lift re-halt.
    apply_broker_session_cash(tradier option cash) every flatten.
 
-8) /health must include health_overlay(state)
+8) /health must include health_overlay(state) and MUST match rec_book()
+   rec_book=true, rec_book_ship=2026-09-30-rec
+   queue_opposite=false (overwrite Railway true)
+   take_exit=ladder_to_market (overwrite Railway bid)
+   fail_streak_0dte_only=true, extra_bto=true, extra_bto_fill_to=16
+   skip_1dte_not_trend=true, cooldown_after_fail_sec=480
    engine_exit_mode == ladder_to_market (not trail).
    After a real starter: consumed_send_ts nonempty and still nonempty after flatten.
    skip_bounce_n increments on $0.30-against with zero BTO.
    skip_quality_n increments on CHOPPY / weak / chase / unknown.
+   skip_misfire_n increments on 1DTE-not-trend / cooldown / missing OCC.
    last_stc_ladder == "market" on envelope hit.
    chop_size == false. protect_fills_n increments on $0.15 down.
 
 9) Size stays min(floor(2000/(ask*100)), 16). NEVER session_starter_cap 8.
    SMS/exec consume sub_alert_send only. admin_n >= sub_n.
+   Rec scenario is the production book. Do not keep a parallel knob set.
 """
 
 
@@ -191,7 +207,9 @@ def apply(dest: Path) -> None:
     if not GATES_SRC.exists():
         raise SystemExit(f"missing {GATES_SRC} — engine/shared/gates.py is required")
     shutil.copy2(GATES_SRC, dest / "gates.py")
-    (dest / HOOKS_NAME).write_text(HOOKS_PY.lstrip("\n"), encoding="utf-8")
+    hooks = HOOKS_SRC.read_text(encoding="utf-8")
+    hooks = hooks.replace("from engine.shared.gates import", "from gates import")
+    (dest / HOOKS_NAME).write_text(hooks, encoding="utf-8")
     (dest / SQL_NAME).write_text(SQL, encoding="utf-8")
     (dest / "WIRE_CONTRACT.txt").write_text(WIRE.lstrip("\n"), encoding="utf-8")
     print(f"wrote {dest / 'gates.py'}")

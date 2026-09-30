@@ -28,6 +28,7 @@ CLEAN_Q = dict(
     plot="sub_alert_send",
     overlay_queued=True,
     is_opposite=False,
+    option_symbol="SPY260929P00765000",
 )
 
 
@@ -555,6 +556,13 @@ class MisfireTests(unittest.TestCase):
         open_ok = self._base(s, send_ts=10.09, et_hhmm="10:09")
         self.assertTrue(open_ok["post"])
 
+    def test_missing_option_symbol_is_refused(self):
+        s = new_session("2026-09-28")
+        d = self._base(s, option_symbol=None, dte=None)
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_dte_unknown")
+        self.assertEqual(s.skip_misfire_n, 1)
+
 
 class PersistConsumeTests(unittest.TestCase):
     def test_sql_conflict_is_dup_not_second_bto(self):
@@ -637,6 +645,9 @@ class ExtraBtoTests(unittest.TestCase):
         )
         self.assertFalse(m["flatten"])
         self.assertEqual(s.ticket_phase, "RUN")
+        self.assertTrue(m["extra_bto"])
+        self.assertEqual(m["extra_bto_qty"], 3)
+        self.assertEqual(m["action"], "extra_bto")
         from engine.tradier_exec.hooks import before_extra_bto
 
         d = before_extra_bto(

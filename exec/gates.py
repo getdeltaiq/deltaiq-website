@@ -43,6 +43,7 @@ from engine.shared.gates import (  # noqa: F401
     misfire_skip_reason,
     option_dte,
     quality_skip_reason,
+    rec_book,
     source_skip_reason,
     starter_qty,
     stc_ladder_prices,

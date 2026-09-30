@@ -35,24 +35,26 @@ Paste into the `deltaiq-signal-engine` production agent:
 
 ```
 Copy engine/shared/gates.py, engine/tradier_exec/hooks.py, engine/overlay/publish.py
-from getdeltaiq/deltaiq-website PR (cover-us gates, 9/29 learn) onto production.
+from getdeltaiq/deltaiq-website PR 24 onto production. Rec book is the live book
+(rec_book_ship=2026-09-30-rec). Overwrite leftover Railway knobs:
+queue_opposite=false, take_exit=ladder_to_market. Do not keep a parallel knob set.
 
 Wire before_bto with plot=sub_alert_send, overlay_queued, is_opposite,
 choppy, on_arm_bar, pre_move_spy, chase_spy, regime, same_dir_age_sec,
-and a Postgres persist= that INSERT ON CONFLICT DO NOTHING
+option_symbol, and a Postgres persist= that INSERT ON CONFLICT DO NOTHING
 into consumed_sends. Boot SELECT + state.load_consumed. Never DELETE on flatten.
 
-Admin ledger is not a BTO source. queue_opposite=false unless overlay_queued.
-take_exit=ladder_to_market (never bid). on_manage flatten disables trail.
-on_flatten(..., dte=option_dte(symbol, session_date), et_hhmm=). 1DTE must not
-increment consecutive_fail_n. Call before_extra_bto on RUN (MFE ≥ $0.20);
-default add_qty fills to 16. Pass option_symbol + regime into before_bto.
-1DTE without TREND is skip_1dte_not_trend. 8-minute cooldown after FAIL.
+on_manage: if extra_bto, POST remaining room to 16 (not a second starter).
+Disable Railway extra_bto_on_run native. 1DTE without TREND is skip_1dte_not_trend.
+Missing option_symbol is skip_dte_unknown. 8-minute cooldown after FAIL.
+on_flatten(..., dte=option_dte(symbol, session_date), et_hhmm=).
+1DTE must not increment consecutive_fail_n.
 
-Proof on /health: engine_exit_mode=ladder_to_market, take_exit=ladder_to_market,
-bto_source=sub_alert_send, queue_opposite=false, chop_size=false,
-skip_strong_pre_move=true, fail_streak_0dte_only=true, extra_bto=true,
-skip_1dte_not_trend=true, cooldown_after_fail_sec=480,
+Proof on /health (must match rec_book()): rec_book=true,
+rec_book_ship=2026-09-30-rec, engine_exit_mode=ladder_to_market,
+take_exit=ladder_to_market, bto_source=sub_alert_send, queue_opposite=false,
+chop_size=false, fail_streak_0dte_only=true, extra_bto=true,
+extra_bto_fill_to=16, skip_1dte_not_trend=true, cooldown_after_fail_sec=480,
 consumed_send_ts after a starter, skip_quality_n, skip_misfire_n.
 ```
 
