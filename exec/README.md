@@ -31,6 +31,7 @@ Railway is not the source of this logic. **`engine/` is.** This directory is a c
 | Trail held 16-lot to −$336 | `apply_manage_result` sets `disable_trail`; `engine_exit_mode=ladder_to_market` |
 | consumed_send_ts [] after flatten | `persist=` INSERT ON CONFLICT; `load_consumed` at boot; never DELETE |
 | 0-for-N never halted until a lift | first-line halt: −$750 (3 envelope misses) or 4 **0DTE** FAILs; 1DTE does not increment the streak |
+| 9/30 10:39 bid scratch in 3s | `before_stc`; HOLD `take_exit=hold`; no working STC on fill; recover_lost ignores fresh fills |
 
 ## Halt (rest of a blown session)
 
