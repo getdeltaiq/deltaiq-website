@@ -49,6 +49,9 @@ CONSECUTIVE_FAIL_HALT = 4
 # Count only 0DTE toward the streak. 1DTE still has envelope + dollar halt.
 FAIL_STREAK_0DTE_ONLY = True
 COOLDOWN_AFTER_FAIL_SEC = 480.0
+# 9/28–9/29 misfire: next-day paper in CHOPPY/RANGE/unknown. 0DTE may still
+# starter; 1DTE only when overlay says TREND (9/25 runner).
+TREND_REGIMES = frozenset({"TREND", "TRENDING"})
 # Cover-us exits are STC ladder → market. Do not hold a loser on trail.
 ENGINE_EXIT_MODE = "ladder_to_market"
 TAKE_EXIT = "ladder_to_market"  # never rest a loser on bid
@@ -124,6 +127,51 @@ def counts_toward_fail_streak(dte: int | None) -> bool:
 
 def hhmm_in_window(hhmm: str, start: str, end: str) -> bool:
     return start <= hhmm <= end
+
+
+def hhmm_to_minutes(hhmm: str) -> int | None:
+    try:
+        h, m = hhmm.split(":")
+        return int(h) * 60 + int(m)
+    except (ValueError, AttributeError):
+        return None
+
+
+def in_fail_cooldown(
+    last_fail_hhmm: str | None,
+    et_hhmm: str,
+    cooldown_sec: float = COOLDOWN_AFTER_FAIL_SEC,
+) -> bool:
+    """True when this send is inside the 8-minute post-FAIL lockout."""
+    if not last_fail_hhmm:
+        return False
+    a = hhmm_to_minutes(last_fail_hhmm)
+    b = hhmm_to_minutes(et_hhmm)
+    if a is None or b is None:
+        return False
+    gap_sec = (b - a) * 60
+    return 0 <= gap_sec < cooldown_sec
+
+
+def misfire_skip_reason(
+    *,
+    dte: int | None = None,
+    regime: str | None = None,
+    last_fail_hhmm: str | None = None,
+    et_hhmm: str = "",
+) -> str | None:
+    """Recurring 9/28–9/29 hole: rapid FAIL re-entry and 1DTE in non-trend.
+
+    Quality (CHOPPY / weak / strong / chase) is applied first. This layer
+    is DTE + cooldown. Missing TREND on a known 1DTE is a refuse.
+    """
+    if in_fail_cooldown(last_fail_hhmm, et_hhmm):
+        return "skip_cooldown_after_fail"
+    if dte is not None and dte >= 1:
+        reg = (regime or "").strip().upper()
+        if reg not in TREND_REGIMES:
+            return "skip_1dte_not_trend"
+    return None
 
 
 def source_skip_reason(
@@ -259,6 +307,7 @@ class SessionState:
     skipped_dup_submit_n: int = 0
     skip_bounce_n: int = 0
     skip_quality_n: int = 0
+    skip_misfire_n: int = 0
     session_starters_n: int = 0
     pending_entry: bool = False
     inflight: bool = False
@@ -280,6 +329,7 @@ class SessionState:
     fails_after_lift_n: int = 0
     consecutive_fail_n: int = 0
     operator_halt: bool = False
+    last_fail_hhmm: str | None = None
 
     def additional_loss_usd(self) -> float:
         return self.session_realized_usd - self.halt_baseline_usd
@@ -330,17 +380,27 @@ class SessionState:
         for send_ts, direction in rows:
             self.consumed[float(send_ts)] = direction
 
-    def on_flatten(self, realized_delta: float, phase: str, *, dte: int | None = None) -> None:
+    def on_flatten(
+        self,
+        realized_delta: float,
+        phase: str,
+        *,
+        dte: int | None = None,
+        et_hhmm: str | None = None,
+    ) -> None:
         """Flatten must NOT un-consume send_ts.
 
         1DTE FAILs/wins are invisible to consecutive_fail_n. 9/28 1DTE
         scratches had halted the 0DTE book before the 767-put printed.
+        Any FAIL starts the 8-minute misfire cooldown.
         """
         self.session_realized_usd += realized_delta
         self.pending_entry = False
         self.inflight = False
         self.broker_qty = 0
         self.ticket_phase = None
+        if phase == "FAIL" and et_hhmm:
+            self.last_fail_hhmm = et_hhmm
         if counts_toward_fail_streak(dte):
             if phase == "FAIL":
                 self.consecutive_fail_n += 1
@@ -430,6 +490,8 @@ def decide_starter(
     plot: str | None = None,
     is_opposite: bool = False,
     overlay_queued: bool = False,
+    option_symbol: str | None = None,
+    dte: int | None = None,
 ) -> dict:
     """Single entry point before any Tradier buy_to_open."""
     if not ledger_ok_placeholder():
@@ -456,6 +518,18 @@ def decide_starter(
         state.skip_quality_n += 1
         state.last_action = q
         return {"action": q, "qty": 0, "post": False}
+    dte_val = dte if dte is not None else option_dte(option_symbol, state.session_date)
+    mf = misfire_skip_reason(
+        dte=dte_val,
+        regime=regime,
+        last_fail_hhmm=state.last_fail_hhmm,
+        et_hhmm=et_hhmm,
+    )
+    if mf is not None:
+        state.try_consume(send_ts, direction, count_starter=False, persist=persist)
+        state.skip_misfire_n += 1
+        state.last_action = mf
+        return {"action": mf, "qty": 0, "post": False}
     if bounce_against(direction, send_spy, spy, bar_high, bar_low, et_hhmm):
         state.try_consume(send_ts, direction, count_starter=False, persist=persist)
         state.skip_bounce_n += 1

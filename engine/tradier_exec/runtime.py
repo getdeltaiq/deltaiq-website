@@ -59,9 +59,14 @@ class CoverUsExec:
         return m
 
     def flatten(
-        self, realized_delta: float, phase: str = "FAIL", *, dte: int | None = None
+        self,
+        realized_delta: float,
+        phase: str = "FAIL",
+        *,
+        dte: int | None = None,
+        et_hhmm: str | None = None,
     ) -> None:
-        self.state.on_flatten(realized_delta, phase, dte=dte)
+        self.state.on_flatten(realized_delta, phase, dte=dte, et_hhmm=et_hhmm)
         self.state.apply_broker_session_cash(self.state.session_realized_usd)
         self.log.append(
             {

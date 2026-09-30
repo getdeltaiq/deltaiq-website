@@ -173,7 +173,7 @@ def replay_929(*, bounce_open: bool, cap_envelope: bool = True) -> dict:
         )
         realized = round((stc_px - avg_fill) * 100.0 * broker, 2)
         posted_pnl.append(realized)
-        ex.flatten(realized, "FAIL")
+        ex.flatten(realized, "FAIL", et_hhmm=hhmm)
         broker = 0
         avg_fill = 0.0
 

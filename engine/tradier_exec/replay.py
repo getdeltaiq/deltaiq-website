@@ -111,7 +111,7 @@ def replay(
             bid=float(stc_px),
         )
         realized = round((float(stc_px) - avg_fill) * 100.0 * broker, 2)
-        ex.flatten(realized, "FAIL")
+        ex.flatten(realized, "FAIL", et_hhmm=hhmm)
         broker = 0
         avg_fill = 0.0
 

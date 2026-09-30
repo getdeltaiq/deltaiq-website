@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from engine.shared.gates import (
     BTO_SOURCE,
     CHOP_SIZE,
+    COOLDOWN_AFTER_FAIL_SEC,
     ENGINE_EXIT_MODE,
     FAIL_STREAK_0DTE_ONLY,
     QUEUE_OPPOSITE,
@@ -126,6 +127,9 @@ def health_overlay(state: SessionState) -> dict:
         "queue_opposite": QUEUE_OPPOSITE,
         "fail_streak_0dte_only": FAIL_STREAK_0DTE_ONLY,
         "extra_bto": True,
+        "skip_1dte_not_trend": True,
+        "cooldown_after_fail_sec": COOLDOWN_AFTER_FAIL_SEC,
+        "skip_misfire_n": state.skip_misfire_n,
         "session_halt": state.session_halt,
         "session_halt_reason": state.session_halt_reason,
         "session_lost_blocks_send": state.session_lost_blocks_send,

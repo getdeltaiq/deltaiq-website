@@ -486,6 +486,76 @@ class QualityLearnTests(unittest.TestCase):
         self.assertTrue(d["post"])
 
 
+class MisfireTests(unittest.TestCase):
+    """9/28 1DTE chop + rapid FAIL re-entry. 9/25 TREND 1DTE runner still posts."""
+
+    def _base(self, s, **kw):
+        args = dict(
+            send_ts=60.0,
+            direction="BEAR",
+            send_spy=765.00,
+            spy=765.00,
+            bar_high=765.02,
+            bar_low=764.90,
+            et_hhmm="11:15",
+            ask=2.54,
+            **CLEAN_Q,
+        )
+        args.update(kw)
+        return decide_starter(s, **args)
+
+    def test_1dte_without_trend_is_refused(self):
+        s = new_session("2026-09-28")
+        d = self._base(
+            s,
+            option_symbol="SPY260929P00768000",
+            regime="RANGE",
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_1dte_not_trend")
+        self.assertEqual(s.skip_misfire_n, 1)
+        self.assertEqual(s.session_starters_n, 0)
+
+    def test_1dte_missing_regime_is_refused(self):
+        s = new_session("2026-09-28")
+        d = self._base(
+            s,
+            option_symbol="SPY260929P00768000",
+            regime=None,
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_1dte_not_trend")
+
+    def test_1dte_trend_still_posts(self):
+        s = new_session("2026-09-25")
+        d = self._base(
+            s,
+            option_symbol="SPY260928C00771000",
+            regime="TREND",
+            direction="BULL",
+        )
+        self.assertTrue(d["post"])
+        self.assertEqual(s.skip_misfire_n, 0)
+
+    def test_0dte_without_regime_still_posts(self):
+        s = new_session("2026-09-24")
+        d = self._base(
+            s,
+            option_symbol="SPY260924P00766000",
+            regime=None,
+        )
+        self.assertTrue(d["post"])
+
+    def test_cooldown_blocks_the_next_eight_minutes(self):
+        s = new_session("2026-09-29")
+        s.on_flatten(-165.0, "FAIL", dte=0, et_hhmm="10:00")
+        blocked = self._base(s, send_ts=10.03, et_hhmm="10:03")
+        self.assertFalse(blocked["post"])
+        self.assertEqual(blocked["action"], "skip_cooldown_after_fail")
+        open_ok = self._base(s, send_ts=10.09, et_hhmm="10:09")
+        self.assertTrue(open_ok["post"])
+
+
 class PersistConsumeTests(unittest.TestCase):
     def test_sql_conflict_is_dup_not_second_bto(self):
         s = new_session("2026-09-29")

@@ -40,6 +40,7 @@ from engine.shared.gates import (  # noqa: F401
     ledger_ok_placeholder,
     new_session,
     extra_bto_qty,
+    misfire_skip_reason,
     option_dte,
     quality_skip_reason,
     source_skip_reason,
