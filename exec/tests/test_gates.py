@@ -269,6 +269,73 @@ class EnvelopeTests(unittest.TestCase):
         self.assertEqual(s.protect_fills_n, 1)
         self.assertEqual(s.last_stc_ladder, "market")
         self.assertEqual(s.engine_exit_mode, "ladder_to_market")
+        self.assertTrue(r["post_stc"])
+
+
+    def test_hold_tick_does_not_advertise_ladder_exit(self):
+        s = new_session("2026-09-30")
+        s.on_bto_fill(10, 1.84, now=1_000.0)
+        m = decide_manage(
+            s,
+            fill_px=1.84,
+            mark_bid=1.83,
+            qty=10,
+            spy_adverse=0.05,
+            seconds_since_fill=3,
+            ticket_phase="FAIL",
+            bid=1.83,
+            now=1_003.0,
+        )
+        self.assertFalse(m["flatten"])
+        self.assertFalse(m["post_stc"])
+        self.assertEqual(m["take_exit"], "hold")
+        self.assertTrue(m["cancel_working_stc"])
+
+
+    def test_before_stc_blocks_bid_scratch_on_fill(self):
+        from engine.tradier_exec.hooks import before_stc
+
+        s = new_session("2026-09-30")
+        s.on_bto_fill(10, 1.84, now=1_000.0)
+        d = before_stc(
+            s,
+            fill_px=1.84,
+            mark_bid=1.83,
+            qty=10,
+            spy_adverse=0.05,
+            seconds_since_fill=3,
+            ticket_phase="FAIL",
+            bid=1.83,
+            now=1_003.0,
+        )
+        self.assertFalse(d["post"])
+        self.assertFalse(d["flatten"])
+        self.assertEqual(d["reason"], "stc_requires_envelope")
+
+
+    def test_stale_prior_fail_clock_cannot_flatten_new_fill(self):
+        s = new_session("2026-09-30")
+        s.on_bto_fill(10, 1.84, now=10_000.0)
+        m = decide_manage(
+            s,
+            fill_px=1.84,
+            mark_bid=1.83,
+            qty=10,
+            spy_adverse=0.10,
+            seconds_since_fill=500,
+            ticket_phase="FAIL",
+            bid=1.83,
+            now=10_005.0,
+        )
+        self.assertFalse(m["flatten"])
+        self.assertEqual(m["take_exit"], "hold")
+
+
+    def test_recover_lost_fresh_fill_is_not_an_orphan(self):
+        s = new_session("2026-09-30")
+        s.on_bto_fill(10, 1.84, now=1_000.0)
+        self.assertEqual(s.recover_lost(10, now=1_003.0), "fresh_fill")
+        self.assertEqual(s.last_action, "recover_lost_fresh_fill")
 
     def test_ladder_order(self):
         steps = stc_ladder_prices(1.25)
@@ -662,6 +729,8 @@ class ExtraBtoTests(unittest.TestCase):
         self.assertTrue(m["extra_bto"])
         self.assertEqual(m["extra_bto_qty"], 3)
         self.assertEqual(m["action"], "extra_bto")
+        self.assertEqual(m["take_exit"], "hold")
+        self.assertFalse(m["post_stc"])
         from engine.tradier_exec.hooks import before_extra_bto
 
         d = before_extra_bto(

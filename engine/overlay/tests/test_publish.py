@@ -118,13 +118,18 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["bto_source"], "sub_alert_send")
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
-        self.assertEqual(h["rec_book_ship"], "2026-09-30-rec-750")
+        self.assertEqual(h["rec_book_ship"], "2026-09-30-stc-hold")
         self.assertTrue(h["fail_streak_0dte_only"])
         self.assertTrue(h["extra_bto"])
         self.assertEqual(h["extra_bto_fill_to"], 16)
         self.assertTrue(h["skip_1dte_not_trend"])
         self.assertEqual(h["cooldown_after_fail_sec"], 480.0)
         self.assertEqual(h["session_loss_halt_usd"], 750.0)
+        self.assertTrue(h["before_stc"])
+        self.assertTrue(h["stc_requires_envelope"])
+        self.assertFalse(h["stc_on_bto_fill"])
+        self.assertFalse(h["working_stc_on_fill"])
+        self.assertEqual(h["hold_exit"], "hold")
 
     def test_before_bto_blocks_on_keep_halt_date(self):
         from engine.shared.gates import new_session

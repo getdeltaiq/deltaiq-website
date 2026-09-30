@@ -15,6 +15,7 @@ from engine.shared.gates import (
     apply_manage_result,
     decide_manage,
     decide_starter,
+    decide_stc,
     extra_bto_qty,
     new_session,
     rec_book,
@@ -60,9 +61,19 @@ def on_manage(state: SessionState, **kwargs) -> dict:
     """Call every manage tick with broker_qty, not intended qty.
 
     If flatten is True, ignore trail and walk STC ladder to market.
+    If flatten is False, do not post STC. take_exit is hold.
     """
     enforce_keep_halt(state)
     return apply_manage_result(state, decide_manage(state, **kwargs))
+
+
+def before_stc(state: SessionState, **kwargs) -> dict:
+    """Call immediately before any Tradier sell_to_close. If post is False, do not send.
+
+    9/30 10:39 BTO fill must not rest a bid STC. Envelope only.
+    """
+    enforce_keep_halt(state)
+    return decide_stc(state, **kwargs)
 
 
 def before_extra_bto(state: SessionState, **kwargs) -> dict:
@@ -103,8 +114,12 @@ def health_overlay(state: SessionState) -> dict:
             "decide_starter": True,
             "before_bto": True,
             "on_manage": True,
+            "before_stc": True,
             "before_extra_bto": True,
             "bto_requires_new_send": True,
+            "stc_requires_envelope": True,
+            "stc_on_bto_fill": False,
+            "working_stc_on_fill": False,
             "skip_bounce_n": state.skip_bounce_n,
             "skip_quality_n": state.skip_quality_n,
             "consumed_send_ts": list(state.consumed.keys()),

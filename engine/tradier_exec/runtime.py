@@ -49,11 +49,8 @@ class CoverUsExec:
             self.state.inflight = True
         return d
 
-    def on_bto_fill(self, qty: int, fill_px: float) -> None:
-        self.state.inflight = False
-        self.state.pending_entry = False
-        self.state.broker_qty = int(qty)
-        self.state.ticket_phase = "FAIL"
+    def on_bto_fill(self, qty: int, fill_px: float, *, now: float | None = None) -> None:
+        self.state.on_bto_fill(qty, fill_px, now=now)
         self.log.append({"kind": "bto_fill", "qty": qty, "fill_px": fill_px})
 
     def manage(self, **kwargs) -> dict:

@@ -146,19 +146,30 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    CHOPPY / weak 0.15–0.29 / strong pre-move ≥0.50 / chase ≥0.50 => no BTO.
    chop_size must be False. Do not resize into CHOPPY.
 
-3) EVERY manage tick
-   from cover_us_hooks import on_manage
+3) EVERY manage tick — STC only when flatten is True
+   from cover_us_hooks import on_manage, before_stc
    m = on_manage(state, fill_px=fill, mark_bid=bid, qty=BROKER_QTY,
                  spy_adverse=spy_adverse, seconds_since_fill=age,
                  ticket_phase=phase, bid=bid)
    engine_exit_mode = m["engine_exit_mode"]  # MUST be ladder_to_market, never trail
-   if m["flatten"] or m.get("override_trail") or m.get("ignore_trail"):
-       trail_armed = False
-       STC ladder: bid, bid-0.05, bid-0.10, MARKET
-       then state.on_flatten(realized, phase)  # MUST NOT delete consumed_sends
+   # 9/30 10:39: BTO 10 @ $1.84 then STC @ $1.83 in 3s because native code
+   # posted a bid STC on fill / honored take_exit on HOLD ticks.
+   on_bto_fill: state.on_bto_fill(qty, fill_px). Do NOT post STC. Do NOT
+   rest a working bid/ask exit. book.take_exit leftover "bid" is ignored.
+   if m["flatten"] is not True:
+       take_exit = hold; post_stc = false; cancel any working STC; return
+   stc = before_stc(state, fill_px=fill, mark_bid=bid, qty=BROKER_QTY,
+                    spy_adverse=spy_adverse, seconds_since_fill=age,
+                    ticket_phase=phase, bid=bid)
+   if not stc["post"]:
+       return
+   STC ladder: bid, bid-0.05, bid-0.10, MARKET
+   then state.on_flatten(realized, phase)  # MUST NOT delete consumed_sends
+   recover_lost: if last_action is recover_lost_fresh_fill, do NOT STC.
 
 4) recover_lost
-   state.recover_lost(broker_qty)  # STC only. NEVER BTO.
+   state.recover_lost(broker_qty)  # STC only for true orphans. NEVER BTO.
+   A fill younger than 15s / quote grace is fresh_fill — leave it on.
 
 5) Rec extra BTO (fill remaining room to 16 on RUN, MFE ≥ $0.20)
    Disable Railway extra_bto_on_run native path. Use gates only.
@@ -183,9 +194,11 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-09-30-rec-750, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-09-30-stc-hold, session_loss_halt_usd=750
    queue_opposite=false (overwrite Railway true)
-   take_exit=ladder_to_market (overwrite Railway bid)
+   take_exit=ladder_to_market (flatten mode only; HOLD ticks take_exit=hold)
+   stc_requires_envelope=true, stc_on_bto_fill=false, working_stc_on_fill=false
+   before_stc=true, post_stc=false until envelope
    fail_streak_0dte_only=true, extra_bto=true, extra_bto_fill_to=16
    skip_1dte_not_trend=true, cooldown_after_fail_sec=480
    engine_exit_mode == ladder_to_market (not trail).
@@ -195,6 +208,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    skip_misfire_n increments on 1DTE-not-trend / cooldown / missing OCC.
    last_stc_ladder == "market" on envelope hit.
    chop_size == false. protect_fills_n increments on $0.15 down.
+   A 1-cent bid scratch in <90s must NOT increment protect_fills_n.
 
 9) Size stays min(floor(2000/(ask*100)), 16). NEVER session_starter_cap 8.
    SMS/exec consume sub_alert_send only. admin_n >= sub_n.

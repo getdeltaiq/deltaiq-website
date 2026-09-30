@@ -26,6 +26,7 @@ from engine.shared.gates import (  # noqa: F401
     STARTER_NOTIONAL_USD,
     TICKET_RISK_USD,
     TAKE_EXIT,
+    HOLD_EXIT,
     Direction,
     EnvelopeReason,
     HaltReason,
@@ -47,5 +48,6 @@ from engine.shared.gates import (  # noqa: F401
     source_skip_reason,
     starter_qty,
     stc_ladder_prices,
+    decide_stc,
     unrealized_dollars,
 )

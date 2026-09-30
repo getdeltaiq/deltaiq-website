@@ -10,6 +10,7 @@ Admin ledger is the full candidate set. Sub is the action subset.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Literal
@@ -54,14 +55,20 @@ COOLDOWN_AFTER_FAIL_SEC = 480.0
 TREND_REGIMES = frozenset({"TREND", "TRENDING"})
 # Cover-us exits are STC ladder → market. Do not hold a loser on trail.
 ENGINE_EXIT_MODE = "ladder_to_market"
-TAKE_EXIT = "ladder_to_market"  # never rest a loser on bid
+TAKE_EXIT = "ladder_to_market"  # flatten mode only; never rest a loser on bid
+HOLD_EXIT = "hold"
 CHOP_SIZE = False  # 9/29 sized into CHOPPY; refuse instead.
 BTO_SOURCE = "sub_alert_send"  # never BTO from admin_alert_ledger
 QUEUE_OPPOSITE = False  # exec must not invent opposite rips
+# 9/30 10:39: BTO 10 @ $1.84 then STC @ $1.83 in 3s. Rec envelope cannot
+# do that. Native bid-exit on fill / take_exit on HOLD ticks caused it.
+STC_REQUIRES_ENVELOPE = True
+STC_ON_BTO_FILL = False
+WORKING_STC_ON_FILL = False
 # Rec scenario (9/15–9/29 replay): envelope + 0DTE halt + extra BTO to 16
 # + 1DTE skip unless TREND. Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-09-30-rec-750"
+REC_BOOK_SHIP = "2026-09-30-stc-hold"
 
 
 def rec_book() -> dict:
@@ -88,6 +95,13 @@ def rec_book() -> dict:
         "starter_notional_usd": STARTER_NOTIONAL_USD,
         "override_trail": True,
         "use_trail": False,
+        "stc_requires_envelope": STC_REQUIRES_ENVELOPE,
+        "stc_on_bto_fill": STC_ON_BTO_FILL,
+        "working_stc_on_fill": WORKING_STC_ON_FILL,
+        "before_stc": True,
+        "quote_grace_sec": QUOTE_GRACE_SEC,
+        "fail_sec": FAIL_SEC,
+        "hold_exit": HOLD_EXIT,
     }
 
 # 2026-09-29 learn (exec still traded these): weak pre-move 1/9 −$160,
@@ -362,6 +376,8 @@ class SessionState:
     operator_halt: bool = False
     last_fail_hhmm: str | None = None
     last_option_symbol: str | None = None
+    ticket_fill_ts: float | None = None
+    avg_fill_px: float | None = None
 
     def additional_loss_usd(self) -> float:
         return self.session_realized_usd - self.halt_baseline_usd
@@ -431,6 +447,8 @@ class SessionState:
         self.inflight = False
         self.broker_qty = 0
         self.ticket_phase = None
+        self.ticket_fill_ts = None
+        self.avg_fill_px = None
         if phase == "FAIL" and et_hhmm:
             self.last_fail_hhmm = et_hhmm
         if counts_toward_fail_streak(dte):
@@ -477,15 +495,46 @@ class SessionState:
         self.session_realized_usd = round(float(realized_usd), 2)
         self.refresh_halt()
 
-    def recover_lost(self, broker_qty: int) -> str:
-        """Adopt existing longs only. Never BTO. Never clear halt."""
+    def recover_lost(self, broker_qty: int, *, now: float | None = None) -> str:
+        """Adopt existing longs only. Never BTO. Never clear halt.
+
+        9/30 10:39: lost-scan ran 3s after a live fill and the native path
+        STCd the bid. A fill younger than quote grace is not an orphan.
+        """
         self.refresh_halt()
         if broker_qty > 0:
+            if self.ticket_fill_ts is not None:
+                age = self.ticket_age_sec(1e9, now=now)
+                if age < max(QUOTE_GRACE_SEC, 15.0):
+                    self.broker_qty = int(broker_qty)
+                    self.last_action = "recover_lost_fresh_fill"
+                    return "fresh_fill"
             self.broker_qty = broker_qty
             self.last_action = "recover_lost_adopt_stc_only"
             return "adopt_stc_only"
         self.last_action = "recover_lost_flat"
         return "flat"
+
+    def on_bto_fill(self, qty: int, fill_px: float, *, now: float | None = None) -> None:
+        """Stamp this ticket's clock. Never post STC from this hook."""
+        self.inflight = False
+        self.pending_entry = False
+        self.broker_qty = int(qty)
+        self.ticket_phase = "FAIL"
+        self.avg_fill_px = float(fill_px)
+        self.ticket_fill_ts = float(now if now is not None else time.time())
+        self.last_action = "bto_fill"
+
+    def ticket_age_sec(
+        self, seconds_since_fill: float, *, now: float | None = None
+    ) -> float:
+        """Clamp caller age to this fill so a prior FAIL clock cannot fire."""
+        passed = float(seconds_since_fill)
+        if self.ticket_fill_ts is None:
+            return passed
+        t = float(now if now is not None else time.time())
+        local = max(0.0, t - self.ticket_fill_ts)
+        return min(passed, local)
 
     def extra_bto_ok(self, add_qty: int, mfe_usd: float, mark_bid: float, avg_fill: float) -> bool:
         if self.operator_halt or self.session_halt or self.session_lost_blocks_send:
@@ -610,15 +659,17 @@ def decide_manage(
     seconds_since_fill: float,
     ticket_phase: str | None,
     bid: float,
+    now: float | None = None,
 ) -> dict:
     if qty > 0:
         state.broker_qty = int(qty)
+    age = state.ticket_age_sec(seconds_since_fill, now=now)
     reason = envelope_hit(
         fill_px=fill_px,
         mark_bid=mark_bid,
         qty=qty,
         spy_adverse=spy_adverse,
-        seconds_since_fill=seconds_since_fill,
+        seconds_since_fill=age,
         ticket_phase=ticket_phase,
     )
     if reason is None:
@@ -634,6 +685,8 @@ def decide_manage(
             {
                 "action": "extra_bto" if extra_ok else "hold",
                 "flatten": False,
+                "post_stc": False,
+                "working_stc": False,
                 "override_trail": False,
                 "ignore_trail": False,
                 "engine_exit_mode": ENGINE_EXIT_MODE,
@@ -656,6 +709,8 @@ def decide_manage(
         {
             "action": "flatten",
             "flatten": True,
+            "post_stc": True,
+            "working_stc": False,
             "reason": reason,
             "ladder": ladder,
             "last_stc_ladder": "market",
@@ -666,22 +721,53 @@ def decide_manage(
     )
 
 
+def decide_stc(state: SessionState, **kwargs) -> dict:
+    """Call immediately before any Tradier sell_to_close.
+
+    9/30 10:39 posted STC on BTO fill. Rec hold ticks must not sell.
+    """
+    m = decide_manage(state, **kwargs)
+    if not m.get("flatten"):
+        state.last_action = "hold_no_stc"
+        m["post"] = False
+        m["post_stc"] = False
+        m["working_stc"] = False
+        m["cancel_working_stc"] = True
+        m["reason"] = m.get("reason") or "stc_requires_envelope"
+        return m
+    m["post"] = True
+    m["post_stc"] = True
+    m["working_stc"] = False
+    m["cancel_working_stc"] = False
+    return m
+
+
 def apply_manage_result(state: SessionState, m: dict) -> dict:
-    """Force cover-us flatten off trail. Live 9/29 still advertised engine_exit_mode=trail."""
+    """Force cover-us flatten off trail. Live 9/29 still advertised engine_exit_mode=trail.
+
+    HOLD ticks must advertise take_exit=hold. Live 9/30 sold the bid in 3s
+    because take_exit=ladder_to_market was set even when flatten was False.
+    """
     state.engine_exit_mode = ENGINE_EXIT_MODE
     m["engine_exit_mode"] = ENGINE_EXIT_MODE
     m["chop_size"] = CHOP_SIZE
-    if m.get("flatten") or m.get("override_trail") or m.get("ignore_trail"):
+    if m.get("flatten"):
         m["use_trail"] = False
         m["disable_trail"] = True
         m["trail_armed"] = False
         m["ignore_trail"] = True
         m["override_trail"] = True
         m["take_exit"] = TAKE_EXIT
+        m["post_stc"] = True
+        m["working_stc"] = False
     else:
         m.setdefault("use_trail", False)
         m.setdefault("disable_trail", False)
-        m["take_exit"] = TAKE_EXIT
+        m["take_exit"] = HOLD_EXIT
+        m["post_stc"] = False
+        m["working_stc"] = False
+        m["flatten"] = False
+        m["cancel_working_stc"] = True
     return m
 
 

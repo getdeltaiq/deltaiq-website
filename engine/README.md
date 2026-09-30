@@ -18,7 +18,8 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 - `admin_n >= sub_n`. Plot `sub_alert_send`. `admin_rows=admin_alert_ledger`. `aligned_copy=false`.
 - Starter BTO only after `before_bto` returns `post=True` with `plot=sub_alert_send`.
 - Envelope flatten sets `override_trail=True` and `engine_exit_mode=ladder_to_market` (never hold a loser on trail).
-- Halt is sticky for the ET date; `recover_lost` never BTOs. `/health` must not show `engine_exit_mode=trail`.
+- **STC only when `on_manage`/`before_stc` returns `flatten=true`.** HOLD ticks use `take_exit=hold` and `post_stc=false`. Never rest a bid STC on BTO fill (9/30 10:39 10-lot 767-call scratch).
+- Halt is sticky for the ET date; `recover_lost` never BTOs. A fill younger than 15s is not an orphan. `/health` must not show `engine_exit_mode=trail`.
 - **9/29 learn (wired at BTO, not just overlay):**
   - Refuse CHOPPY (do **not** `chop_size`). Weak pre-move $0.15–$0.29. Strong pre-move ≥ $0.50. Chase ≥ $0.50.
   - Missing `pre_move_spy` / `chase_spy` is `skip_quality_unknown` (fail closed).
@@ -36,9 +37,21 @@ Paste into the `deltaiq-signal-engine` production agent:
 ```
 Copy engine/shared/gates.py, engine/tradier_exec/hooks.py, engine/overlay/publish.py
 from getdeltaiq/deltaiq-website PR 24 onto production. Rec book is the live book
-(rec_book_ship=2026-09-30-rec-750). Overwrite leftover Railway knobs:
-queue_opposite=false, take_exit=ladder_to_market. Session cash halt is −$750
+(rec_book_ship=2026-09-30-stc-hold). Overwrite leftover Railway knobs:
+queue_opposite=false, take_exit=ladder_to_market on FLATTEN only.
+HOLD ticks must set take_exit=hold and post_stc=false. Session cash halt is −$750
 (3 envelope misses), not −$500. Do not keep a parallel knob set.
+
+9/30 10:39 bug: BTO 10-lot 767-call @ $1.84 then STC @ $1.83 in ~3s.
+That was native bid-exit on fill / take_exit on HOLD. Rec envelope needs
+$0.15 option down or 90s FAIL. Fix:
+- Call state.on_bto_fill(qty, fill_px) on fill. Do NOT post STC there.
+- Do NOT rest a working bid/ask STC on entry (book.take_exit leftover
+  "bid" is ignored). working_stc_on_fill=false. stc_on_bto_fill=false.
+- Every STC must go through before_stc. If post is False, cancel working
+  STC and return. Only when flatten=true walk bid / bid-0.05 / bid-0.10 / MARKET.
+- recover_lost must not STC a fill younger than 15s (fresh_fill).
+- Clamp seconds_since_fill to this ticket's fill clock.
 
 Wire before_bto with plot=sub_alert_send, overlay_queued, is_opposite,
 choppy, on_arm_bar, pre_move_spy, chase_spy, regime, same_dir_age_sec,
@@ -52,12 +65,16 @@ on_flatten(..., dte=option_dte(symbol, session_date), et_hhmm=).
 1DTE must not increment consecutive_fail_n.
 
 Proof on /health (must match rec_book()): rec_book=true,
-rec_book_ship=2026-09-30-rec-750, session_loss_halt_usd=750,
+rec_book_ship=2026-09-30-stc-hold, session_loss_halt_usd=750,
 engine_exit_mode=ladder_to_market,
-take_exit=ladder_to_market, bto_source=sub_alert_send, queue_opposite=false,
+take_exit=ladder_to_market, hold_exit=hold, stc_requires_envelope=true,
+stc_on_bto_fill=false, working_stc_on_fill=false, before_stc=true,
+bto_source=sub_alert_send, queue_opposite=false,
 chop_size=false, fail_streak_0dte_only=true, extra_bto=true,
 extra_bto_fill_to=16, skip_1dte_not_trend=true, cooldown_after_fail_sec=480,
 consumed_send_ts after a starter, skip_quality_n, skip_misfire_n.
+After a BTO fill: last_action=bto_fill, post_stc=false until envelope.
+A 1-cent scratch in 3s must not happen.
 ```
 
 
