@@ -19,4 +19,4 @@ jobs:
           python-version: "3.12"
       - name: Run engine + exec unit tests
         run: |
-          python3 -m unittest engine.overlay.tests.test_publish exec.tests.test_gates engine.tradier_exec.tests.test_runtime
+          python3 -m unittest engine.overlay.tests.test_publish exec.tests.test_gates engine.tradier_exec.tests.test_runtime engine.tradier_exec.tests.test_week_replay

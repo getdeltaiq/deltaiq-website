@@ -52,6 +52,9 @@ skip_strong_pre_move=true, consumed_send_ts after a starter, skip_quality_n.
 ## Test
 
 ```bash
-python3 -m unittest engine.overlay.tests.test_publish exec.tests.test_gates engine.tradier_exec.tests.test_runtime
+python3 -m unittest engine.overlay.tests.test_publish exec.tests.test_gates engine.tradier_exec.tests.test_runtime engine.tradier_exec.tests.test_week_replay
 python3 -m engine.tradier_exec.replay
+python3 -m engine.tradier_exec.week_replay
 ```
+
+Last-week tape (9/23–9/29, no quality flags — those were not on BTO): envelope + first-line halt cuts the 9/23 14-lot 770C and the 9/29 0-for-N grind. Halt resets on the ET date so 9/24–9/28 still trade. Winners *after* halt on a red tape are not kept.
