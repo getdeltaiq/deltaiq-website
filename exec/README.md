@@ -28,7 +28,7 @@ Railway is not the source of this logic. **`engine/` is.** This directory is a c
 | CHOPPY / weak / chase still bought | `quality_skip_reason` in `before_bto`; fail closed if fields missing; `chop_size=False` |
 | Trail held 16-lot to −$336 | `apply_manage_result` sets `disable_trail`; `engine_exit_mode=ladder_to_market` |
 | consumed_send_ts [] after flatten | `persist=` INSERT ON CONFLICT; `load_consumed` at boot; never DELETE |
-| 0-for-N never halted until a lift | first-line halt: −$500 or 4 FAILs without `halt_lifted` |
+| 0-for-N never halted until a lift | first-line halt: −$500 or 4 **0DTE** FAILs; 1DTE does not increment the streak |
 
 ## Halt (rest of a blown session)
 

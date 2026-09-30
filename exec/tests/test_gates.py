@@ -38,6 +38,13 @@ class QtyTests(unittest.TestCase):
         self.assertEqual(starter_qty(0.50), 16)
         self.assertEqual(starter_qty(3.03), 6)
 
+    def test_option_dte_spy(self):
+        from exec.gates import option_dte
+
+        self.assertEqual(option_dte("SPY260924P00766000", "2026-09-24"), 0)
+        self.assertEqual(option_dte("SPY260929P00767000", "2026-09-28"), 1)
+        self.assertEqual(option_dte("SPY260928C00771000", "2026-09-25"), 3)
+
 
 class LedgerTests(unittest.TestCase):
     def test_sub_is_subset(self):
@@ -374,6 +381,28 @@ class HaltTests(unittest.TestCase):
         self.assertTrue(s.session_halt)
         self.assertEqual(s.session_halt_reason, "consecutive_fail")
 
+    def test_1dte_fails_do_not_count_toward_streak(self):
+        s = new_session("2026-09-28")
+        for _ in range(4):
+            s.on_flatten(-40.0, "FAIL", dte=1)
+        self.assertFalse(s.session_halt)
+        self.assertEqual(s.consecutive_fail_n, 0)
+        for _ in range(3):
+            s.on_flatten(-40.0, "FAIL", dte=0)
+        self.assertFalse(s.session_halt)
+        s.on_flatten(-40.0, "FAIL", dte=0)
+        self.assertTrue(s.session_halt)
+
+    def test_1dte_fail_does_not_reset_0dte_streak(self):
+        s = new_session("2026-09-28")
+        s.on_flatten(-40.0, "FAIL", dte=0)
+        s.on_flatten(-40.0, "FAIL", dte=0)
+        s.on_flatten(-40.0, "FAIL", dte=0)
+        s.on_flatten(-40.0, "FAIL", dte=1)
+        self.assertEqual(s.consecutive_fail_n, 3)
+        s.on_flatten(-40.0, "FAIL", dte=0)
+        self.assertTrue(s.session_halt)
+
 
 class QualityLearnTests(unittest.TestCase):
     """2026-09-29: overlay skipped these; Tradier still bought them."""
@@ -514,6 +543,42 @@ class ExtraBtoTests(unittest.TestCase):
         s.ticket_phase = "RUN"
         self.assertTrue(s.extra_bto_ok(4, 0.25, 1.60, 1.40))
         self.assertFalse(s.extra_bto_ok(9, 0.25, 1.60, 1.40))  # 8+9 > 16
+
+    def test_extra_qty_fills_headroom_to_cap(self):
+        from engine.shared.gates import extra_bto_qty
+
+        self.assertEqual(extra_bto_qty(13), 3)
+        self.assertEqual(extra_bto_qty(11), 5)
+        self.assertEqual(extra_bto_qty(16), 0)
+
+    def test_manage_arms_run_so_extra_can_fire(self):
+        s = new_session("2026-09-24")
+        s.broker_qty = 13
+        s.ticket_phase = "FAIL"
+        m = decide_manage(
+            s,
+            fill_px=1.51,
+            mark_bid=1.71,
+            qty=13,
+            spy_adverse=0.0,
+            seconds_since_fill=12,
+            ticket_phase="FAIL",
+            bid=1.71,
+        )
+        self.assertFalse(m["flatten"])
+        self.assertEqual(s.ticket_phase, "RUN")
+        from engine.tradier_exec.hooks import before_extra_bto
+
+        d = before_extra_bto(
+            s,
+            mfe_usd=0.20,
+            mark_bid=1.71,
+            avg_fill=1.51,
+            plot="sub_alert_send",
+            overlay_queued=True,
+        )
+        self.assertTrue(d["post"])
+        self.assertEqual(d["qty"], 3)
 
     def test_extra_exec_queued_opposite_blocked(self):
         from engine.tradier_exec.hooks import before_extra_bto

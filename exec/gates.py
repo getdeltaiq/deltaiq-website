@@ -39,6 +39,8 @@ from engine.shared.gates import (  # noqa: F401
     ledger_invariant,
     ledger_ok_placeholder,
     new_session,
+    extra_bto_qty,
+    option_dte,
     quality_skip_reason,
     source_skip_reason,
     starter_qty,

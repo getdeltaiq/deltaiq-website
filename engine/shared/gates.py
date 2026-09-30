@@ -9,7 +9,9 @@ Admin ledger is the full candidate set. Sub is the action subset.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Literal
 
 Direction = Literal["BULL", "BEAR"]
@@ -43,6 +45,9 @@ OPEN_REVERSAL_WINDOW = ("10:00", "10:02")
 EXTRA_BTO_MFE_USD = 0.20
 SESSION_LOSS_HALT_USD = 500.0
 CONSECUTIVE_FAIL_HALT = 4
+# 9/28: 1DTE wiggles printed 4 FAILs and halted before the 0DTE 767-put.
+# Count only 0DTE toward the streak. 1DTE still has envelope + dollar halt.
+FAIL_STREAK_0DTE_ONLY = True
 COOLDOWN_AFTER_FAIL_SEC = 480.0
 # Cover-us exits are STC ladder → market. Do not hold a loser on trail.
 ENGINE_EXIT_MODE = "ladder_to_market"
@@ -84,6 +89,37 @@ def starter_qty(ask: float) -> int:
         return 0
     contracts = int(STARTER_NOTIONAL_USD // (ask * 100.0))
     return max(1, min(contracts, RISK_QTY_CAP))
+
+
+def extra_bto_qty(broker_qty: int) -> int:
+    """Contracts left to the 16-lot cap. 9/24 winners had 3–5 of headroom."""
+    return max(0, RISK_QTY_CAP - int(broker_qty))
+
+
+_OCC_EXP = re.compile(r"(\d{6})[CP]")
+
+
+def option_dte(option_symbol: str | None, session_date: str) -> int | None:
+    """Days from session_date to OCC expiry. None = unknown (treat as 0DTE)."""
+    if not option_symbol:
+        return None
+    m = _OCC_EXP.search(option_symbol.upper())
+    if not m:
+        return None
+    raw = m.group(1)
+    try:
+        exp = date(2000 + int(raw[0:2]), int(raw[2:4]), int(raw[4:6]))
+        sess = date.fromisoformat(session_date)
+    except ValueError:
+        return None
+    return (exp - sess).days
+
+
+def counts_toward_fail_streak(dte: int | None) -> bool:
+    """1DTE+ does not increment or reset the 0DTE fail streak."""
+    if not FAIL_STREAK_0DTE_ONLY:
+        return True
+    return dte is None or dte <= 0
 
 
 def hhmm_in_window(hhmm: str, start: str, end: str) -> bool:
@@ -294,19 +330,24 @@ class SessionState:
         for send_ts, direction in rows:
             self.consumed[float(send_ts)] = direction
 
-    def on_flatten(self, realized_delta: float, phase: str) -> None:
-        """Flatten must NOT un-consume send_ts."""
+    def on_flatten(self, realized_delta: float, phase: str, *, dte: int | None = None) -> None:
+        """Flatten must NOT un-consume send_ts.
+
+        1DTE FAILs/wins are invisible to consecutive_fail_n. 9/28 1DTE
+        scratches had halted the 0DTE book before the 767-put printed.
+        """
         self.session_realized_usd += realized_delta
         self.pending_entry = False
         self.inflight = False
         self.broker_qty = 0
         self.ticket_phase = None
-        if phase == "FAIL":
-            self.consecutive_fail_n += 1
-            if self.halt_lifted:
-                self.fails_after_lift_n += 1
-        else:
-            self.consecutive_fail_n = 0
+        if counts_toward_fail_streak(dte):
+            if phase == "FAIL":
+                self.consecutive_fail_n += 1
+                if self.halt_lifted:
+                    self.fails_after_lift_n += 1
+            else:
+                self.consecutive_fail_n = 0
         self.refresh_halt()
 
     def _trip_halt(self, reason: HaltReason) -> None:
@@ -332,7 +373,7 @@ class SessionState:
                 self._trip_halt("consecutive_fail")
             return
         # 9/29: 0-for-N never tripped halt until a prior lift. First-line stop:
-        # −$500 session cash or 4 consecutive FAILs, no lift required.
+        # −$500 session cash or 4 consecutive 0DTE FAILs, no lift required.
         if self.session_realized_usd <= -SESSION_LOSS_HALT_USD:
             self._trip_halt("session_loss")
             return
@@ -464,6 +505,9 @@ def decide_manage(
         ticket_phase=ticket_phase,
     )
     if reason is None:
+        mfe = round(mark_bid - fill_px, 4)
+        if mfe >= EXTRA_BTO_MFE_USD:
+            state.ticket_phase = "RUN"
         return apply_manage_result(
             state,
             {
@@ -472,6 +516,7 @@ def decide_manage(
                 "override_trail": False,
                 "ignore_trail": False,
                 "engine_exit_mode": ENGINE_EXIT_MODE,
+                "ticket_phase": state.ticket_phase,
             },
         )
     if reason == "protective":

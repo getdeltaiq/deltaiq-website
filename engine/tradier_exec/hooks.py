@@ -13,12 +13,14 @@ from engine.shared.gates import (
     BTO_SOURCE,
     CHOP_SIZE,
     ENGINE_EXIT_MODE,
+    FAIL_STREAK_0DTE_ONLY,
     QUEUE_OPPOSITE,
     TAKE_EXIT,
     SessionState,
     apply_manage_result,
     decide_manage,
     decide_starter,
+    extra_bto_qty,
     new_session,
     source_skip_reason,
 )
@@ -34,6 +36,8 @@ def today_et() -> str:
 def enforce_keep_halt(state: SessionState) -> None:
     """9/29 stay halted even if a dashboard flag was flipped."""
     if today_et() != SESSION_KEEP_HALT_DATE:
+        return
+    if state.session_date != SESSION_KEEP_HALT_DATE:
         return
     state.session_halt = True
     state.session_lost_blocks_send = True
@@ -66,7 +70,10 @@ def on_manage(state: SessionState, **kwargs) -> dict:
 
 
 def before_extra_bto(state: SessionState, **kwargs) -> dict:
-    """Size-up only when extra_bto_ok. Never a second starter."""
+    """Size-up only when extra_bto_ok. Never a second starter.
+
+    Default add_qty is remaining room to 16. 9/24 winners left 3–5 unused.
+    """
     enforce_keep_halt(state)
     src = source_skip_reason(
         plot=kwargs.get("plot"),
@@ -76,16 +83,20 @@ def before_extra_bto(state: SessionState, **kwargs) -> dict:
     if src is not None:
         state.last_action = src
         return {"post": False, "action": src}
+    add = int(kwargs.get("add_qty") or 0)
+    if add <= 0:
+        add = extra_bto_qty(state.broker_qty)
     ok = state.extra_bto_ok(
-        int(kwargs.get("add_qty") or 0),
+        add,
         float(kwargs.get("mfe_usd") or 0.0),
         float(kwargs.get("mark_bid") or 0.0),
         float(kwargs.get("avg_fill") or 0.0),
     )
     if not ok:
         state.last_action = "top_up_blocked"
-        return {"post": False, "action": "top_up_blocked"}
-    return {"post": True, "action": "extra_bto"}
+        return {"post": False, "action": "top_up_blocked", "qty": 0}
+    state.last_action = "extra_bto"
+    return {"post": True, "action": "extra_bto", "qty": add}
 
 
 def health_overlay(state: SessionState) -> dict:
@@ -113,6 +124,8 @@ def health_overlay(state: SessionState) -> dict:
         "skip_choppy_is_refuse": True,
         "bto_source": BTO_SOURCE,
         "queue_opposite": QUEUE_OPPOSITE,
+        "fail_streak_0dte_only": FAIL_STREAK_0DTE_ONLY,
+        "extra_bto": True,
         "session_halt": state.session_halt,
         "session_halt_reason": state.session_halt_reason,
         "session_lost_blocks_send": state.session_lost_blocks_send,

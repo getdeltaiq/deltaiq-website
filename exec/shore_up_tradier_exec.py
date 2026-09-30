@@ -168,7 +168,8 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    NEVER DELETE except session_date rollover.
 
 7) Halt first-line (9/29 0-for-N never waited for a lift)
-   −$500 session cash OR 4 consecutive FAILs halt even if halt_lifted is False.
+   −$500 session cash OR 4 consecutive 0DTE FAILs halt even if halt_lifted is False.
+   1DTE FAILs do not increment consecutive_fail_n. Call before_extra_bto on RUN.
    After a lift, additional −$500 / 4 fails-after-lift re-halt.
    apply_broker_session_cash(tradier option cash) every flatten.
 

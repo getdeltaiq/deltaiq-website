@@ -38,23 +38,33 @@ class EnvelopeLotTests(unittest.TestCase):
 class HaltWalkTests(unittest.TestCase):
     def test_nine_twenty_three_skips_blowup_and_tiny_wins(self):
         lots = load_lots()["days"]["2026-09-23"]
-        w = walk_session(lots, oldest_first=True)
+        w = walk_session(lots, oldest_first=True, session_date="2026-09-23")
         self.assertEqual(w["halt_reason"], "consecutive_fail")
-        self.assertLessEqual(w["n_kept"], 4)
         skipped_live = [round(x["proceeds"] - x["cost"], 2) for x in w["skipped"]]
         self.assertTrue(any(x < -1200 for x in skipped_live))
-        self.assertGreater(w["wins_skipped"], 0)
-        self.assertGreater(w["cover"], -400)
+        self.assertGreater(w["cover"], -450)
         self.assertLess(w["live_lots"], -1600)
 
     def test_nine_twenty_four_keeps_the_puts(self):
         lots = load_lots()["days"]["2026-09-24"]
-        w = walk_session(lots, oldest_first=True)
+        w = walk_session(lots, oldest_first=True, session_date="2026-09-24")
         self.assertEqual(w["halt_reason"], "none")
         self.assertEqual(w["n_skipped"], 0)
         self.assertGreater(w["wins_kept"], 600)
         self.assertEqual(w["wins_skipped"], 0)
         self.assertGreater(w["cover"], 200)
+
+    def test_nine_twenty_five_keeps_the_1dte_runner(self):
+        lots = load_lots()["days"]["2026-09-25"]
+        w = walk_session(lots, oldest_first=True, session_date="2026-09-25")
+        self.assertGreater(w["cover"], 0)
+        self.assertTrue(any(x["live"] > 200 for x in w["kept"]))
+
+    def test_nine_twenty_eight_keeps_the_0dte_put(self):
+        lots = load_lots()["days"]["2026-09-28"]
+        w = walk_session(lots, oldest_first=True, session_date="2026-09-28")
+        self.assertGreater(w["cover"], 800)
+        self.assertTrue(any(x["live"] > 1400 for x in w["kept"]))
 
     def test_halt_does_not_carry_to_next_et_date(self):
         a = new_session("2026-09-23")
@@ -106,9 +116,9 @@ class WeekNetTests(unittest.TestCase):
         self.assertGreater(s["cover_week"], s["live_week"] + 2000)
         # Green sessions still print a plus once halt resets.
         self.assertGreater(s["days"]["2026-09-24"]["cover"], 0)
-        self.assertGreater(s["days"]["2026-09-25"]["cover"], -200)
-        # Late winners after halt are the cost of the floor.
-        self.assertGreater(s["wins_skipped_usd"], 0)
+        self.assertGreater(s["days"]["2026-09-25"]["cover"], 0)
+        self.assertGreater(s["days"]["2026-09-28"]["cover"], 800)
+        self.assertGreater(s["cover_week"], 400)
 
 
 if __name__ == "__main__":

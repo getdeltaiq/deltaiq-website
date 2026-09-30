@@ -58,8 +58,10 @@ class CoverUsExec:
         self.log.append({"kind": "manage", **{k: v for k, v in m.items() if k != "ladder"}})
         return m
 
-    def flatten(self, realized_delta: float, phase: str = "FAIL") -> None:
-        self.state.on_flatten(realized_delta, phase)
+    def flatten(
+        self, realized_delta: float, phase: str = "FAIL", *, dte: int | None = None
+    ) -> None:
+        self.state.on_flatten(realized_delta, phase, dte=dte)
         self.state.apply_broker_session_cash(self.state.session_realized_usd)
         self.log.append(
             {

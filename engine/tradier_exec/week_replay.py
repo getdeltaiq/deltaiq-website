@@ -17,6 +17,8 @@ from engine.shared.gates import (
     PROTECTIVE_STOP_USD,
     SESSION_LOSS_HALT_USD,
     TICKET_RISK_USD,
+    counts_toward_fail_streak,
+    option_dte,
     starter_qty,
 )
 
@@ -50,6 +52,7 @@ def walk_session(
     lots: list[dict],
     *,
     oldest_first: bool = True,
+    session_date: str | None = None,
 ) -> dict:
     ordered = list(reversed(lots)) if oldest_first else list(lots)
     session = 0.0
@@ -66,7 +69,8 @@ def walk_session(
     for lot in ordered:
         live = round(lot["proceeds"] - lot["cost"], 2)
         env, is_fail = envelope_lot(lot["qty"], lot["cost"], lot["proceeds"])
-        row = {**lot, "live": live, "env": env, "fail": is_fail}
+        dte = option_dte(lot.get("symbol"), session_date or lot.get("session_date") or "")
+        row = {**lot, "live": live, "env": env, "fail": is_fail, "dte": dte}
         if halted:
             skipped.append(row)
             if live >= 0:
@@ -80,10 +84,11 @@ def walk_session(
             wins_kept += live
         else:
             losses_kept += env
-        if is_fail:
-            fails += 1
-        else:
-            fails = 0
+        if counts_toward_fail_streak(dte):
+            if is_fail:
+                fails += 1
+            else:
+                fails = 0
         if session <= -SESSION_LOSS_HALT_USD:
             halted = True
             halt_reason = "session_loss"
@@ -204,7 +209,7 @@ def week_summary() -> dict:
     wins_skipped = 0.0
 
     for day, lots in data["days"].items():
-        w = walk_session(lots, oldest_first=True)
+        w = walk_session(lots, oldest_first=True, session_date=day)
         live = live_eq.get(day, w["live_lots"])
         days[day] = {
             "live_equity": live,
