@@ -107,7 +107,8 @@ class NineTwentyNineTests(unittest.TestCase):
         self.assertTrue(nb["halted"])
         self.assertGreater(b["cover"], live)
         self.assertGreater(nb["cover"], live)
-        self.assertGreater(b["cover"], nb["cover"])
+        # Open-fade already skips 10:00 0DTE, so bounce and no-bounce match.
+        self.assertEqual(b["cover"], nb["cover"])
         self.assertGreater(b["cover"], -700)
         self.assertEqual(b["n_kept"], 4)
         self.assertNotIn(14, b["qty"])

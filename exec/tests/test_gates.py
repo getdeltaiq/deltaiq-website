@@ -66,7 +66,7 @@ class ConsumeTests(unittest.TestCase):
             spy=764.78,
             bar_high=764.80,
             bar_low=764.68,
-            et_hhmm="10:03",
+            et_hhmm="11:02",
             ask=1.42,
             **CLEAN_Q,
         )
@@ -85,7 +85,7 @@ class ConsumeTests(unittest.TestCase):
             spy=764.90,
             bar_high=765.00,
             bar_low=764.70,
-            et_hhmm="10:13",
+            et_hhmm="11:13",
             ask=1.57,
             **CLEAN_Q,
         )
@@ -104,7 +104,7 @@ class ConsumeTests(unittest.TestCase):
             spy=764.78,
             bar_high=764.80,
             bar_low=764.60,
-            et_hhmm="10:03",
+            et_hhmm="11:02",
             ask=1.42,
             **CLEAN_Q,
         )
@@ -120,7 +120,7 @@ class ConsumeTests(unittest.TestCase):
             spy=764.78,
             bar_high=764.80,
             bar_low=764.60,
-            et_hhmm="10:03",
+            et_hhmm="11:02",
             ask=1.39,
             **CLEAN_Q,
         )
