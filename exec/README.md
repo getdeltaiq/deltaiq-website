@@ -28,6 +28,7 @@ Railway is not the source of this logic. **`engine/` is.** This directory is a c
 | CHOPPY / weak / chase still bought | `quality_skip_reason` in `before_bto`; fail closed if fields missing; `chop_size=False` |
 | 1DTE misfire in RANGE/CHOP before 12:45 | `skip_1dte_not_trend` unless `regime=TREND` |
 | After 12:45 still looking for 0DTE / skipping 1DTE | `dte_cutover_et=12:45`; trade 1DTE; `skip_0dte_after_cutover` |
+| Bid-scratch + rejected STC spray | `before_stc`; `skip_already_flat` when broker qty 0; no close_push |
 | Rapid FAIL re-entry | `skip_cooldown_after_fail` (480s); `COOLDOWN_AFTER_FAIL_SEC` is wired |
 | Trail held 16-lot to −$336 | `apply_manage_result` sets `disable_trail`; `engine_exit_mode=ladder_to_market` |
 | consumed_send_ts [] after flatten | `persist=` INSERT ON CONFLICT; `load_consumed` at boot; never DELETE |

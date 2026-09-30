@@ -71,7 +71,7 @@ WORKING_STC_ON_FILL = False
 # + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:45 (trade it).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-09-30-dte-cutover"
+REC_BOOK_SHIP = "2026-09-30-path-bind"
 
 
 def rec_book() -> dict:
@@ -105,6 +105,8 @@ def rec_book() -> dict:
         "stc_on_bto_fill": STC_ON_BTO_FILL,
         "working_stc_on_fill": WORKING_STC_ON_FILL,
         "before_stc": True,
+        "skip_already_flat": True,
+        "flatten_limit_thru_usd": 0.0,
         "quote_grace_sec": QUOTE_GRACE_SEC,
         "fail_sec": FAIL_SEC,
         "hold_exit": HOLD_EXIT,
@@ -751,7 +753,26 @@ def decide_stc(state: SessionState, **kwargs) -> dict:
     """Call immediately before any Tradier sell_to_close.
 
     9/30 10:39 posted STC on BTO fill. Rec hold ticks must not sell.
+    9/30 11:04 / 12:02 sprayed the ladder after the bid STC already filled
+    (reject 0/14). Never STC when broker qty is 0.
     """
+    if "qty" in kwargs and kwargs["qty"] is not None:
+        qty = int(kwargs["qty"])
+    else:
+        qty = int(state.broker_qty or 0)
+    if qty <= 0:
+        state.last_action = "skip_already_flat"
+        state.broker_qty = 0
+        return {
+            "post": False,
+            "post_stc": False,
+            "flatten": False,
+            "working_stc": False,
+            "cancel_working_stc": True,
+            "reason": "skip_already_flat",
+            "take_exit": HOLD_EXIT,
+            "engine_exit_mode": ENGINE_EXIT_MODE,
+        }
     m = decide_manage(state, **kwargs)
     if not m.get("flatten"):
         state.last_action = "hold_no_stc"

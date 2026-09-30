@@ -118,7 +118,7 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["bto_source"], "sub_alert_send")
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
-        self.assertEqual(h["rec_book_ship"], "2026-09-30-dte-cutover")
+        self.assertEqual(h["rec_book_ship"], "2026-09-30-path-bind")
         self.assertTrue(h["fail_streak_0dte_only"])
         self.assertTrue(h["extra_bto"])
         self.assertEqual(h["extra_bto_fill_to"], 16)
@@ -132,6 +132,8 @@ class HookHaltTests(unittest.TestCase):
         self.assertTrue(h["stc_requires_envelope"])
         self.assertFalse(h["stc_on_bto_fill"])
         self.assertFalse(h["working_stc_on_fill"])
+        self.assertTrue(h["skip_already_flat"])
+        self.assertEqual(h["flatten_limit_thru_usd"], 0.0)
         self.assertEqual(h["hold_exit"], "hold")
 
     def test_before_bto_blocks_on_keep_halt_date(self):

@@ -163,7 +163,10 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
                     ticket_phase=phase, bid=bid)
    if not stc["post"]:
        return
+   if BROKER_QTY <= 0 or stc.get("reason") == "skip_already_flat":
+       cancel working STC; return  # 11:04/12:02 reject spray
    STC ladder: bid, bid-0.05, bid-0.10, MARKET
+   Disable native close_push / flatten_limit_thru_usd (set 0).
    then state.on_flatten(realized, phase)  # MUST NOT delete consumed_sends
    recover_lost: if last_action is recover_lost_fresh_fill, do NOT STC.
 
@@ -197,7 +200,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-09-30-dte-cutover, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-09-30-path-bind, session_loss_halt_usd=750
    queue_opposite=false (overwrite Railway true)
    take_exit=ladder_to_market (flatten mode only; HOLD ticks take_exit=hold)
    stc_requires_envelope=true, stc_on_bto_fill=false, working_stc_on_fill=false
@@ -205,6 +208,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    fail_streak_0dte_only=true, extra_bto=true, extra_bto_fill_to=16
    skip_1dte_not_trend=true (morning only), dte_cutover_et=12:45,
    skip_0dte_after_cutover=true, trade_1dte_after_cutover=true,
+   skip_already_flat=true, flatten_limit_thru_usd=0,
    cooldown_after_fail_sec=480
    engine_exit_mode == ladder_to_market (not trail).
    After a real starter: consumed_send_ts nonempty and still nonempty after flatten.

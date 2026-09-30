@@ -313,6 +313,27 @@ class EnvelopeTests(unittest.TestCase):
         self.assertEqual(d["reason"], "stc_requires_envelope")
 
 
+    def test_before_stc_skips_when_already_flat(self):
+        from engine.tradier_exec.hooks import before_stc
+
+        s = new_session("2026-09-30")
+        s.on_bto_fill(14, 1.37, now=1_000.0)
+        d = before_stc(
+            s,
+            fill_px=1.37,
+            mark_bid=1.22,
+            qty=0,
+            spy_adverse=0.20,
+            seconds_since_fill=20,
+            ticket_phase="FAIL",
+            bid=1.22,
+            now=1_020.0,
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["reason"], "skip_already_flat")
+        self.assertTrue(d["cancel_working_stc"])
+
+
     def test_stale_prior_fail_clock_cannot_flatten_new_fill(self):
         s = new_session("2026-09-30")
         s.on_bto_fill(10, 1.84, now=10_000.0)

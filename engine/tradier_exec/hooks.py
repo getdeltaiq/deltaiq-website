@@ -120,6 +120,7 @@ def health_overlay(state: SessionState) -> dict:
             "stc_requires_envelope": True,
             "stc_on_bto_fill": False,
             "working_stc_on_fill": False,
+            "skip_already_flat": True,
             "skip_bounce_n": state.skip_bounce_n,
             "skip_quality_n": state.skip_quality_n,
             "consumed_send_ts": list(state.consumed.keys()),
