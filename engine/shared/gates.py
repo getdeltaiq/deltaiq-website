@@ -43,6 +43,13 @@ CATASTROPHIC_SPY = 0.50
 FAIL_SEC = 90.0
 BOUNCE_AGAINST_SPY = 0.30
 OPEN_REVERSAL_WINDOW = ("10:00", "10:02")
+# 9/30 10:14 BEAR 10-lot 1.84→1.65 −$190. First 20 minutes of the midday
+# 0DTE book is fade tape. 1DTE TREND still posts (9/25). 10:21–12:29 0DTE
+# still posts. Morning 09:36–09:40 rip is a different window.
+OPEN_FADE_WINDOW = ("10:00", "10:20")
+# 9/30 12:44 BULL 16-lot 1.19→1.03 −$256, STC at 12:45 cutover. Do not
+# open a fresh 0DTE in the last 15 minutes of the 0DTE book.
+NEAR_CUTOVER_0DTE_ET = "12:30"
 EXTRA_BTO_MFE_USD = 0.20
 SESSION_LOSS_HALT_USD = 750.0  # 3 envelope misses (~$240) before the day stops
 CONSECUTIVE_FAIL_HALT = 4
@@ -71,7 +78,7 @@ WORKING_STC_ON_FILL = False
 # + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:45 (trade it).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-09-30-path-bind"
+REC_BOOK_SHIP = "2026-09-30-alert-quality"
 
 
 def rec_book() -> dict:
@@ -92,6 +99,10 @@ def rec_book() -> dict:
         "dte_cutover_et": DTE_CUTOVER_ET,
         "skip_0dte_after_cutover": True,
         "trade_1dte_after_cutover": True,
+        "skip_0dte_open_fade": True,
+        "open_fade_window": list(OPEN_FADE_WINDOW),
+        "skip_0dte_near_cutover": True,
+        "near_cutover_0dte_et": NEAR_CUTOVER_0DTE_ET,
         "cooldown_after_fail_sec": COOLDOWN_AFTER_FAIL_SEC,
         "session_loss_halt_usd": SESSION_LOSS_HALT_USD,
         "consecutive_fail_halt": CONSECUTIVE_FAIL_HALT,
@@ -243,6 +254,31 @@ def misfire_skip_reason(
         reg = (regime or "").strip().upper()
         if reg not in TREND_REGIMES:
             return "skip_1dte_not_trend"
+    return None
+
+
+def clock_quality_skip_reason(
+    *,
+    dte: int | None = None,
+    et_hhmm: str = "",
+) -> str | None:
+    """Refuse the two 9/30 morning envelope losses >$150. Not a 0DTE freeze.
+
+    10:14 BEAR −$190 sat in the first 20 minutes of midday 0DTE.
+    12:44 BULL −$256 opened 0DTE one minute before the 1DTE cutover.
+    1DTE (9/25 TREND, 15:16 runner) and 10:21–12:29 0DTE still post.
+    Missing dte is treated as 0DTE (fail closed) inside these windows.
+    """
+    if not et_hhmm:
+        return None
+    if past_dte_cutover(et_hhmm):
+        return None
+    if dte is not None and dte >= 1:
+        return None
+    if hhmm_in_window(et_hhmm, *OPEN_FADE_WINDOW):
+        return "skip_0dte_open_fade"
+    if et_hhmm >= NEAR_CUTOVER_0DTE_ET:
+        return "skip_0dte_near_cutover"
     return None
 
 
@@ -650,6 +686,12 @@ def decide_starter(
         state.skip_bounce_n += 1
         state.last_action = "skip_bounce_against"
         return {"action": "skip_bounce_against", "qty": 0, "post": False}
+    cq = clock_quality_skip_reason(dte=dte_val, et_hhmm=et_hhmm)
+    if cq is not None:
+        state.try_consume(send_ts, direction, count_starter=False, persist=persist)
+        state.skip_quality_n += 1
+        state.last_action = cq
+        return {"action": cq, "qty": 0, "post": False}
     if not state.may_starter_bto():
         # Consume so an illicit halt lift cannot fire this send later the same day.
         state.try_consume(send_ts, direction, count_starter=False, persist=persist)

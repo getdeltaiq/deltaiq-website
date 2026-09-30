@@ -37,8 +37,9 @@ class RuntimeTapeTests(unittest.TestCase):
         posted = [x for x in starters if x.get("post")]
         actions = [x.get("action") for x in starters]
         self.assertIn("skip_dup_send_ts", actions)
-        # One starter at 10:00, not 14+14.
-        self.assertEqual(posted[0]["qty"], 14)
+        self.assertIn("skip_0dte_open_fade", actions)
+        # 10:00–10:20 0DTE is open-fade (9/30 10:14 −$190). First post is 10:37.
+        self.assertEqual(posted[0]["qty"], 11)
         self.assertTrue(ex.state.session_halt)
         self.assertIn(ex.state.session_halt_reason, ("session_loss", "consecutive_fail"))
         # Afternoon 16-lot / 15:32 / 15:44 must not post after halt.

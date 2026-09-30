@@ -11,7 +11,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from engine.shared.gates import ledger_invariant as _qty_ledger_ok
+from engine.shared.gates import (
+    DTE_CUTOVER_ET,
+    NEAR_CUTOVER_0DTE_ET,
+    OPEN_FADE_WINDOW,
+    clock_quality_skip_reason,
+    ledger_invariant as _qty_ledger_ok,
+)
 
 Direction = Literal["BULL", "BEAR"]
 
@@ -66,6 +72,8 @@ class Candidate:
     et_hhmm: str
     copy: str = COPY
     same_dir_age_sec: float | None = None
+    dte: int | None = None
+    regime: str | None = None
 
 
 def skip_reason(c: Candidate) -> str | None:
@@ -76,6 +84,9 @@ def skip_reason(c: Candidate) -> str | None:
         return "skip_copy"
     if not c.armed:
         return "skip_not_armed"
+    cq = clock_quality_skip_reason(dte=c.dte, et_hhmm=c.et_hhmm)
+    if cq is not None:
+        return cq
     if SKIP_ARM_BAR and c.on_arm_bar:
         return "skip_arm_bar"
     if SKIP_CHOPPY and c.choppy:
@@ -162,4 +173,9 @@ class PublishLedgers:
             "skip_strong_pre_move": SKIP_STRONG_PRE_MOVE,
             "pre_move_strong": PRE_MOVE_STRONG,
             "same_dir_lock_sec": SAME_DIR_LOCK_SEC,
+            "skip_0dte_open_fade": True,
+            "open_fade_window": list(OPEN_FADE_WINDOW),
+            "skip_0dte_near_cutover": True,
+            "near_cutover_0dte_et": NEAR_CUTOVER_0DTE_ET,
+            "dte_cutover_et": DTE_CUTOVER_ET,
         }

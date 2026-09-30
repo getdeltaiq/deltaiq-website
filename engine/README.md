@@ -26,6 +26,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - First-line halt: −$750 session cash (3 envelope misses) **or** 4 consecutive **0DTE** FAILs, even if halt was never lifted. 1DTE FAILs do not increment the streak (9/28 1DTE wiggles had halted before the 0DTE 767-put).
   - Extra BTO on RUN: fill remaining room to 16 when MFE ≥ $0.20 (`before_extra_bto`).
   - Misfire: 8-minute cooldown after any FAIL (`skip_cooldown_after_fail`). Before **12:45 ET** 1DTE starters require overlay `regime=TREND` (`skip_1dte_not_trend`). From **12:45** the book is 1DTE: trade next-day OCC, refuse leftover 0DTE (`skip_0dte_after_cutover`). Do not freeze 0DTE before cutover.
+  - **9/30 alert quality (morning losses >$150):** 0DTE in **10:00–10:20** is `skip_0dte_open_fade` (10:14 BEAR −$190). 0DTE in **12:30–12:44** is `skip_0dte_near_cutover` (12:44 BULL −$256, STC at the 12:45 cutover). 1DTE TREND still posts in those windows. 10:21–12:29 0DTE still posts. 09:36–09:40 morning rip still sends.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` into `before_bto`.
 - Live Railway repo is `getdeltaiq/deltaiq-signal-engine` branch `production`. Copy `engine/shared/gates.py`, `engine/tradier_exec/hooks.py`, and `engine/overlay/publish.py` there to ship. This website PR does not deploy the bot.
@@ -37,19 +38,24 @@ Paste into the `deltaiq-signal-engine` production agent:
 ```
 Copy engine/shared/gates.py, engine/tradier_exec/hooks.py, engine/overlay/publish.py
 from getdeltaiq/deltaiq-website PR 24 onto production.
-rec_book_ship=2026-09-30-path-bind. Do not lift today's halt.
+rec_book_ship=2026-09-30-alert-quality. Do not lift a halt that is already off.
 
-PATH BIND — flags are on /health; native still bid-scratched 9/30 10:39,
-11:04, 12:02 and sprayed rejected STCs. close_push_skip=exit_not_filled
-and flatten_limit_thru_usd=0.1 are the leftover spray. 11:21/11:29 missed
-because pending_entry + working_bto locked later subs.
+ALERT QUALITY — 9/30 two morning envelope losses >$150 were real sub sends:
+10:14 BEAR 10-lot 1.84→1.65 −$190, 12:44 BULL 16-lot 1.19→1.03 −$256.
+Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
 
-1) On BTO fill:
+1) Overlay decide_sub_send AND before_bto clock_quality_skip_reason:
+   0DTE (or missing dte) in 10:00–10:20 ET => skip_0dte_open_fade (admin only, no BTO).
+   0DTE (or missing dte) in 12:30–12:44 ET => skip_0dte_near_cutover (admin only, no BTO).
+   1DTE still sends/posts in those windows (9/25 TREND). 10:21–12:29 0DTE still posts.
+   09:36–09:40 morning rip still sends. 12:45+ is the 1DTE book (15:16 runner).
+
+2) On BTO fill:
    state.on_bto_fill(qty, fill_px)
    Do NOT post STC. Do NOT rest a working bid/ask/mid exit.
    Ignore leftover book.take_exit. last_action=bto_fill. pending_entry=false.
 
-2) Every manage tick / every STC:
+3) Every manage tick / every STC:
    qty = BROKER_QTY (Tradier position, not intended).
    m = on_manage(..., qty=qty)
    if qty <= 0 or m["flatten"] is not True:
@@ -59,24 +65,21 @@ because pending_entry + working_bto locked later subs.
        cancel working STC; return
    Only then walk bid / bid-0.05 / bid-0.10 / MARKET ONCE.
    Disable native close_push. Set flatten_limit_thru_usd=0.
-   Do not spray a second ladder. close_push_skip must not be exit_not_filled
-   after a filled STC.
 
-3) Working BTO lock (11:21/11:29):
+4) Working BTO lock (11:21/11:29):
    One ask limit at a time. While send age < 90s, replace to CURRENT ask.
    If send age >= 90s OR ask-limit >= 0.10: CANCEL, pending_entry=false,
    inflight=false, last_error=null. Next before_bto(post=true) may POST.
-   recover_lost_flat must not keep pending_entry true when broker_qty=0
-   and the only working order is a stale unfilled BTO.
 
-4) DTE clock stays: 12:45 switch to 1DTE, trade it, skip leftover 0DTE.
+5) DTE clock stays: 12:45 switch to 1DTE, trade it, skip leftover 0DTE.
    STC-hold stays. 1DTE FAILs after 12:45 count toward the 4-fail halt.
 
-Proof: rec_book_ship=2026-09-30-path-bind, skip_already_flat=true,
-flatten_limit_thru_usd=0, before_stc=true, stc_on_bto_fill=false,
-working_stc_on_fill=false, dte_cutover_et=12:45, trade_1dte_after_cutover=true.
-A 1–2 cent scratch in <15s must not happen. After a filled STC, no rejected
-0/N ladder. After a stale unfilled BTO cancel, the next sub send BTOs.
+Proof: rec_book_ship=2026-09-30-alert-quality, skip_0dte_open_fade=true,
+open_fade_window=["10:00","10:20"], skip_0dte_near_cutover=true,
+near_cutover_0dte_et=12:30, skip_already_flat=true, flatten_limit_thru_usd=0,
+dte_cutover_et=12:45, trade_1dte_after_cutover=true.
+A 10:14 0DTE BEAR must be skip_0dte_open_fade. A 12:44 0DTE BULL must be
+skip_0dte_near_cutover. An 11:48 0DTE and a 15:16 1DTE must still POST.
 
 ```
 

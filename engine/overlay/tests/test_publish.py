@@ -83,6 +83,32 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertTrue(d["send"])
         self.assertEqual(d["reason"], "sub_alert_send")
 
+    def test_1014_0dte_is_admin_only(self):
+        d = decide_sub_send(_c(et_hhmm="10:14", dte=0, direction="BEAR", spy=768.17))
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_0dte_open_fade")
+
+    def test_1243_0dte_is_admin_only(self):
+        d = decide_sub_send(_c(et_hhmm="12:43", dte=0, direction="BULL", spy=768.41))
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_0dte_near_cutover")
+
+    def test_morning_rip_still_sends(self):
+        d = decide_sub_send(_c(et_hhmm="09:38"))
+        self.assertTrue(d["send"])
+
+    def test_open_fade_1dte_trend_still_sends(self):
+        d = decide_sub_send(_c(et_hhmm="10:14", dte=1, regime="TREND"))
+        self.assertTrue(d["send"])
+
+    def test_1148_0dte_still_sends(self):
+        d = decide_sub_send(_c(et_hhmm="11:48", dte=0))
+        self.assertTrue(d["send"])
+
+    def test_1516_after_cutover_still_sends(self):
+        d = decide_sub_send(_c(et_hhmm="15:16", dte=1))
+        self.assertTrue(d["send"])
+
     def test_outside_window_admin_only(self):
         d = decide_sub_send(_c(et_hhmm="09:20"))
         self.assertFalse(d["send"])
@@ -118,7 +144,7 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["bto_source"], "sub_alert_send")
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
-        self.assertEqual(h["rec_book_ship"], "2026-09-30-path-bind")
+        self.assertEqual(h["rec_book_ship"], "2026-09-30-alert-quality")
         self.assertTrue(h["fail_streak_0dte_only"])
         self.assertTrue(h["extra_bto"])
         self.assertEqual(h["extra_bto_fill_to"], 16)
@@ -126,6 +152,10 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["dte_cutover_et"], "12:45")
         self.assertTrue(h["skip_0dte_after_cutover"])
         self.assertTrue(h["trade_1dte_after_cutover"])
+        self.assertTrue(h["skip_0dte_open_fade"])
+        self.assertEqual(h["open_fade_window"], ["10:00", "10:20"])
+        self.assertTrue(h["skip_0dte_near_cutover"])
+        self.assertEqual(h["near_cutover_0dte_et"], "12:30")
         self.assertEqual(h["cooldown_after_fail_sec"], 480.0)
         self.assertEqual(h["session_loss_halt_usd"], 750.0)
         self.assertTrue(h["before_stc"])

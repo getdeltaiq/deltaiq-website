@@ -7,6 +7,7 @@ import unittest
 from exec.gates import (
     SessionState,
     bounce_against,
+    clock_quality_skip_reason,
     decide_manage,
     decide_starter,
     envelope_hit,
@@ -690,7 +691,7 @@ class MisfireTests(unittest.TestCase):
         blocked = self._base(s, send_ts=10.03, et_hhmm="10:03")
         self.assertFalse(blocked["post"])
         self.assertEqual(blocked["action"], "skip_cooldown_after_fail")
-        open_ok = self._base(s, send_ts=10.09, et_hhmm="10:09")
+        open_ok = self._base(s, send_ts=10.21, et_hhmm="10:21")
         self.assertTrue(open_ok["post"])
 
     def test_missing_option_symbol_is_refused(self):
@@ -747,6 +748,123 @@ class PersistConsumeTests(unittest.TestCase):
         )
         self.assertFalse(d["post"])
         self.assertEqual(d["action"], "skip_dup_send_ts")
+
+
+class AlertQualityTests(unittest.TestCase):
+    """9/30 morning envelope losses >$150: 10:14 BEAR −$190, 12:44 BULL −$256."""
+
+    def _starter(self, s, **kw):
+        args = dict(
+            send_ts=70.0,
+            direction="BEAR",
+            send_spy=768.17,
+            spy=768.17,
+            bar_high=768.20,
+            bar_low=768.00,
+            et_hhmm="10:14",
+            ask=1.84,
+            **CLEAN_Q,
+        )
+        args.update(kw)
+        return decide_starter(s, **args)
+
+    def test_1014_0dte_bear_is_open_fade(self):
+        s = new_session("2026-09-30")
+        d = self._starter(
+            s,
+            option_symbol="SPY260930P00768000",
+            et_hhmm="10:14",
+            ask=1.84,
+            direction="BEAR",
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_0dte_open_fade")
+        self.assertEqual(s.skip_quality_n, 1)
+        self.assertEqual(s.session_starters_n, 0)
+
+    def test_1244_0dte_bull_is_near_cutover(self):
+        s = new_session("2026-09-30")
+        d = self._starter(
+            s,
+            send_ts=71.0,
+            direction="BULL",
+            send_spy=768.41,
+            spy=768.41,
+            bar_high=768.50,
+            bar_low=768.30,
+            et_hhmm="12:44",
+            ask=1.19,
+            option_symbol="SPY260930C00768000",
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_0dte_near_cutover")
+        self.assertEqual(s.skip_quality_n, 1)
+
+    def test_1148_0dte_midbook_still_posts(self):
+        s = new_session("2026-09-30")
+        d = self._starter(
+            s,
+            send_ts=72.0,
+            direction="BEAR",
+            send_spy=768.20,
+            spy=768.20,
+            et_hhmm="11:48",
+            ask=1.39,
+            option_symbol="SPY260930P00768000",
+        )
+        self.assertTrue(d["post"])
+        self.assertEqual(d["qty"], 14)
+
+    def test_open_fade_does_not_freeze_1dte_trend(self):
+        s = new_session("2026-09-25")
+        d = self._starter(
+            s,
+            send_ts=73.0,
+            direction="BULL",
+            et_hhmm="10:14",
+            ask=2.32,
+            option_symbol="SPY260928C00771000",
+            regime="TREND",
+        )
+        self.assertTrue(d["post"])
+
+    def test_924_0dte_extra_bto_hour_still_posts(self):
+        s = new_session("2026-09-24")
+        d = self._starter(
+            s,
+            send_ts=74.0,
+            et_hhmm="11:02",
+            ask=1.51,
+            option_symbol="SPY260924P00766000",
+        )
+        self.assertTrue(d["post"])
+
+    def test_1516_1dte_runner_still_posts(self):
+        s = new_session("2026-09-30")
+        d = self._starter(
+            s,
+            send_ts=75.0,
+            direction="BEAR",
+            et_hhmm="15:16",
+            ask=2.38,
+            option_symbol="SPY261001P00762000",
+            regime="RANGE",
+        )
+        self.assertTrue(d["post"])
+        self.assertEqual(d["qty"], 8)
+
+    def test_clock_helper_matches_the_two_losses(self):
+        self.assertEqual(
+            clock_quality_skip_reason(dte=0, et_hhmm="10:14"),
+            "skip_0dte_open_fade",
+        )
+        self.assertEqual(
+            clock_quality_skip_reason(dte=0, et_hhmm="12:44"),
+            "skip_0dte_near_cutover",
+        )
+        self.assertIsNone(clock_quality_skip_reason(dte=0, et_hhmm="11:48"))
+        self.assertIsNone(clock_quality_skip_reason(dte=1, et_hhmm="10:14"))
+        self.assertIsNone(clock_quality_skip_reason(dte=1, et_hhmm="15:16"))
 
 
 class ExtraBtoTests(unittest.TestCase):
