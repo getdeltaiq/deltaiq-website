@@ -16,6 +16,7 @@ from engine.tradier_exec.week_replay import (
     two_week_recap,
     walk_session,
     week_summary,
+    weekly_impact,
 )
 
 
@@ -168,6 +169,50 @@ class TwoWeekRecapTests(unittest.TestCase):
         self.assertEqual(t["last_week"]["2026-09-25"]["n_skip_1dte"], 0)
         live = live_session_pnl()
         self.assertAlmostEqual(live["2026-09-21"], 519.07, places=2)
+
+
+class WeeklyImpactTests(unittest.TestCase):
+    def test_thirty_sessions_roll_to_weeks_only(self):
+        w = weekly_impact()
+        self.assertEqual(w["sessions"], 30)
+        self.assertEqual(sum(row["sessions"] for row in w["weeks"]), 30)
+        for row in w["weeks"]:
+            self.assertNotIn("days", row)
+            self.assertEqual(
+                set(row),
+                {
+                    "week",
+                    "monday",
+                    "sessions",
+                    "live",
+                    "rec",
+                    "impact",
+                    "result",
+                    "rec_tape",
+                },
+            )
+        by_monday = {row["monday"]: row for row in w["weeks"]}
+        # No Rec tape before 9/15: impact is funding-stripped live, unchanged.
+        self.assertEqual(by_monday["2026-08-17"]["impact"], 0.0)
+        self.assertEqual(by_monday["2026-08-24"]["impact"], 0.0)
+        self.assertEqual(by_monday["2026-08-31"]["impact"], 0.0)
+        self.assertEqual(by_monday["2026-09-07"]["impact"], 0.0)
+        # Rec weeks: 9/14–18, 9/21–25, 9/28–29.
+        self.assertGreater(by_monday["2026-09-14"]["impact"], 1000)
+        self.assertGreater(by_monday["2026-09-21"]["impact"], 3000)
+        self.assertGreater(by_monday["2026-09-28"]["impact"], 3000)
+        self.assertGreater(w["impact"], 7000)
+        self.assertEqual(w["result"], "win")
+        t = two_week_recap()
+        rec_spy = t["two_week_rec"]
+        spy_live = t["week_before_live"] + t["last_week_live"]
+        rec_week_impact = round(
+            by_monday["2026-09-14"]["impact"]
+            + by_monday["2026-09-21"]["impact"]
+            + by_monday["2026-09-28"]["impact"],
+            2,
+        )
+        self.assertAlmostEqual(rec_week_impact, rec_spy - spy_live, delta=20)
 
 
 if __name__ == "__main__":

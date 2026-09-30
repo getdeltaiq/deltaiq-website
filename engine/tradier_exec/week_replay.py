@@ -1,16 +1,18 @@
-"""Two-week cover-us recap. Lots only — no account ids, no broker calls.
+"""Weekly Rec vs live recap. Lots only — no account ids, no broker calls.
 
+30 trading days through 9/29, rolled to Mon–Fri weeks.
 Live 9/15–9/28 from closed option lots (newest-first as returned).
-Live 9/29 from fixtures/2026-09-29-orders.json.
+Live 9/29 from fixtures/2026-09-29-orders.json. Earlier sessions have no
+SPY lots; Rec equals live (impact $0). 9/11 $7,000 cash-in is stripped.
 
-Cover-us is envelope + first-line halt + consume-once.
-Rec adds extra BTO on RUN winners (fill to 16) and skip_1dte_not_trend
-except sessions overlay marked TREND (9/25 runner).
+Rec = envelope + first-line halt + extra BTO on RUN (fill to 16) +
+skip_1dte_not_trend except TREND (9/25 runner).
 """
 
 from __future__ import annotations
 
 import json
+from datetime import date, timedelta
 from pathlib import Path
 
 from engine.shared.gates import (
@@ -21,7 +23,6 @@ from engine.shared.gates import (
     counts_toward_fail_streak,
     extra_bto_qty,
     option_dte,
-    starter_qty,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "week-2026-09-22-lots.json"
@@ -30,8 +31,28 @@ FIXTURE_BEFORE = Path(__file__).parent / "fixtures" / "week-2026-09-15-lots.json
 # 9/25 1DTE runner was TREND. Other sessions: missing regime is a 1DTE refuse.
 TREND_SESSIONS = frozenset({"2026-09-25"})
 
-# Equity EOD (option cash + marks). 9/29 is live total equity after the session.
+# Equity EOD (option cash + marks). 8/17 is the close before the 30-session window.
+# 9/29 is live total equity after that session (MONTH curve stops at 9/28).
 LIVE_EOD = {
+    "2026-08-17": 554.93,
+    "2026-08-18": 544.77,
+    "2026-08-19": 542.49,
+    "2026-08-20": 540.75,
+    "2026-08-21": 536.76,
+    "2026-08-24": 525.10,
+    "2026-08-25": 534.89,
+    "2026-08-26": 527.29,
+    "2026-08-27": 564.79,
+    "2026-08-28": 545.36,
+    "2026-08-31": 550.25,
+    "2026-09-01": 542.37,
+    "2026-09-02": 557.13,
+    "2026-09-03": 566.40,
+    "2026-09-04": 568.56,
+    "2026-09-08": 556.82,
+    "2026-09-09": 551.62,
+    "2026-09-10": 539.89,
+    "2026-09-11": 7539.75,
     "2026-09-14": 7525.09,
     "2026-09-15": 7366.46,
     "2026-09-16": 7392.40,
@@ -45,6 +66,11 @@ LIVE_EOD = {
     "2026-09-28": 6948.02,
     "2026-09-29": 5074.99,
 }
+
+# 9/11 equity 539.89 → 7539.75. Strip $7,000 funding so the week is trading P&L.
+FUNDING_USD = {"2026-09-11": 7000.0}
+WINDOW_END = "2026-09-29"
+WINDOW_SESSIONS = 30
 
 WEEK_BEFORE_DAYS = (
     "2026-09-15",
@@ -302,6 +328,107 @@ def live_session_pnl() -> dict[str, float]:
     return out
 
 
+def live_trading_pnl() -> dict[str, float]:
+    """Session equity change with cash-in stripped. Rec does not rewrite funding."""
+    raw = live_session_pnl()
+    return {d: round(pnl - FUNDING_USD.get(d, 0.0), 2) for d, pnl in raw.items()}
+
+
+def window_sessions(end: str = WINDOW_END, n: int = WINDOW_SESSIONS) -> list[str]:
+    days = [d for d in LIVE_EOD if d <= end]
+    if days and days[0] == min(LIVE_EOD):
+        days = days[1:]  # drop the prior-close anchor
+    if len(days) < n:
+        raise ValueError(f"need {n} sessions through {end}, have {len(days)}")
+    return days[-n:]
+
+
+def _monday(day: str) -> str:
+    d = date.fromisoformat(day)
+    return (d - timedelta(days=d.weekday())).isoformat()
+
+
+def _week_label(days: list[str]) -> str:
+    a = date.fromisoformat(days[0])
+    b = date.fromisoformat(days[-1])
+    if a.month == b.month:
+        return f"{a.strftime('%b')} {a.day}–{b.day}"
+    return f"{a.strftime('%b')} {a.day}–{b.strftime('%b')} {b.day}"
+
+
+def _session_rec(day: str, live_eq: dict[str, float], lots_by_day: dict[str, list]) -> dict:
+    """Rec on SPY lots; days with no Rec tape keep live trading P&L (impact $0)."""
+    live = live_eq[day]
+    if day == "2026-09-29":
+        r = replay_929(bounce_open=True, cap_envelope=True)
+        rec = r["cover"]
+        return {
+            "live": live,
+            "rec": rec,
+            "impact": round(rec - live, 2),
+            "has_rec_tape": True,
+        }
+    lots = lots_by_day.get(day)
+    if not lots:
+        return {"live": live, "rec": live, "impact": 0.0, "has_rec_tape": False}
+    rec = recap_session(lots, day, skip_1dte=True)["rec"]
+    return {
+        "live": live,
+        "rec": rec,
+        "impact": round(rec - live, 2),
+        "has_rec_tape": True,
+    }
+
+
+def _load_all_lots() -> dict[str, list]:
+    out: dict[str, list] = {}
+    out.update(load_lots_before()["days"])
+    out.update(load_lots()["days"])
+    return out
+
+
+def weekly_impact() -> dict:
+    """30 trading days through 9/29, rolled to Mon–Fri weeks. No daily rows."""
+    live_eq = live_trading_pnl()
+    lots_by_day = _load_all_lots()
+    sessions = window_sessions()
+    buckets: dict[str, list[str]] = {}
+    for day in sessions:
+        buckets.setdefault(_monday(day), []).append(day)
+
+    weeks = []
+    for monday, days in buckets.items():
+        rows = [_session_rec(d, live_eq, lots_by_day) for d in days]
+        live = round(sum(r["live"] for r in rows), 2)
+        rec = round(sum(r["rec"] for r in rows), 2)
+        impact = round(rec - live, 2)
+        weeks.append(
+            {
+                "week": _week_label(days),
+                "monday": monday,
+                "sessions": len(days),
+                "live": live,
+                "rec": rec,
+                "impact": impact,
+                "result": "win" if impact > 0 else ("lose" if impact < 0 else "flat"),
+                "rec_tape": any(r["has_rec_tape"] for r in rows),
+            }
+        )
+
+    live_sum = round(sum(w["live"] for w in weeks), 2)
+    rec_sum = round(sum(w["rec"] for w in weeks), 2)
+    impact_sum = round(rec_sum - live_sum, 2)
+    return {
+        "window": f"{sessions[0]} → {sessions[-1]}",
+        "sessions": len(sessions),
+        "weeks": weeks,
+        "live": live_sum,
+        "rec": rec_sum,
+        "impact": impact_sum,
+        "result": "win" if impact_sum > 0 else ("lose" if impact_sum < 0 else "flat"),
+    }
+
+
 def _day_row(day: str, rec: dict, live_eq: dict[str, float]) -> dict:
     live = live_eq.get(day, rec["live_lots"])
     return {
@@ -438,23 +565,22 @@ def _print_week(title: str, days: dict, live_sum: float, rec_sum: float) -> None
     print()
 
 
+def _print_weekly(w: dict) -> None:
+    print(f"Rec vs live  {w['window']}  ({w['sessions']} sessions)")
+    print("week              sess      live       rec    impact")
+    for row in w["weeks"]:
+        print(
+            f"{row['week']:<16}  {row['sessions']:4}  {row['live']:8.0f}  "
+            f"{row['rec']:8.0f}  {row['impact']:+8.0f}  {row['result']}"
+        )
+    print(
+        f"{'30-day':<16}  {w['sessions']:4}  {w['live']:8.0f}  "
+        f"{w['rec']:8.0f}  {w['impact']:+8.0f}  {w['result']}"
+    )
+
+
 def main() -> int:
-    t = two_week_recap()
-    _print_week(
-        "week before (9/15-9/21)",
-        t["week_before"],
-        t["week_before_live"],
-        t["week_before_rec"],
-    )
-    _print_week(
-        "last week (9/22-9/29)",
-        t["last_week"],
-        t["last_week_live"],
-        t["last_week_rec"],
-    )
-    print("two-week rec", t["two_week_rec"])
-    print("929 bounce", t["929_bounce"]["cover"], "no_bounce", t["929_no_bounce"]["cover"])
-    print("starter_qty 1.36", starter_qty(1.36))
+    _print_weekly(weekly_impact())
     return 0
 
 
