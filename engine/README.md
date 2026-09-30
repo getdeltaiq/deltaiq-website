@@ -65,5 +65,5 @@ python3 -m engine.tradier_exec.replay
 python3 -m engine.tradier_exec.week_replay
 ```
 
-Last-week tape (9/23–9/29): envelope + 0DTE fail-streak + extra BTO on RUN.
-1DTE wiggles do not halt the 0DTE book (9/28 767-put). Halt resets on the ET date.
+Last-week + week-before tape (9/15–9/29): envelope + 0DTE fail-streak + extra BTO
+on RUN + 1DTE skip unless TREND (9/25 runner). Halt resets on the ET date.

@@ -1,10 +1,11 @@
-"""Last-week cover-us backtest. Lots only — no account ids, no broker calls.
+"""Two-week cover-us recap. Lots only — no account ids, no broker calls.
 
-Live 9/22–9/28 from closed option lots (newest-first as returned).
+Live 9/15–9/28 from closed option lots (newest-first as returned).
 Live 9/29 from fixtures/2026-09-29-orders.json.
 
-Cover-us is envelope + first-line halt + consume-once. Quality flags for
-9/22–9/28 were never on the BTO path, so they are not applied here.
+Cover-us is envelope + first-line halt + consume-once.
+Rec adds extra BTO on RUN winners (fill to 16) and skip_1dte_not_trend
+except sessions overlay marked TREND (9/25 runner).
 """
 
 from __future__ import annotations
@@ -18,14 +19,25 @@ from engine.shared.gates import (
     SESSION_LOSS_HALT_USD,
     TICKET_RISK_USD,
     counts_toward_fail_streak,
+    extra_bto_qty,
     option_dte,
     starter_qty,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "week-2026-09-22-lots.json"
+FIXTURE_BEFORE = Path(__file__).parent / "fixtures" / "week-2026-09-15-lots.json"
+
+# 9/25 1DTE runner was TREND. Other sessions: missing regime is a 1DTE refuse.
+TREND_SESSIONS = frozenset({"2026-09-25"})
 
 # Equity EOD (option cash + marks). 9/29 is live total equity after the session.
 LIVE_EOD = {
+    "2026-09-14": 7525.09,
+    "2026-09-15": 7366.46,
+    "2026-09-16": 7392.40,
+    "2026-09-17": 7396.17,
+    "2026-09-18": 7024.00,
+    "2026-09-21": 7543.07,
     "2026-09-22": 7590.38,
     "2026-09-23": 6112.68,
     "2026-09-24": 6739.83,
@@ -34,9 +46,29 @@ LIVE_EOD = {
     "2026-09-29": 5074.99,
 }
 
+WEEK_BEFORE_DAYS = (
+    "2026-09-15",
+    "2026-09-16",
+    "2026-09-17",
+    "2026-09-18",
+    "2026-09-21",
+)
+LAST_WEEK_DAYS = (
+    "2026-09-22",
+    "2026-09-23",
+    "2026-09-24",
+    "2026-09-25",
+    "2026-09-28",
+    "2026-09-29",
+)
+
 
 def load_lots() -> dict:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+
+def load_lots_before() -> dict:
+    return json.loads(FIXTURE_BEFORE.read_text(encoding="utf-8"))
 
 
 def envelope_lot(qty: float, cost: float, proceeds: float) -> tuple[float, bool]:
@@ -189,6 +221,76 @@ def replay_929(*, bounce_open: bool, cap_envelope: bool = True) -> dict:
     }
 
 
+def skip_1dte_lots(
+    lots: list[dict],
+    session_date: str,
+    *,
+    trend_days: frozenset[str] = TREND_SESSIONS,
+) -> tuple[list[dict], list[dict]]:
+    """Refuse 1DTE unless the session is a known TREND day (9/25 runner)."""
+    if session_date in trend_days:
+        return list(lots), []
+    kept: list[dict] = []
+    skipped: list[dict] = []
+    for lot in lots:
+        dte = option_dte(lot.get("symbol"), session_date)
+        if dte is not None and dte >= 1:
+            skipped.append(lot)
+        else:
+            kept.append(lot)
+    return kept, skipped
+
+
+def extra_bto_on_kept(kept_rows: list[dict]) -> tuple[float, int]:
+    """Fill remaining room to 16 on kept winners at the same ROP."""
+    add = 0.0
+    n = 0
+    for row in kept_rows:
+        live = float(row["live"])
+        if live <= 0:
+            continue
+        qty = int(row["qty"])
+        extra = extra_bto_qty(qty)
+        if extra <= 0:
+            continue
+        add += extra * (live / qty)
+        n += 1
+    return round(add, 2), n
+
+
+def recap_session(
+    lots: list[dict],
+    session_date: str,
+    *,
+    skip_1dte: bool = True,
+) -> dict:
+    tradable, skipped_1dte = (
+        skip_1dte_lots(lots, session_date) if skip_1dte else (list(lots), [])
+    )
+    w = walk_session(tradable, oldest_first=True, session_date=session_date)
+    xbto, n_xbto = extra_bto_on_kept(w["kept"])
+    skip_live = round(
+        sum(round(x["proceeds"] - x["cost"], 2) for x in skipped_1dte), 2
+    )
+    return {
+        "live_lots": w["live_lots"],
+        "cover": w["cover"],
+        "xbto": xbto,
+        "n_xbto": n_xbto,
+        "rec": round(w["cover"] + xbto, 2),
+        "halt_reason": w["halt_reason"],
+        "n_kept": w["n_kept"],
+        "n_skipped": w["n_skipped"],
+        "n_skip_1dte": len(skipped_1dte),
+        "skip_1dte_live": skip_live,
+        "wins_kept": w["wins_kept"],
+        "wins_skipped": w["wins_skipped"],
+        "cover_all_dte": walk_session(
+            lots, oldest_first=True, session_date=session_date
+        )["cover"],
+    }
+
+
 def live_session_pnl() -> dict[str, float]:
     dates = list(LIVE_EOD)
     out: dict[str, float] = {}
@@ -198,6 +300,74 @@ def live_session_pnl() -> dict[str, float]:
         prev = dates[i - 1]
         out[d] = round(LIVE_EOD[d] - LIVE_EOD[prev], 2)
     return out
+
+
+def _day_row(day: str, rec: dict, live_eq: dict[str, float]) -> dict:
+    live = live_eq.get(day, rec["live_lots"])
+    return {
+        "live_equity": live,
+        "live_lots": rec["live_lots"],
+        "cover": rec["cover"],
+        "cover_all_dte": rec["cover_all_dte"],
+        "xbto": rec["xbto"],
+        "rec": rec["rec"],
+        "halt_reason": rec["halt_reason"],
+        "n_kept": rec["n_kept"],
+        "n_skipped": rec["n_skipped"],
+        "n_skip_1dte": rec["n_skip_1dte"],
+        "skip_1dte_live": rec["skip_1dte_live"],
+        "wins_kept": rec["wins_kept"],
+        "wins_skipped": rec["wins_skipped"],
+    }
+
+
+def two_week_recap() -> dict:
+    """Envelope + 0DTE fail-streak + extra BTO + 1DTE skip except TREND."""
+    live_eq = live_session_pnl()
+    before_lots = load_lots_before()["days"]
+    last_lots = load_lots()["days"]
+    before: dict[str, dict] = {}
+    last: dict[str, dict] = {}
+    for day in WEEK_BEFORE_DAYS:
+        rec = recap_session(before_lots[day], day, skip_1dte=True)
+        before[day] = _day_row(day, rec, live_eq)
+    for day in LAST_WEEK_DAYS:
+        if day == "2026-09-29":
+            continue
+        rec = recap_session(last_lots[day], day, skip_1dte=True)
+        last[day] = _day_row(day, rec, live_eq)
+    r_nb = replay_929(bounce_open=False, cap_envelope=True)
+    r_b = replay_929(bounce_open=True, cap_envelope=True)
+    last["2026-09-29"] = {
+        "live_equity": live_eq["2026-09-29"],
+        "live_lots": live_eq["2026-09-29"],
+        "cover": r_b["cover"],
+        "cover_all_dte": r_b["cover"],
+        "cover_no_bounce": r_nb["cover"],
+        "xbto": 0.0,
+        "rec": r_b["cover"],
+        "halt_reason": r_b["halt_reason"],
+        "n_kept": r_b["n_kept"],
+        "n_skipped": None,
+        "n_skip_1dte": 0,
+        "skip_1dte_live": 0.0,
+        "wins_kept": 0.0,
+        "wins_skipped": 0.0,
+    }
+    return {
+        "week_before": before,
+        "last_week": last,
+        "week_before_live": round(sum(d["live_equity"] for d in before.values()), 2),
+        "week_before_rec": round(sum(d["rec"] for d in before.values()), 2),
+        "last_week_live": round(sum(d["live_equity"] for d in last.values()), 2),
+        "last_week_rec": round(sum(d["rec"] for d in last.values()), 2),
+        "two_week_rec": round(
+            sum(d["rec"] for d in before.values()) + sum(d["rec"] for d in last.values()),
+            2,
+        ),
+        "929_bounce": r_b,
+        "929_no_bounce": r_nb,
+    }
 
 
 def week_summary() -> dict:
@@ -251,18 +421,39 @@ def week_summary() -> dict:
     }
 
 
-def main() -> int:
-    s = week_summary()
-    print("day          live_eq   lots     cover  halt              kept/skip  wins_skipped")
-    for day, d in s["days"].items():
+def _print_week(title: str, days: dict, live_sum: float, rec_sum: float) -> None:
+    print(title)
+    print(
+        "day          live_eq  lots   cover  xbto    rec  halt             "
+        "kept/skip  skip_1dte"
+    )
+    for day, d in days.items():
         skip = d["n_skipped"] if d["n_skipped"] is not None else "-"
         print(
-            f"{day}  {d['live_equity']:8.0f} {d['live_lots']:8.0f} {d['cover']:8.0f}  "
-            f"{d['halt_reason']:16} {d['n_kept']}/{skip}  {d['wins_skipped']:8.0f}"
+            f"{day}  {d['live_equity']:8.0f} {d['live_lots']:6.0f} {d['cover']:7.0f} "
+            f"{d['xbto']:5.0f} {d['rec']:7.0f}  {d['halt_reason']:16} "
+            f"{d['n_kept']}/{skip}  {d['n_skip_1dte']}"
         )
-    print("week live", s["live_week"], "cover", s["cover_week"], "wins_skipped", s["wins_skipped_usd"])
-    print("929 bounce", s["929_bounce"])
-    print("929 no_bounce", s["929_no_bounce"])
+    print(f"  week live {live_sum:.0f}  rec {rec_sum:.0f}")
+    print()
+
+
+def main() -> int:
+    t = two_week_recap()
+    _print_week(
+        "week before (9/15-9/21)",
+        t["week_before"],
+        t["week_before_live"],
+        t["week_before_rec"],
+    )
+    _print_week(
+        "last week (9/22-9/29)",
+        t["last_week"],
+        t["last_week_live"],
+        t["last_week_rec"],
+    )
+    print("two-week rec", t["two_week_rec"])
+    print("929 bounce", t["929_bounce"]["cover"], "no_bounce", t["929_no_bounce"]["cover"])
     print("starter_qty 1.36", starter_qty(1.36))
     return 0
 

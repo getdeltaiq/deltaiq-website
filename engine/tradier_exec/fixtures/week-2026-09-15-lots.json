@@ -1,0 +1,58 @@
+{
+  "note": "Closed SPY option lots 2026-09-15 through 2026-09-21. Newest-first per session from Tradier gain/loss. No account ids.",
+  "days": {
+    "2026-09-15": [
+      {"symbol": "SPY260915P00758000", "qty": 1, "cost": 131.46, "proceeds": 137.52},
+      {"symbol": "SPY260915C00757000", "qty": 1, "cost": 190.46, "proceeds": 108.52},
+      {"symbol": "SPY260915C00757000", "qty": 1, "cost": 218.4, "proceeds": 77.54},
+      {"symbol": "SPY260915P00758000", "qty": 1, "cost": 133.46, "proceeds": 134.52},
+      {"symbol": "SPY260915P00758000", "qty": 4, "cost": 449.82, "proceeds": 570.15},
+      {"symbol": "SPY260916P00758000", "qty": 1, "cost": 339.46, "proceeds": 344.52},
+      {"symbol": "SPY260915C00757000", "qty": 3, "cost": 403.37, "proceeds": 232.61},
+      {"symbol": "SPY260916P00758000", "qty": 1, "cost": 349.46, "proceeds": 367.52}
+    ],
+    "2026-09-16": [
+      {"symbol": "SPY260917P00760000", "qty": 1, "cost": 371.46, "proceeds": 347.52},
+      {"symbol": "SPY260917P00760000", "qty": 1, "cost": 356.4, "proceeds": 428.52},
+      {"symbol": "SPY260916C00760000", "qty": 1, "cost": 235.46, "proceeds": 205.52},
+      {"symbol": "SPY260917C00760000", "qty": 1, "cost": 360.46, "proceeds": 320.52},
+      {"symbol": "SPY260917C00760000", "qty": 1, "cost": 378.4, "proceeds": 322.52},
+      {"symbol": "SPY260916P00760000", "qty": 1, "cost": 265.46, "proceeds": 282.52},
+      {"symbol": "SPY260916C00760000", "qty": 1, "cost": 314.4, "proceeds": 285.52},
+      {"symbol": "SPY260916P00761000", "qty": 1, "cost": 250.46, "proceeds": 268.52}
+    ],
+    "2026-09-17": [
+      {"symbol": "SPY260918C00762000", "qty": 1, "cost": 187.46, "proceeds": 172.53},
+      {"symbol": "SPY260917P00764000", "qty": 3, "cost": 577.37, "proceeds": 514.61},
+      {"symbol": "SPY260918C00762000", "qty": 1, "cost": 202.38, "proceeds": 171.52},
+      {"symbol": "SPY260917C00761000", "qty": 5, "cost": 635.27, "proceeds": 792.69},
+      {"symbol": "SPY260917C00762000", "qty": 1, "cost": 99.37, "proceeds": 93.54},
+      {"symbol": "SPY260918C00762000", "qty": 3, "cost": 571.37, "proceeds": 517.61},
+      {"symbol": "SPY260917C00762000", "qty": 6, "cost": 620.21, "proceeds": 561.24},
+      {"symbol": "SPY260917C00762000", "qty": 7, "cost": 682.18, "proceeds": 626.79},
+      {"symbol": "SPY260917C00762000", "qty": 1, "cost": 93.46, "proceeds": 89.54},
+      {"symbol": "SPY260917P00764000", "qty": 1, "cost": 183.46, "proceeds": 171.54},
+      {"symbol": "SPY260917P00763000", "qty": 6, "cost": 716.73, "proceeds": 777.23}
+    ],
+    "2026-09-18": [
+      {"symbol": "SPY260918C00759000", "qty": 1, "cost": 137.46, "proceeds": 138.52},
+      {"symbol": "SPY260918P00760000", "qty": 1, "cost": 137.37, "proceeds": 138.52},
+      {"symbol": "SPY260918P00760000", "qty": 10, "cost": 1244.54, "proceeds": 1105.4},
+      {"symbol": "SPY260921C00759000", "qty": 5, "cost": 1192.27, "proceeds": 1182.68},
+      {"symbol": "SPY260918P00759000", "qty": 12, "cost": 1181.44, "proceeds": 978.49},
+      {"symbol": "SPY260918P00759000", "qty": 1, "cost": 112.37, "proceeds": 74.52},
+      {"symbol": "SPY260918C00758000", "qty": 1, "cost": 212.46, "proceeds": 205.52},
+      {"symbol": "SPY260921C00759000", "qty": 5, "cost": 1156.86, "proceeds": 1132.68}
+    ],
+    "2026-09-21": [
+      {"symbol": "SPY260922C00774000", "qty": 6, "cost": 1130.73, "proceeds": 1353.21},
+      {"symbol": "SPY260921C00770000", "qty": 1, "cost": 219.46, "proceeds": 255.52},
+      {"symbol": "SPY260921C00771000", "qty": 3, "cost": 397.37, "proceeds": 472.61},
+      {"symbol": "SPY260921C00771000", "qty": 3, "cost": 412.37, "proceeds": 520.6},
+      {"symbol": "SPY260921C00766000", "qty": 1, "cost": 148.38, "proceeds": 118.52},
+      {"symbol": "SPY260922C00772000", "qty": 1, "cost": 210.46, "proceeds": 189.52},
+      {"symbol": "SPY260922C00773000", "qty": 6, "cost": 1172.73, "proceeds": 1324.21},
+      {"symbol": "SPY260921C00766000", "qty": 3, "cost": 382.37, "proceeds": 331.61}
+    ]
+  }
+}

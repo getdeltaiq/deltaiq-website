@@ -7,9 +7,13 @@ import unittest
 from engine.shared.gates import envelope_hit, new_session
 from engine.tradier_exec.week_replay import (
     envelope_lot,
+    extra_bto_on_kept,
     live_session_pnl,
     load_lots,
+    load_lots_before,
+    recap_session,
     replay_929,
+    two_week_recap,
     walk_session,
     week_summary,
 )
@@ -119,6 +123,51 @@ class WeekNetTests(unittest.TestCase):
         self.assertGreater(s["days"]["2026-09-25"]["cover"], 0)
         self.assertGreater(s["days"]["2026-09-28"]["cover"], 800)
         self.assertGreater(s["cover_week"], 400)
+
+
+class ExtraBtoRecapTests(unittest.TestCase):
+    def test_nine_twenty_four_extra_bto_is_about_two_hundred(self):
+        lots = load_lots()["days"]["2026-09-24"]
+        rec = recap_session(lots, "2026-09-24", skip_1dte=True)
+        self.assertGreater(rec["xbto"], 200)
+        self.assertLess(rec["xbto"], 230)
+        self.assertGreater(rec["rec"], rec["cover"] + 200)
+
+    def test_winner_headroom_scales_at_same_rop(self):
+        add, n = extra_bto_on_kept(
+            [{"qty": 11, "live": 253.93}, {"qty": 16, "live": 100.0}]
+        )
+        self.assertEqual(n, 1)
+        self.assertAlmostEqual(add, 5 * (253.93 / 11), places=2)
+
+
+class WeekBeforeTests(unittest.TestCase):
+    def test_nine_eighteen_envelope_beats_live_lots(self):
+        lots = load_lots_before()["days"]["2026-09-18"]
+        rec = recap_session(lots, "2026-09-18", skip_1dte=True)
+        self.assertGreater(rec["rec"], rec["live_lots"])
+        self.assertGreater(rec["n_skip_1dte"], 0)
+
+    def test_nine_twenty_one_1dte_skip_cuts_the_calls(self):
+        lots = load_lots_before()["days"]["2026-09-21"]
+        kept = recap_session(lots, "2026-09-21", skip_1dte=False)
+        skipped = recap_session(lots, "2026-09-21", skip_1dte=True)
+        self.assertGreater(kept["rec"], skipped["rec"] + 300)
+        self.assertEqual(skipped["n_skip_1dte"], 3)
+
+
+class TwoWeekRecapTests(unittest.TestCase):
+    def test_rec_beats_live_on_both_weeks(self):
+        t = two_week_recap()
+        self.assertGreater(t["last_week_rec"], t["last_week_live"] + 2000)
+        self.assertGreater(t["week_before_rec"], -200)
+        self.assertGreater(t["last_week"]["2026-09-24"]["rec"], 500)
+        self.assertGreater(t["last_week"]["2026-09-28"]["rec"], 800)
+        self.assertLess(t["last_week"]["2026-09-23"]["rec"], 0)
+        self.assertGreater(t["last_week"]["2026-09-23"]["rec"], -450)
+        self.assertEqual(t["last_week"]["2026-09-25"]["n_skip_1dte"], 0)
+        live = live_session_pnl()
+        self.assertAlmostEqual(live["2026-09-21"], 519.07, places=2)
 
 
 if __name__ == "__main__":
