@@ -10,13 +10,17 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from engine.shared.gates import (
+    BTO_SOURCE,
     CHOP_SIZE,
     ENGINE_EXIT_MODE,
+    QUEUE_OPPOSITE,
+    TAKE_EXIT,
     SessionState,
     apply_manage_result,
     decide_manage,
     decide_starter,
     new_session,
+    source_skip_reason,
 )
 
 ET = ZoneInfo("America/New_York")
@@ -64,6 +68,14 @@ def on_manage(state: SessionState, **kwargs) -> dict:
 def before_extra_bto(state: SessionState, **kwargs) -> dict:
     """Size-up only when extra_bto_ok. Never a second starter."""
     enforce_keep_halt(state)
+    src = source_skip_reason(
+        plot=kwargs.get("plot"),
+        is_opposite=bool(kwargs.get("is_opposite")),
+        overlay_queued=bool(kwargs.get("overlay_queued")),
+    )
+    if src is not None:
+        state.last_action = src
+        return {"post": False, "action": src}
     ok = state.extra_bto_ok(
         int(kwargs.get("add_qty") or 0),
         float(kwargs.get("mfe_usd") or 0.0),
@@ -94,10 +106,13 @@ def health_overlay(state: SessionState) -> dict:
         "ticket_risk_hits_n": state.ticket_risk_hits_n,
         "last_stc_ladder": state.last_stc_ladder,
         "engine_exit_mode": ENGINE_EXIT_MODE,
+        "take_exit": TAKE_EXIT,
         "override_trail": True,
         "use_trail": False,
         "chop_size": CHOP_SIZE,
         "skip_choppy_is_refuse": True,
+        "bto_source": BTO_SOURCE,
+        "queue_opposite": QUEUE_OPPOSITE,
         "session_halt": state.session_halt,
         "session_halt_reason": state.session_halt_reason,
         "session_lost_blocks_send": state.session_lost_blocks_send,

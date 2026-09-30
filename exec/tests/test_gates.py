@@ -25,6 +25,9 @@ CLEAN_Q = dict(
     pre_move_spy=0.40,
     chase_spy=0.10,
     regime="TREND",
+    plot="sub_alert_send",
+    overlay_queued=True,
+    is_opposite=False,
 )
 
 
@@ -253,6 +256,7 @@ class EnvelopeTests(unittest.TestCase):
         self.assertTrue(r["ignore_trail"])
         self.assertTrue(r["disable_trail"])
         self.assertFalse(r["use_trail"])
+        self.assertEqual(r["take_exit"], "ladder_to_market")
         self.assertEqual(r["ladder"][-1][0], "market")
         self.assertEqual(s.protect_fills_n, 1)
         self.assertEqual(s.last_stc_ladder, "market")
@@ -429,6 +433,29 @@ class QualityLearnTests(unittest.TestCase):
             quality_skip_reason(choppy=False, pre_move_spy=0.40, chase_spy=0.10)
         )
 
+    def test_admin_ledger_is_not_a_starter(self):
+        s = new_session("2026-09-29")
+        d = self._base(s, plot="admin_alert_ledger")
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_not_sub")
+
+    def test_missing_plot_is_not_a_starter(self):
+        s = new_session("2026-09-29")
+        d = self._base(s, plot=None)
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_not_sub")
+
+    def test_exec_queued_opposite_is_not_a_starter(self):
+        s = new_session("2026-09-29")
+        d = self._base(s, is_opposite=True, overlay_queued=False)
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_queue_opposite")
+
+    def test_overlay_queued_opposite_still_posts(self):
+        s = new_session("2026-09-29")
+        d = self._base(s, is_opposite=True, overlay_queued=True)
+        self.assertTrue(d["post"])
+
 
 class PersistConsumeTests(unittest.TestCase):
     def test_sql_conflict_is_dup_not_second_bto(self):
@@ -487,6 +514,25 @@ class ExtraBtoTests(unittest.TestCase):
         s.ticket_phase = "RUN"
         self.assertTrue(s.extra_bto_ok(4, 0.25, 1.60, 1.40))
         self.assertFalse(s.extra_bto_ok(9, 0.25, 1.60, 1.40))  # 8+9 > 16
+
+    def test_extra_exec_queued_opposite_blocked(self):
+        from engine.tradier_exec.hooks import before_extra_bto
+
+        s = new_session("2026-09-30")
+        s.broker_qty = 8
+        s.ticket_phase = "RUN"
+        d = before_extra_bto(
+            s,
+            add_qty=4,
+            mfe_usd=0.25,
+            mark_bid=1.60,
+            avg_fill=1.40,
+            plot="sub_alert_send",
+            is_opposite=True,
+            overlay_queued=False,
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_queue_opposite")
 
 
 class BounceHelperTests(unittest.TestCase):

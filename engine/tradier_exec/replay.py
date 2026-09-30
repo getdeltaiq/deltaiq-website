@@ -20,6 +20,9 @@ CLEAN_Q = dict(
     pre_move_spy=0.40,
     chase_spy=0.10,
     regime="TREND",
+    plot="sub_alert_send",
+    overlay_queued=True,
+    is_opposite=False,
 )
 
 

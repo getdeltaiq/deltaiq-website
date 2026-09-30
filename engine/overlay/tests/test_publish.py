@@ -40,6 +40,8 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertEqual(h["sms_from"], "sub_alert_send")
         self.assertFalse(h["aligned_copy"])
         self.assertTrue(h["invariant_ok"])
+        self.assertTrue(h["skip_strong_pre_move"])
+        self.assertEqual(h["pre_move_strong"], 0.50)
 
     def test_unarmed_is_admin_only(self):
         d = decide_sub_send(_c(armed=False))
@@ -112,6 +114,9 @@ class HookHaltTests(unittest.TestCase):
         self.assertFalse(h["chop_size"])
         self.assertTrue(h["skip_choppy_is_refuse"])
         self.assertFalse(h["use_trail"])
+        self.assertEqual(h["take_exit"], "ladder_to_market")
+        self.assertEqual(h["bto_source"], "sub_alert_send")
+        self.assertFalse(h["queue_opposite"])
 
     def test_before_bto_blocks_on_keep_halt_date(self):
         from engine.shared.gates import new_session
@@ -135,6 +140,9 @@ class HookHaltTests(unittest.TestCase):
             pre_move_spy=0.40,
             chase_spy=0.10,
             regime="TREND",
+            plot="sub_alert_send",
+            overlay_queued=True,
+            is_opposite=False,
         )
         self.assertFalse(d["post"])
         self.assertTrue(st.session_halt)

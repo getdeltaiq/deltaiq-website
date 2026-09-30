@@ -66,13 +66,34 @@ class RuntimeTapeTests(unittest.TestCase):
         self.assertGreaterEqual(len(recycle), 2)
 
     def test_missing_quality_refuses_every_bto(self):
-        ex = replay(keep_halt=False, quality={})
+        ex = replay(
+            keep_halt=False,
+            quality={"plot": "sub_alert_send", "overlay_queued": True},
+        )
         posted = [x for x in ex.log if x.get("kind") == "starter" and x.get("post")]
         self.assertEqual(posted, [])
         self.assertGreaterEqual(ex.state.skip_quality_n, 1)
         self.assertEqual(
             [x.get("action") for x in ex.log if x.get("kind") == "starter"][0],
             "skip_quality_unknown",
+        )
+
+    def test_admin_plot_refuses_every_bto(self):
+        ex = replay(
+            keep_halt=False,
+            quality={
+                "plot": "admin_alert_ledger",
+                "overlay_queued": False,
+                "choppy": False,
+                "pre_move_spy": 0.40,
+                "chase_spy": 0.10,
+            },
+        )
+        posted = [x for x in ex.log if x.get("kind") == "starter" and x.get("post")]
+        self.assertEqual(posted, [])
+        self.assertEqual(
+            [x.get("action") for x in ex.log if x.get("kind") == "starter"][0],
+            "skip_not_sub",
         )
 
     def test_sixteen_lot_envelope_hits_before_held_to_093(self):

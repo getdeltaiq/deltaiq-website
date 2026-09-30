@@ -46,7 +46,10 @@ CONSECUTIVE_FAIL_HALT = 4
 COOLDOWN_AFTER_FAIL_SEC = 480.0
 # Cover-us exits are STC ladder → market. Do not hold a loser on trail.
 ENGINE_EXIT_MODE = "ladder_to_market"
+TAKE_EXIT = "ladder_to_market"  # never rest a loser on bid
 CHOP_SIZE = False  # 9/29 sized into CHOPPY; refuse instead.
+BTO_SOURCE = "sub_alert_send"  # never BTO from admin_alert_ledger
+QUEUE_OPPOSITE = False  # exec must not invent opposite rips
 
 # 2026-09-29 learn (exec still traded these): weak pre-move 1/9 −$160,
 # pre-move 0.50+ 0/5 −$256, chase ≥ $0.50, CHOPPY 0/8 −$297.
@@ -85,6 +88,20 @@ def starter_qty(ask: float) -> int:
 
 def hhmm_in_window(hhmm: str, start: str, end: str) -> bool:
     return start <= hhmm <= end
+
+
+def source_skip_reason(
+    *,
+    plot: str | None = None,
+    is_opposite: bool = False,
+    overlay_queued: bool = False,
+) -> str | None:
+    """Tie cash to the overlay sub send. Admin / exec-queued opposite are not the book."""
+    if plot != BTO_SOURCE:
+        return "skip_not_sub"
+    if is_opposite and not overlay_queued:
+        return "skip_queue_opposite"
+    return None
 
 
 def quality_skip_reason(
@@ -369,11 +386,22 @@ def decide_starter(
     regime: str | None = None,
     same_dir_age_sec: float | None = None,
     persist=None,
+    plot: str | None = None,
+    is_opposite: bool = False,
+    overlay_queued: bool = False,
 ) -> dict:
     """Single entry point before any Tradier buy_to_open."""
     if not ledger_ok_placeholder():
         pass
     state.refresh_halt()
+    src = source_skip_reason(
+        plot=plot, is_opposite=is_opposite, overlay_queued=overlay_queued
+    )
+    if src is not None:
+        state.try_consume(send_ts, direction, count_starter=False, persist=persist)
+        state.skip_quality_n += 1
+        state.last_action = src
+        return {"action": src, "qty": 0, "post": False}
     q = quality_skip_reason(
         choppy=choppy,
         on_arm_bar=on_arm_bar,
@@ -481,10 +509,11 @@ def apply_manage_result(state: SessionState, m: dict) -> dict:
         m["trail_armed"] = False
         m["ignore_trail"] = True
         m["override_trail"] = True
-        m["take_exit"] = "ladder_to_market"
+        m["take_exit"] = TAKE_EXIT
     else:
         m.setdefault("use_trail", False)
         m.setdefault("disable_trail", False)
+        m["take_exit"] = TAKE_EXIT
     return m
 
 
