@@ -50,9 +50,11 @@ CONSECUTIVE_FAIL_HALT = 4
 # Count only 0DTE toward the streak. 1DTE still has envelope + dollar halt.
 FAIL_STREAK_0DTE_ONLY = True
 COOLDOWN_AFTER_FAIL_SEC = 480.0
-# 9/28–9/29 misfire: next-day paper in CHOPPY/RANGE/unknown. 0DTE may still
-# starter; 1DTE only when overlay says TREND (9/25 runner).
+# 9/28–9/29 misfire: next-day paper in CHOPPY/RANGE/unknown BEFORE cutover.
+# 0DTE may still starter until 12:45. After 12:45 the book is 1DTE — trade it,
+# do not look for 0DTE. Morning 1DTE still needs TREND (9/25 runner).
 TREND_REGIMES = frozenset({"TREND", "TRENDING"})
+DTE_CUTOVER_ET = "12:45"
 # Cover-us exits are STC ladder → market. Do not hold a loser on trail.
 ENGINE_EXIT_MODE = "ladder_to_market"
 TAKE_EXIT = "ladder_to_market"  # flatten mode only; never rest a loser on bid
@@ -66,9 +68,10 @@ STC_REQUIRES_ENVELOPE = True
 STC_ON_BTO_FILL = False
 WORKING_STC_ON_FILL = False
 # Rec scenario (9/15–9/29 replay): envelope + 0DTE halt + extra BTO to 16
-# + 1DTE skip unless TREND. Railway must advertise this dict on /health
+# + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:45 (trade it).
+# Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-09-30-stc-hold"
+REC_BOOK_SHIP = "2026-09-30-dte-cutover"
 
 
 def rec_book() -> dict:
@@ -86,6 +89,9 @@ def rec_book() -> dict:
         "extra_bto_fill_to": RISK_QTY_CAP,
         "extra_bto_mfe_usd": EXTRA_BTO_MFE_USD,
         "skip_1dte_not_trend": True,
+        "dte_cutover_et": DTE_CUTOVER_ET,
+        "skip_0dte_after_cutover": True,
+        "trade_1dte_after_cutover": True,
         "cooldown_after_fail_sec": COOLDOWN_AFTER_FAIL_SEC,
         "session_loss_halt_usd": SESSION_LOSS_HALT_USD,
         "consecutive_fail_halt": CONSECUTIVE_FAIL_HALT,
@@ -163,8 +169,20 @@ def option_dte(option_symbol: str | None, session_date: str) -> int | None:
     return (exp - sess).days
 
 
-def counts_toward_fail_streak(dte: int | None) -> bool:
-    """1DTE+ does not increment or reset the 0DTE fail streak."""
+def past_dte_cutover(et_hhmm: str, cutover: str = DTE_CUTOVER_ET) -> bool:
+    """True from 12:45 ET onward. Afternoon book is 1DTE."""
+    if not et_hhmm:
+        return False
+    return et_hhmm >= cutover
+
+
+def counts_toward_fail_streak(dte: int | None, et_hhmm: str | None = None) -> bool:
+    """1DTE+ does not increment the morning 0DTE streak.
+
+    After 12:45 the live book is 1DTE, so those FAILs count.
+    """
+    if past_dte_cutover(et_hhmm or ""):
+        return True
     if not FAIL_STREAK_0DTE_ONLY:
         return True
     return dte is None or dte <= 0
@@ -205,13 +223,20 @@ def misfire_skip_reason(
     last_fail_hhmm: str | None = None,
     et_hhmm: str = "",
 ) -> str | None:
-    """Recurring 9/28–9/29 hole: rapid FAIL re-entry and 1DTE in non-trend.
+    """DTE clock + FAIL cooldown.
 
-    Quality (CHOPPY / weak / strong / chase) is applied first. This layer
-    is DTE + cooldown. Missing TREND on a known 1DTE is a refuse.
+    Before 12:45: 0DTE is the book. 1DTE in CHOP/RANGE is skip_1dte_not_trend
+    (9/28 misfire). TREND 1DTE still posts (9/25 runner).
+    From 12:45: all orders are 1DTE. Trade them. Refuse leftover 0DTE
+    (skip_0dte_after_cutover). Do not require TREND after cutover — 9/30
+    14:06 BEAR was a real sub send that Rec ate as misfire.
     """
     if in_fail_cooldown(last_fail_hhmm, et_hhmm):
         return "skip_cooldown_after_fail"
+    if past_dte_cutover(et_hhmm):
+        if dte is not None and dte <= 0:
+            return "skip_0dte_after_cutover"
+        return None
     if dte is not None and dte >= 1:
         reg = (regime or "").strip().upper()
         if reg not in TREND_REGIMES:
@@ -438,8 +463,9 @@ class SessionState:
     ) -> None:
         """Flatten must NOT un-consume send_ts.
 
-        1DTE FAILs/wins are invisible to consecutive_fail_n. 9/28 1DTE
-        scratches had halted the 0DTE book before the 767-put printed.
+        1DTE FAILs/wins before 12:45 are invisible to consecutive_fail_n.
+        9/28 1DTE scratches had halted the 0DTE book before the 767-put printed.
+        After 12:45 the book is 1DTE, so those FAILs count.
         Any FAIL starts the 8-minute misfire cooldown.
         """
         self.session_realized_usd += realized_delta
@@ -451,7 +477,7 @@ class SessionState:
         self.avg_fill_px = None
         if phase == "FAIL" and et_hhmm:
             self.last_fail_hhmm = et_hhmm
-        if counts_toward_fail_streak(dte):
+        if counts_toward_fail_streak(dte, et_hhmm):
             if phase == "FAIL":
                 self.consecutive_fail_n += 1
                 if self.halt_lifted:

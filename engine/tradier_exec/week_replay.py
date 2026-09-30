@@ -175,6 +175,7 @@ def replay_929(*, bounce_open: bool, cap_envelope: bool = True) -> dict:
     """Mutex/consume/halt on the 9/29 tape. Optionally cap STC at $0.15 down."""
     from engine.tradier_exec.replay import load_fixture, _et, _send_for, CLEAN_Q
     from engine.tradier_exec.runtime import CoverUsExec
+    from engine.shared.gates import past_dte_cutover
 
     fx = load_fixture()
     overlay = fx["overlay_sends"]
@@ -195,6 +196,11 @@ def replay_929(*, bounce_open: bool, cap_envelope: bool = True) -> dict:
             bar_high = 765.63
 
         if od["side"] == "buy_to_open":
+            q_tick = dict(CLEAN_Q)
+            if past_dte_cutover(hhmm) and q_tick.get("option_symbol"):
+                q_tick["option_symbol"] = q_tick["option_symbol"].replace(
+                    "260929", "260930"
+                )
             d = ex.starter(
                 send_ts=send_ts,
                 direction=direction,
@@ -204,7 +210,7 @@ def replay_929(*, bounce_open: bool, cap_envelope: bool = True) -> dict:
                 bar_low=bar_low,
                 et_hhmm=hhmm,
                 ask=float(od["price"]),
-                **CLEAN_Q,
+                **q_tick,
             )
             if d.get("post"):
                 broker = int(d["qty"])

@@ -27,6 +27,7 @@ from engine.shared.gates import (  # noqa: F401
     TICKET_RISK_USD,
     TAKE_EXIT,
     HOLD_EXIT,
+    DTE_CUTOVER_ET,
     Direction,
     EnvelopeReason,
     HaltReason,

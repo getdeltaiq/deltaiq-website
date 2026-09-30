@@ -397,7 +397,7 @@ class HaltTests(unittest.TestCase):
             bar_low=764.00,
             et_hhmm="15:44",
             ask=2.59,
-            **CLEAN_Q,
+            **{**CLEAN_Q, "option_symbol": "SPY260930P00765000"},
         )
         self.assertFalse(d["post"])
         self.assertEqual(d["action"], "skip_halt_or_inflight")
@@ -415,7 +415,7 @@ class HaltTests(unittest.TestCase):
             bar_low=764.00,
             et_hhmm="15:45",
             ask=2.59,
-            **CLEAN_Q,
+            **{**CLEAN_Q, "option_symbol": "SPY260930P00765000"},
         )
         self.assertFalse(again["post"])
 
@@ -618,6 +618,41 @@ class MisfireTests(unittest.TestCase):
         )
         self.assertTrue(d["post"])
         self.assertEqual(s.skip_misfire_n, 0)
+
+    def test_after_cutover_1dte_range_posts(self):
+        """9/30 14:06 BEAR: afternoon book is 1DTE. Do not require TREND."""
+        s = new_session("2026-09-30")
+        d = self._base(
+            s,
+            et_hhmm="14:06",
+            option_symbol="SPY261001P00767000",
+            regime="RANGE",
+        )
+        self.assertTrue(d["post"])
+        self.assertEqual(s.skip_misfire_n, 0)
+
+    def test_cutover_on_the_clock_is_1dte(self):
+        s = new_session("2026-09-30")
+        d = self._base(
+            s,
+            et_hhmm="12:45",
+            option_symbol="SPY261001P00767000",
+            regime="RANGE",
+            choppy=False,
+        )
+        self.assertTrue(d["post"])
+
+    def test_after_cutover_0dte_is_refused(self):
+        s = new_session("2026-09-30")
+        d = self._base(
+            s,
+            et_hhmm="14:06",
+            option_symbol="SPY260930P00767000",
+            regime="RANGE",
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_0dte_after_cutover")
+        self.assertEqual(s.skip_misfire_n, 1)
 
     def test_0dte_without_regime_still_posts(self):
         s = new_session("2026-09-24")

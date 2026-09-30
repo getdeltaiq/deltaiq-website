@@ -25,7 +25,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - Missing `pre_move_spy` / `chase_spy` is `skip_quality_unknown` (fail closed).
   - First-line halt: −$750 session cash (3 envelope misses) **or** 4 consecutive **0DTE** FAILs, even if halt was never lifted. 1DTE FAILs do not increment the streak (9/28 1DTE wiggles had halted before the 0DTE 767-put).
   - Extra BTO on RUN: fill remaining room to 16 when MFE ≥ $0.20 (`before_extra_bto`).
-  - Misfire: 8-minute cooldown after any FAIL (`skip_cooldown_after_fail`). 1DTE starters require overlay `regime=TREND` (`skip_1dte_not_trend`); CHOPPY/RANGE/missing is a refuse.
+  - Misfire: 8-minute cooldown after any FAIL (`skip_cooldown_after_fail`). Before **12:45 ET** 1DTE starters require overlay `regime=TREND` (`skip_1dte_not_trend`). From **12:45** the book is 1DTE: trade next-day OCC, refuse leftover 0DTE (`skip_0dte_after_cutover`). Do not freeze 0DTE before cutover.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` into `before_bto`.
 - Live Railway repo is `getdeltaiq/deltaiq-signal-engine` branch `production`. Copy `engine/shared/gates.py`, `engine/tradier_exec/hooks.py`, and `engine/overlay/publish.py` there to ship. This website PR does not deploy the bot.
@@ -37,10 +37,21 @@ Paste into the `deltaiq-signal-engine` production agent:
 ```
 Copy engine/shared/gates.py, engine/tradier_exec/hooks.py, engine/overlay/publish.py
 from getdeltaiq/deltaiq-website PR 24 onto production. Rec book is the live book
-(rec_book_ship=2026-09-30-stc-hold). Overwrite leftover Railway knobs:
+(rec_book_ship=2026-09-30-dte-cutover). Overwrite leftover Railway knobs:
 queue_opposite=false, take_exit=ladder_to_market on FLATTEN only.
 HOLD ticks must set take_exit=hold and post_stc=false. Session cash halt is −$750
 (3 envelope misses), not −$500. Do not keep a parallel knob set.
+
+DTE CLOCK (9/30 14:06 BEAR sub SMS, no Tradier order):
+Native dte_cutover_et=12:45 already switches expiry to tomorrow.
+skip_1dte_not_trend was still refusing those 1DTEs unless TREND.
+Fix: from 12:45 ET, before_bto MUST post 1DTE. Do not look for 0DTE.
+- Before 12:45: select TODAY expiry (0DTE). 1DTE only if regime=TREND.
+- From 12:45 inclusive: select NEXT SESSION expiry (1DTE). Pass that
+  option_symbol into before_bto. If OCC is still 0DTE, skip_0dte_after_cutover.
+- After cutover, skip_1dte_not_trend does NOT apply. RANGE/CHOPPY 1DTE still
+  hits quality_skip (choppy=true still refuses). 14:06 skip_misfire was the bug.
+- Flatten still 15:50. Do not add a 0DTE TREND freeze.
 
 9/30 10:39 bug: BTO 10-lot 767-call @ $1.84 then STC @ $1.83 in ~3s.
 That was native bid-exit on fill / take_exit on HOLD. Rec envelope needs
@@ -59,22 +70,24 @@ option_symbol, and a Postgres persist= that INSERT ON CONFLICT DO NOTHING
 into consumed_sends. Boot SELECT + state.load_consumed. Never DELETE on flatten.
 
 on_manage: if extra_bto, POST remaining room to 16 (not a second starter).
-Disable Railway extra_bto_on_run native. 1DTE without TREND is skip_1dte_not_trend.
-Missing option_symbol is skip_dte_unknown. 8-minute cooldown after FAIL.
-on_flatten(..., dte=option_dte(symbol, session_date), et_hhmm=).
+Disable Railway extra_bto_on_run native. Missing option_symbol is skip_dte_unknown.
+8-minute cooldown after FAIL. on_flatten(..., dte=option_dte(symbol, session_date), et_hhmm=).
 1DTE must not increment consecutive_fail_n.
 
 Proof on /health (must match rec_book()): rec_book=true,
-rec_book_ship=2026-09-30-stc-hold, session_loss_halt_usd=750,
+rec_book_ship=2026-09-30-dte-cutover, session_loss_halt_usd=750,
 engine_exit_mode=ladder_to_market,
 take_exit=ladder_to_market, hold_exit=hold, stc_requires_envelope=true,
 stc_on_bto_fill=false, working_stc_on_fill=false, before_stc=true,
 bto_source=sub_alert_send, queue_opposite=false,
 chop_size=false, fail_streak_0dte_only=true, extra_bto=true,
-extra_bto_fill_to=16, skip_1dte_not_trend=true, cooldown_after_fail_sec=480,
+extra_bto_fill_to=16, skip_1dte_not_trend=true, dte_cutover_et=12:45,
+skip_0dte_after_cutover=true, trade_1dte_after_cutover=true,
+cooldown_after_fail_sec=480,
 consumed_send_ts after a starter, skip_quality_n, skip_misfire_n.
 After a BTO fill: last_action=bto_fill, post_stc=false until envelope.
 A 1-cent scratch in 3s must not happen.
+After 12:45 a sub 1DTE send with post=true must place a Tradier BTO.
 ```
 
 

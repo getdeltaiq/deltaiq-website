@@ -188,19 +188,24 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    −$750 session cash (3 envelope misses) OR 4 consecutive 0DTE FAILs halt even if halt_lifted is False.
    1DTE FAILs do not increment consecutive_fail_n.
    Pass option_symbol into before_bto (missing is skip_dte_unknown).
-   1DTE without overlay TREND is skip_1dte_not_trend.
+   1DTE without overlay TREND is skip_1dte_not_trend BEFORE 12:45 only.
+   From 12:45 ET: select NEXT-DAY OCC (1DTE). before_bto must POST that 1DTE.
+   If option_symbol is still 0DTE after 12:45 => skip_0dte_after_cutover.
+   Do not require TREND after cutover. 9/30 14:06 BEAR was skip_misfire — that is the bug.
    on_flatten(realized, phase, dte=option_dte(symbol, session_date), et_hhmm=).
    After a lift, additional −$750 / 4 fails-after-lift re-halt.
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-09-30-stc-hold, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-09-30-dte-cutover, session_loss_halt_usd=750
    queue_opposite=false (overwrite Railway true)
    take_exit=ladder_to_market (flatten mode only; HOLD ticks take_exit=hold)
    stc_requires_envelope=true, stc_on_bto_fill=false, working_stc_on_fill=false
    before_stc=true, post_stc=false until envelope
    fail_streak_0dte_only=true, extra_bto=true, extra_bto_fill_to=16
-   skip_1dte_not_trend=true, cooldown_after_fail_sec=480
+   skip_1dte_not_trend=true (morning only), dte_cutover_et=12:45,
+   skip_0dte_after_cutover=true, trade_1dte_after_cutover=true,
+   cooldown_after_fail_sec=480
    engine_exit_mode == ladder_to_market (not trail).
    After a real starter: consumed_send_ts nonempty and still nonempty after flatten.
    skip_bounce_n increments on $0.30-against with zero BTO.
