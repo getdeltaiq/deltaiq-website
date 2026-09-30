@@ -279,7 +279,7 @@ class EnvelopeTests(unittest.TestCase):
 
 
 class HaltTests(unittest.TestCase):
-    def test_does_not_rehalt_on_old_loss_until_additional_500(self):
+    def test_does_not_rehalt_on_old_loss_until_additional_750(self):
         s = new_session("2026-09-29")
         s.session_realized_usd = -1111.0
         s.halt_baseline_usd = -1111.0
@@ -287,6 +287,9 @@ class HaltTests(unittest.TestCase):
         s.refresh_halt()
         self.assertFalse(s.session_halt)
         s.session_realized_usd = -1111.0 - 500.0
+        s.refresh_halt()
+        self.assertFalse(s.session_halt)
+        s.session_realized_usd = -1111.0 - 750.0
         s.refresh_halt()
         self.assertTrue(s.session_halt)
         self.assertEqual(s.session_halt_reason, "session_loss_after_lift")
@@ -296,7 +299,7 @@ class HaltTests(unittest.TestCase):
         s = new_session("2026-09-29")
         s.halt_lifted = True
         s.halt_baseline_usd = 0.0
-        s.on_flatten(-500.0, "FAIL")
+        s.on_flatten(-750.0, "FAIL")
         self.assertTrue(s.session_halt)
         s.on_flatten(0.0, "FAIL")
         self.assertTrue(s.session_halt)
@@ -306,7 +309,7 @@ class HaltTests(unittest.TestCase):
         s = new_session("2026-09-29")
         s.halt_lifted = True
         s.halt_baseline_usd = 0.0
-        s.on_flatten(-500.0, "FAIL")
+        s.on_flatten(-750.0, "FAIL")
         self.assertTrue(s.session_halt)
         s.session_realized_usd = 0.0
         s.refresh_halt()
@@ -369,9 +372,20 @@ class HaltTests(unittest.TestCase):
     def test_first_line_session_loss_halts_without_lift(self):
         s = new_session("2026-09-29")
         s.on_flatten(-500.0, "FAIL")
+        self.assertFalse(s.session_halt)
+        s.on_flatten(-250.0, "FAIL")
         self.assertTrue(s.session_halt)
         self.assertEqual(s.session_halt_reason, "session_loss")
         self.assertFalse(s.may_starter_bto())
+
+    def test_three_ticket_risk_misses_stay_under_halt(self):
+        s = new_session("2026-09-30")
+        s.on_flatten(-240.0, "FAIL")
+        s.on_flatten(-240.0, "FAIL")
+        s.on_flatten(-240.0, "FAIL")
+        self.assertEqual(s.session_realized_usd, -720.0)
+        self.assertFalse(s.session_halt)
+        self.assertEqual(s.consecutive_fail_n, 3)
 
     def test_four_fails_halt_without_lift(self):
         s = new_session("2026-09-29")

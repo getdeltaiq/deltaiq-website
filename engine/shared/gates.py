@@ -43,7 +43,7 @@ FAIL_SEC = 90.0
 BOUNCE_AGAINST_SPY = 0.30
 OPEN_REVERSAL_WINDOW = ("10:00", "10:02")
 EXTRA_BTO_MFE_USD = 0.20
-SESSION_LOSS_HALT_USD = 500.0
+SESSION_LOSS_HALT_USD = 750.0  # 3 envelope misses (~$240) before the day stops
 CONSECUTIVE_FAIL_HALT = 4
 # 9/28: 1DTE wiggles printed 4 FAILs and halted before the 0DTE 767-put.
 # Count only 0DTE toward the streak. 1DTE still has envelope + dollar halt.
@@ -61,7 +61,7 @@ QUEUE_OPPOSITE = False  # exec must not invent opposite rips
 # Rec scenario (9/15–9/29 replay): envelope + 0DTE halt + extra BTO to 16
 # + 1DTE skip unless TREND. Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-09-30-rec"
+REC_BOOK_SHIP = "2026-09-30-rec-750"
 
 
 def rec_book() -> dict:
@@ -464,8 +464,8 @@ class SessionState:
             if self.fails_after_lift_n >= CONSECUTIVE_FAIL_HALT:
                 self._trip_halt("consecutive_fail")
             return
-        # 9/29: 0-for-N never tripped halt until a prior lift. First-line stop:
-        # −$500 session cash or 4 consecutive 0DTE FAILs, no lift required.
+        # First-line stop: −$750 session cash (3 envelope misses) or 4
+        # consecutive 0DTE FAILs, no lift required.
         if self.session_realized_usd <= -SESSION_LOSS_HALT_USD:
             self._trip_halt("session_loss")
             return

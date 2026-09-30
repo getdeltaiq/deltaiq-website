@@ -30,7 +30,7 @@ Railway is not the source of this logic. **`engine/` is.** This directory is a c
 | Rapid FAIL re-entry | `skip_cooldown_after_fail` (480s); `COOLDOWN_AFTER_FAIL_SEC` is wired |
 | Trail held 16-lot to −$336 | `apply_manage_result` sets `disable_trail`; `engine_exit_mode=ladder_to_market` |
 | consumed_send_ts [] after flatten | `persist=` INSERT ON CONFLICT; `load_consumed` at boot; never DELETE |
-| 0-for-N never halted until a lift | first-line halt: −$500 or 4 **0DTE** FAILs; 1DTE does not increment the streak |
+| 0-for-N never halted until a lift | first-line halt: −$750 (3 envelope misses) or 4 **0DTE** FAILs; 1DTE does not increment the streak |
 
 ## Halt (rest of a blown session)
 

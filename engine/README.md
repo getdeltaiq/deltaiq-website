@@ -22,7 +22,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 - **9/29 learn (wired at BTO, not just overlay):**
   - Refuse CHOPPY (do **not** `chop_size`). Weak pre-move $0.15–$0.29. Strong pre-move ≥ $0.50. Chase ≥ $0.50.
   - Missing `pre_move_spy` / `chase_spy` is `skip_quality_unknown` (fail closed).
-  - First-line halt: −$500 session cash **or** 4 consecutive **0DTE** FAILs, even if halt was never lifted. 1DTE FAILs do not increment the streak (9/28 1DTE wiggles had halted before the 0DTE 767-put).
+  - First-line halt: −$750 session cash (3 envelope misses) **or** 4 consecutive **0DTE** FAILs, even if halt was never lifted. 1DTE FAILs do not increment the streak (9/28 1DTE wiggles had halted before the 0DTE 767-put).
   - Extra BTO on RUN: fill remaining room to 16 when MFE ≥ $0.20 (`before_extra_bto`).
   - Misfire: 8-minute cooldown after any FAIL (`skip_cooldown_after_fail`). 1DTE starters require overlay `regime=TREND` (`skip_1dte_not_trend`); CHOPPY/RANGE/missing is a refuse.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
@@ -36,8 +36,9 @@ Paste into the `deltaiq-signal-engine` production agent:
 ```
 Copy engine/shared/gates.py, engine/tradier_exec/hooks.py, engine/overlay/publish.py
 from getdeltaiq/deltaiq-website PR 24 onto production. Rec book is the live book
-(rec_book_ship=2026-09-30-rec). Overwrite leftover Railway knobs:
-queue_opposite=false, take_exit=ladder_to_market. Do not keep a parallel knob set.
+(rec_book_ship=2026-09-30-rec-750). Overwrite leftover Railway knobs:
+queue_opposite=false, take_exit=ladder_to_market. Session cash halt is −$750
+(3 envelope misses), not −$500. Do not keep a parallel knob set.
 
 Wire before_bto with plot=sub_alert_send, overlay_queued, is_opposite,
 choppy, on_arm_bar, pre_move_spy, chase_spy, regime, same_dir_age_sec,
@@ -51,7 +52,8 @@ on_flatten(..., dte=option_dte(symbol, session_date), et_hhmm=).
 1DTE must not increment consecutive_fail_n.
 
 Proof on /health (must match rec_book()): rec_book=true,
-rec_book_ship=2026-09-30-rec, engine_exit_mode=ladder_to_market,
+rec_book_ship=2026-09-30-rec-750, session_loss_halt_usd=750,
+engine_exit_mode=ladder_to_market,
 take_exit=ladder_to_market, bto_source=sub_alert_send, queue_opposite=false,
 chop_size=false, fail_streak_0dte_only=true, extra_bto=true,
 extra_bto_fill_to=16, skip_1dte_not_trend=true, cooldown_after_fail_sec=480,

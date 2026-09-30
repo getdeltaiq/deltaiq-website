@@ -174,16 +174,16 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    NEVER DELETE except session_date rollover.
 
 7) Halt first-line (9/29 0-for-N never waited for a lift)
-   −$500 session cash OR 4 consecutive 0DTE FAILs halt even if halt_lifted is False.
+   −$750 session cash (3 envelope misses) OR 4 consecutive 0DTE FAILs halt even if halt_lifted is False.
    1DTE FAILs do not increment consecutive_fail_n.
    Pass option_symbol into before_bto (missing is skip_dte_unknown).
    1DTE without overlay TREND is skip_1dte_not_trend.
    on_flatten(realized, phase, dte=option_dte(symbol, session_date), et_hhmm=).
-   After a lift, additional −$500 / 4 fails-after-lift re-halt.
+   After a lift, additional −$750 / 4 fails-after-lift re-halt.
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-09-30-rec
+   rec_book=true, rec_book_ship=2026-09-30-rec-750, session_loss_halt_usd=750
    queue_opposite=false (overwrite Railway true)
    take_exit=ladder_to_market (overwrite Railway bid)
    fail_streak_0dte_only=true, extra_bto=true, extra_bto_fill_to=16

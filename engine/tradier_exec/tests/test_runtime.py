@@ -47,7 +47,7 @@ class RuntimeTapeTests(unittest.TestCase):
             for x in ex.log
             if x.get("kind") == "starter" and x.get("post") and x is not posted[0]
         ]
-        # May post a few morning tickets until −$500, then halt.
+        # May post a few morning tickets until −$750 or 4 0DTE FAILs, then halt.
         self.assertLess(len(posted), 8)
         self.assertTrue(any(x.get("action") == "skip_halt_or_inflight" for x in starters))
         self.assertEqual(ex.health()["engine_exit_mode"], "ladder_to_market")
