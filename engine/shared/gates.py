@@ -37,10 +37,16 @@ RISK_QTY_CAP = 16
 SESSION_STARTER_CAP = 16  # omit-or-16; NEVER 8
 TICKET_RISK_USD = 240.0
 PROTECTIVE_STOP_USD = 0.15
+# 10/1 14:04 1DTE BULL printed −$0.21 option in 1m (SPY −$0.42) then ran
+# into the 15:50 close. 0DTE keeps $0.15 (9/29 16-lot). 1DTE uses $0.30.
+PROTECTIVE_STOP_1DTE_USD = 0.30
 QUOTE_GRACE_SEC = 8.0
 CATASTROPHIC_OPTION_USD = 0.40
 CATASTROPHIC_SPY = 0.50
 FAIL_SEC = 90.0
+# 10/1 14:26 1DTE BULL never tagged $0.15, then 90s FAIL scratched a
+# hold-to-flatten path winner. 1DTE does not 90s-FAIL.
+FAIL_SEC_1DTE = None
 BOUNCE_AGAINST_SPY = 0.30
 OPEN_REVERSAL_WINDOW = ("10:00", "10:02")
 # 9/30 10:14 BEAR 10-lot 1.84→1.65 −$190. First 20 minutes of the midday
@@ -78,7 +84,7 @@ WORKING_STC_ON_FILL = False
 # + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:45 (trade it).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-01-channel-align"
+REC_BOOK_SHIP = "2026-10-01-1dte-protect"
 
 
 def rec_book() -> dict:
@@ -110,6 +116,8 @@ def rec_book() -> dict:
         "session_loss_halt_usd": SESSION_LOSS_HALT_USD,
         "consecutive_fail_halt": CONSECUTIVE_FAIL_HALT,
         "protective_stop_usd": PROTECTIVE_STOP_USD,
+        "protective_stop_1dte_usd": PROTECTIVE_STOP_1DTE_USD,
+        "fail_sec_1dte": FAIL_SEC_1DTE,
         "ticket_risk_usd": TICKET_RISK_USD,
         "risk_qty_cap": RISK_QTY_CAP,
         "starter_notional_usd": STARTER_NOTIONAL_USD,
@@ -434,6 +442,20 @@ def unrealized_dollars(mark_bid: float, avg_fill: float, qty: int) -> float:
     return (mark_bid - avg_fill) * 100.0 * qty
 
 
+def protective_stop_usd(dte: int | None = None) -> float:
+    """0DTE $0.15. 1DTE $0.30. Missing dte is 0DTE (fail closed)."""
+    if dte is not None and dte >= 1:
+        return PROTECTIVE_STOP_1DTE_USD
+    return PROTECTIVE_STOP_USD
+
+
+def fail_sec_for(dte: int | None = None) -> float | None:
+    """90s FAIL on 0DTE only. 1DTE holds to protective / ticket_risk / flatten."""
+    if dte is not None and dte >= 1:
+        return FAIL_SEC_1DTE
+    return FAIL_SEC
+
+
 def envelope_hit(
     *,
     fill_px: float,
@@ -442,6 +464,7 @@ def envelope_hit(
     spy_adverse: float,
     seconds_since_fill: float,
     ticket_phase: str | None,
+    dte: int | None = None,
 ) -> EnvelopeReason | None:
     """Evaluate combined broker qty. qty is broker longs, not intended starter size."""
     if qty <= 0:
@@ -450,7 +473,8 @@ def envelope_hit(
         return None
     down = round(fill_px - mark_bid, 4)
     u = round(unrealized_dollars(mark_bid, fill_px, qty), 2)
-    if down >= PROTECTIVE_STOP_USD:
+    stop = protective_stop_usd(dte)
+    if down >= stop:
         return "protective"
     if u <= -TICKET_RISK_USD:
         return "ticket_risk"
@@ -458,7 +482,8 @@ def envelope_hit(
         return "cata_opt"
     if spy_adverse >= CATASTROPHIC_SPY:
         return "cata_spy"
-    if seconds_since_fill >= FAIL_SEC and ticket_phase == "FAIL":
+    fail_s = fail_sec_for(dte)
+    if fail_s is not None and seconds_since_fill >= fail_s and ticket_phase == "FAIL":
         return "fail_90"
     return None
 
@@ -782,10 +807,16 @@ def decide_manage(
     ticket_phase: str | None,
     bid: float,
     now: float | None = None,
+    dte: int | None = None,
 ) -> dict:
     if qty > 0:
         state.broker_qty = int(qty)
     age = state.ticket_age_sec(seconds_since_fill, now=now)
+    dte_val = (
+        dte
+        if dte is not None
+        else option_dte(state.last_option_symbol, state.session_date)
+    )
     reason = envelope_hit(
         fill_px=fill_px,
         mark_bid=mark_bid,
@@ -793,6 +824,7 @@ def decide_manage(
         spy_adverse=spy_adverse,
         seconds_since_fill=age,
         ticket_phase=ticket_phase,
+        dte=dte_val,
     )
     if reason is None:
         mfe = round(mark_bid - fill_px, 4)

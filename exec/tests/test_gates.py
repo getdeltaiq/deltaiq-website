@@ -876,7 +876,9 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-01-channel-align")
+        self.assertEqual(h["rec_book_ship"], "2026-10-01-1dte-protect")
+        self.assertEqual(h["protective_stop_1dte_usd"], 0.30)
+        self.assertIsNone(h["fail_sec_1dte"])
         self.assertTrue(h["channels_aligned"])
         self.assertTrue(h["sms_iff_sub_send"])
         self.assertEqual(h["sms_from"], "sub_alert_send")
@@ -955,6 +957,97 @@ class ChannelAlignTests(unittest.TestCase):
             else:
                 self.assertFalse(d["post"], msg=kw)
                 self.assertEqual(d["action"], act)
+
+
+class AdaptiveProtectTests(unittest.TestCase):
+    """10/1 1DTE $0.15 clip: widen 1DTE stop, keep 0DTE $0.15 + fail_90."""
+
+    def test_0dte_015_still_protective(self):
+        self.assertEqual(
+            envelope_hit(
+                fill_px=1.90,
+                mark_bid=1.75,
+                qty=10,
+                spy_adverse=0.20,
+                seconds_since_fill=12,
+                ticket_phase="FAIL",
+                dte=0,
+            ),
+            "protective",
+        )
+
+    def test_1dte_021_is_not_protective(self):
+        # 10/1 14:04: −$0.21 option, then the close rally.
+        self.assertIsNone(
+            envelope_hit(
+                fill_px=2.95,
+                mark_bid=2.74,
+                qty=6,
+                spy_adverse=0.42,
+                seconds_since_fill=60,
+                ticket_phase="FAIL",
+                dte=1,
+            )
+        )
+
+    def test_1dte_030_is_protective(self):
+        self.assertEqual(
+            envelope_hit(
+                fill_px=2.95,
+                mark_bid=2.65,
+                qty=6,
+                spy_adverse=0.60,
+                seconds_since_fill=60,
+                ticket_phase="FAIL",
+                dte=1,
+            ),
+            "protective",
+        )
+
+    def test_1dte_does_not_fail_90(self):
+        self.assertIsNone(
+            envelope_hit(
+                fill_px=2.95,
+                mark_bid=2.90,
+                qty=6,
+                spy_adverse=0.10,
+                seconds_since_fill=95,
+                ticket_phase="FAIL",
+                dte=1,
+            )
+        )
+
+    def test_0dte_still_fail_90(self):
+        self.assertEqual(
+            envelope_hit(
+                fill_px=1.90,
+                mark_bid=1.85,
+                qty=10,
+                spy_adverse=0.10,
+                seconds_since_fill=95,
+                ticket_phase="FAIL",
+                dte=0,
+            ),
+            "fail_90",
+        )
+
+    def test_manage_holds_1dte_021_dip(self):
+        s = new_session("2026-10-01")
+        s.last_option_symbol = "SPY261002C00763000"
+        m = decide_manage(
+            s,
+            fill_px=2.95,
+            mark_bid=2.74,
+            qty=6,
+            spy_adverse=0.42,
+            seconds_since_fill=60,
+            ticket_phase="FAIL",
+            bid=2.74,
+            dte=1,
+        )
+        self.assertFalse(m["flatten"])
+        self.assertEqual(m["take_exit"], "hold")
+        self.assertEqual(s.protect_fills_n, 0)
 
 
 class ExtraBtoTests(unittest.TestCase):

@@ -200,8 +200,9 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-10-01-channel-align, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-10-01-1dte-protect, session_loss_halt_usd=750
    channels_aligned=true, sms_iff_sub_send=true, sms_from=sub_alert_send
+   protective_stop_usd=0.15, protective_stop_1dte_usd=0.30, fail_sec_1dte=null
    queue_opposite=false (overwrite Railway true)
    take_exit=ladder_to_market (flatten mode only; HOLD ticks take_exit=hold)
    stc_requires_envelope=true, stc_on_bto_fill=false, working_stc_on_fill=false
@@ -218,6 +219,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    skip_quality_n increments on CHOPPY / weak / chase / unknown / open_fade / near_cutover.
    skip_misfire_n increments on 1DTE-not-trend / cooldown / missing OCC.
    last_stc_ladder == "market" on envelope hit.
+   0DTE −$0.15 still flatten_protective. 1DTE −$0.21 must HOLD. 1DTE 90s FAIL must HOLD.
    chop_size == false. protect_fills_n increments on $0.15 down.
    A 1-cent bid scratch in <90s must NOT increment protect_fills_n.
 

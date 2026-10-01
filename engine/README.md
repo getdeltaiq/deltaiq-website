@@ -29,6 +29,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - Misfire: 8-minute cooldown after any FAIL (`skip_cooldown_after_fail`). Before **12:45 ET** 1DTE starters require overlay `regime=TREND` (`skip_1dte_not_trend`). From **12:45** the book is 1DTE: trade next-day OCC, refuse leftover 0DTE (`skip_0dte_after_cutover`). Do not freeze 0DTE before cutover.
   - **9/30 alert quality (morning losses >$150):** 0DTE in **10:00–10:20** is `skip_0dte_open_fade` (10:14 BEAR −$190; also 10/1 10:01 SUB ping). 0DTE in **12:30–12:44** is `skip_0dte_near_cutover` (12:44 BULL −$256, STC at the 12:45 cutover). 1DTE TREND still posts in those windows. 10:21–12:29 0DTE still posts. 09:36–09:40 morning rip still sends.
   - **Channel align (10/1):** SUB_signals SMS is a `sub_alert_send`. Overlay and Tradier call the same skip stack. A 10:01 0DTE is admin-only (no SMS, no BTO). Do not SMS a quality/misfire/clock skip.
+  - **1DTE adaptive protect (10/1 close):** 0DTE stays `protective $0.15` + `fail_90`. 1DTE uses `protective $0.30` and does **not** 90s-FAIL (10/1 14:04 $0.15-clip then rally; 14:26 fail_90 scratch). Ticket risk −$240 and flatten 15:50 stay. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` into `before_bto`.
 - Live Railway repo is `getdeltaiq/deltaiq-signal-engine` branch `production`. Copy `engine/shared/gates.py`, `engine/tradier_exec/hooks.py`, and `engine/overlay/publish.py` there to ship. This website PR does not deploy the bot.
@@ -40,7 +41,13 @@ Paste into the `deltaiq-signal-engine` production agent:
 ```
 Copy engine/shared/gates.py, engine/tradier_exec/hooks.py, engine/overlay/publish.py
 from getdeltaiq/deltaiq-website PR 24 onto production.
-rec_book_ship=2026-10-01-channel-align. Do not lift a halt that is already off.
+rec_book_ship=2026-10-01-1dte-protect. Do not lift a halt that is already off.
+
+1DTE ADAPTIVE PROTECT — 10/1 $0.15 clipped 1DTE path winners.
+0DTE keeps protective $0.15 and fail_90 (9/29 16-lot).
+1DTE protective $0.30. 1DTE does NOT fail_90.
+A 14:04 1DTE −$0.21 option dip must HOLD. A 14:26 1DTE 90s tick must HOLD.
+Ticket risk −$240 and 15:50 flatten stay. Do not freeze 0DTE TREND.
 
 CHANNEL ALIGN — 10/1 10:01 SUB_signals SMS with no Tradier BTO is the bug.
 SMS and BTO share sub_action_skip_reason. One skip stack.
@@ -67,7 +74,7 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
 
 3) Every manage tick / every STC:
    qty = BROKER_QTY (Tradier position, not intended).
-   m = on_manage(..., qty=qty)
+   m = on_manage(..., qty=qty, dte=option_dte(symbol, session_date))
    if qty <= 0 or m["flatten"] is not True:
        take_exit=hold; post_stc=false; cancel working STC; return
    stc = before_stc(...)
@@ -75,6 +82,8 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
        cancel working STC; return
    Only then walk bid / bid-0.05 / bid-0.10 / MARKET ONCE.
    Disable native close_push. Set flatten_limit_thru_usd=0.
+   0DTE: flatten at $0.15 down or fail_90. 1DTE: flatten at $0.30 down;
+   do NOT fail_90. Ticket risk −$240 still flattens either DTE.
 
 4) Working BTO lock (11:21/11:29):
    One ask limit at a time. While send age < 90s, replace to CURRENT ask.
@@ -84,14 +93,16 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
 5) DTE clock stays: 12:45 switch to 1DTE, trade it, skip leftover 0DTE.
    STC-hold stays. 1DTE FAILs after 12:45 count toward the 4-fail halt.
 
-Proof: rec_book_ship=2026-10-01-channel-align, channels_aligned=true,
+Proof: rec_book_ship=2026-10-01-1dte-protect, channels_aligned=true,
 sms_iff_sub_send=true, sms_from=sub_alert_send, skip_0dte_open_fade=true,
 open_fade_window=["10:00","10:20"], skip_0dte_near_cutover=true,
 near_cutover_0dte_et=12:30, skip_already_flat=true, flatten_limit_thru_usd=0,
-dte_cutover_et=12:45, trade_1dte_after_cutover=true.
+dte_cutover_et=12:45, trade_1dte_after_cutover=true,
+protective_stop_usd=0.15, protective_stop_1dte_usd=0.30, fail_sec_1dte=null.
 A 10:01 0DTE must be skip_0dte_open_fade on SMS AND BTO. A 10:14 0DTE BEAR
 must be skip_0dte_open_fade. A 12:44 0DTE BULL must be skip_0dte_near_cutover.
 An 11:48 0DTE and a 15:16 1DTE must still SEND and POST.
+A 1DTE −$0.21 mark in 60s must HOLD. A 0DTE −$0.15 mark must still flatten.
 
 ```
 

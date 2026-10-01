@@ -23,6 +23,7 @@ from engine.shared.gates import (
     counts_toward_fail_streak,
     extra_bto_qty,
     option_dte,
+    protective_stop_usd,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "week-2026-09-22-lots.json"
@@ -97,12 +98,15 @@ def load_lots_before() -> dict:
     return json.loads(FIXTURE_BEFORE.read_text(encoding="utf-8"))
 
 
-def envelope_lot(qty: float, cost: float, proceeds: float) -> tuple[float, bool]:
-    """Keep winners. Cap losers at protective $0.15 / ticket_risk −$240."""
+def envelope_lot(
+    qty: float, cost: float, proceeds: float, *, dte: int | None = None
+) -> tuple[float, bool]:
+    """Keep winners. Cap losers at DTE protective / ticket_risk −$240."""
     live = round(proceeds - cost, 2)
     if live >= 0:
         return live, False
-    cap = max(-PROTECTIVE_STOP_USD * qty * 100.0, -TICKET_RISK_USD)
+    stop = protective_stop_usd(dte)
+    cap = max(-stop * qty * 100.0, -TICKET_RISK_USD)
     return round(max(live, cap), 2), True
 
 
@@ -126,8 +130,8 @@ def walk_session(
 
     for lot in ordered:
         live = round(lot["proceeds"] - lot["cost"], 2)
-        env, is_fail = envelope_lot(lot["qty"], lot["cost"], lot["proceeds"])
         dte = option_dte(lot.get("symbol"), session_date or lot.get("session_date") or "")
+        env, is_fail = envelope_lot(lot["qty"], lot["cost"], lot["proceeds"], dte=dte)
         row = {**lot, "live": live, "env": env, "fail": is_fail, "dte": dte}
         if halted:
             skipped.append(row)
@@ -183,6 +187,7 @@ def replay_929(*, bounce_open: bool, cap_envelope: bool = True) -> dict:
     ex = CoverUsExec(":memory:", fx["session_date"], keep_halt=False)
     avg_fill = 0.0
     broker = 0
+    last_dte: int | None = 0
     posted_pnl: list[float] = []
 
     for od in fx["orders"]:
@@ -215,17 +220,21 @@ def replay_929(*, bounce_open: bool, cap_envelope: bool = True) -> dict:
             if d.get("post"):
                 broker = int(d["qty"])
                 avg_fill = float(od["price"])
+                last_dte = d.get("dte")
+                if last_dte is None:
+                    last_dte = option_dte(q_tick.get("option_symbol"), fx["session_date"])
                 ex.on_bto_fill(broker, avg_fill)
             continue
 
         if broker <= 0:
             continue
+        stop = protective_stop_usd(last_dte)
         stc_px = od["price"]
         if stc_px is None:
-            stc_px = round(avg_fill - PROTECTIVE_STOP_USD, 2)
+            stc_px = round(avg_fill - stop, 2)
         stc_px = float(stc_px)
-        if cap_envelope and avg_fill - stc_px >= PROTECTIVE_STOP_USD:
-            stc_px = round(avg_fill - PROTECTIVE_STOP_USD, 2)
+        if cap_envelope and avg_fill - stc_px >= stop:
+            stc_px = round(avg_fill - stop, 2)
         ex.manage(
             fill_px=avg_fill,
             mark_bid=stc_px,
@@ -234,6 +243,7 @@ def replay_929(*, bounce_open: bool, cap_envelope: bool = True) -> dict:
             seconds_since_fill=12.0,
             ticket_phase="FAIL",
             bid=stc_px,
+            dte=last_dte,
         )
         realized = round((stc_px - avg_fill) * 100.0 * broker, 2)
         posted_pnl.append(realized)
