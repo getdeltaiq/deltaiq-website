@@ -59,9 +59,11 @@ class RuntimeTapeTests(unittest.TestCase):
     def test_ten_am_bounce_skips_open_double_and_recycles(self):
         ex = replay(keep_halt=False, bounce_open=True)
         starters = [x for x in ex.log if x.get("kind") == "starter"]
-        self.assertEqual(starters[0]["action"], "skip_bounce_against")
+        # 0DTE 10:00 is open-fade on the shared SMS+BTO stack. Bounce is
+        # exec-only for 1DTE TREND in 10:00–10:02.
+        self.assertEqual(starters[0]["action"], "skip_0dte_open_fade")
         self.assertFalse(starters[0]["post"])
-        self.assertGreaterEqual(ex.state.skip_bounce_n, 1)
+        self.assertGreaterEqual(ex.state.skip_quality_n, 1)
         # Recycles of 10:00 are consumed, not new BTOs.
         recycle = [x for x in starters if x.get("action") == "skip_dup_send_ts"]
         self.assertGreaterEqual(len(recycle), 2)

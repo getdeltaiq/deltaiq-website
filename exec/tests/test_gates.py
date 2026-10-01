@@ -136,9 +136,10 @@ class ConsumeTests(unittest.TestCase):
 
 class BounceTests(unittest.TestCase):
     def test_ten_am_bear_reversal_bar_skipped_and_consumed(self):
+        # 0DTE 10:00 is open-fade. Bounce still applies to 1DTE TREND in
+        # 10:00–10:02 (exec-only live tape after the shared skip stack).
         s = new_session("2026-09-29")
-        d = decide_starter(
-            s,
+        args = dict(
             send_ts=10.0,
             direction="BEAR",
             send_spy=764.78,
@@ -149,23 +150,24 @@ class BounceTests(unittest.TestCase):
             ask=1.42,
             **CLEAN_Q,
         )
+        args["option_symbol"] = "SPY260930P00765000"
+        args["dte"] = 1
+        args["regime"] = "TREND"
+        d = decide_starter(s, **args)
         self.assertEqual(d["action"], "skip_bounce_against")
         self.assertFalse(d["post"])
         self.assertEqual(s.skip_bounce_n, 1)
         self.assertEqual(s.session_starters_n, 0)
         self.assertIn(10.0, s.consumed)
-        again = decide_starter(
-            s,
-            send_ts=10.0,
-            direction="BEAR",
-            send_spy=764.78,
+        again_args = dict(args)
+        again_args.update(
             spy=764.80,
             bar_high=764.85,
             bar_low=764.70,
             et_hhmm="10:13",
             ask=1.57,
-            **CLEAN_Q,
         )
+        again = decide_starter(s, **again_args)
         self.assertFalse(again["post"])
 
     def test_with_trend_bear_posts_one_starter(self):
