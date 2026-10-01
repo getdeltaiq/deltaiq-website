@@ -15,7 +15,8 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 ## Contract
 
 - **Adopted book:** overlay **sub** is the performer (PF 1.86 paper). Cover-us is the cash floor. Never BTO `admin_alert_ledger`. Never exec-queue an opposite (`queue_opposite=false`) unless overlay itself queued that send. Flatten `take_exit=ladder_to_market` (not bid).
-- `admin_n >= sub_n`. Plot `sub_alert_send`. `admin_rows=admin_alert_ledger`. `aligned_copy=false`.
+- `admin_n >= sub_n`. Plot `sub_alert_send`. `admin_rows=admin_alert_ledger`. `aligned_copy=false` is SMS **body** (“sign in to view”), not “not a trade.”
+- **Channels aligned:** overlay `decide_sub_send` and Tradier `before_bto` share `sub_action_skip_reason`. SMS only if `send=True`. If overlay SMS, Tradier BTO that send (bounce / halt / inflight stay exec-only). Never SMS a skip.
 - Starter BTO only after `before_bto` returns `post=True` with `plot=sub_alert_send`.
 - Envelope flatten sets `override_trail=True` and `engine_exit_mode=ladder_to_market` (never hold a loser on trail).
 - **STC only when `on_manage`/`before_stc` returns `flatten=true`.** HOLD ticks use `take_exit=hold` and `post_stc=false`. Never rest a bid STC on BTO fill (9/30 10:39 10-lot 767-call scratch).
@@ -26,7 +27,8 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - First-line halt: −$750 session cash (3 envelope misses) **or** 4 consecutive **0DTE** FAILs, even if halt was never lifted. 1DTE FAILs do not increment the streak (9/28 1DTE wiggles had halted before the 0DTE 767-put).
   - Extra BTO on RUN: fill remaining room to 16 when MFE ≥ $0.20 (`before_extra_bto`).
   - Misfire: 8-minute cooldown after any FAIL (`skip_cooldown_after_fail`). Before **12:45 ET** 1DTE starters require overlay `regime=TREND` (`skip_1dte_not_trend`). From **12:45** the book is 1DTE: trade next-day OCC, refuse leftover 0DTE (`skip_0dte_after_cutover`). Do not freeze 0DTE before cutover.
-  - **9/30 alert quality (morning losses >$150):** 0DTE in **10:00–10:20** is `skip_0dte_open_fade` (10:14 BEAR −$190). 0DTE in **12:30–12:44** is `skip_0dte_near_cutover` (12:44 BULL −$256, STC at the 12:45 cutover). 1DTE TREND still posts in those windows. 10:21–12:29 0DTE still posts. 09:36–09:40 morning rip still sends.
+  - **9/30 alert quality (morning losses >$150):** 0DTE in **10:00–10:20** is `skip_0dte_open_fade` (10:14 BEAR −$190; also 10/1 10:01 SUB ping). 0DTE in **12:30–12:44** is `skip_0dte_near_cutover` (12:44 BULL −$256, STC at the 12:45 cutover). 1DTE TREND still posts in those windows. 10:21–12:29 0DTE still posts. 09:36–09:40 morning rip still sends.
+  - **Channel align (10/1):** SUB_signals SMS is a `sub_alert_send`. Overlay and Tradier call the same skip stack. A 10:01 0DTE is admin-only (no SMS, no BTO). Do not SMS a quality/misfire/clock skip.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` into `before_bto`.
 - Live Railway repo is `getdeltaiq/deltaiq-signal-engine` branch `production`. Copy `engine/shared/gates.py`, `engine/tradier_exec/hooks.py`, and `engine/overlay/publish.py` there to ship. This website PR does not deploy the bot.
@@ -38,15 +40,23 @@ Paste into the `deltaiq-signal-engine` production agent:
 ```
 Copy engine/shared/gates.py, engine/tradier_exec/hooks.py, engine/overlay/publish.py
 from getdeltaiq/deltaiq-website PR 24 onto production.
-rec_book_ship=2026-09-30-alert-quality. Do not lift a halt that is already off.
+rec_book_ship=2026-10-01-channel-align. Do not lift a halt that is already off.
+
+CHANNEL ALIGN — 10/1 10:01 SUB_signals SMS with no Tradier BTO is the bug.
+SMS and BTO share sub_action_skip_reason. One skip stack.
+aligned_copy=false is SMS wording ("sign in to view"), NOT "not a trade."
+If decide_sub_send send=True, before_bto must POST (except bounce/halt/inflight).
+If sub_action_skip_reason returns a code: do not SMS and do not BTO.
+A 10:01 0DTE is skip_0dte_open_fade on BOTH channels.
 
 ALERT QUALITY — 9/30 two morning envelope losses >$150 were real sub sends:
 10:14 BEAR 10-lot 1.84→1.65 −$190, 12:44 BULL 16-lot 1.19→1.03 −$256.
 Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
 
-1) Overlay decide_sub_send AND before_bto clock_quality_skip_reason:
-   0DTE (or missing dte) in 10:00–10:20 ET => skip_0dte_open_fade (admin only, no BTO).
-   0DTE (or missing dte) in 12:30–12:44 ET => skip_0dte_near_cutover (admin only, no BTO).
+1) Overlay skip_reason after armed calls sub_action_skip_reason (same as before_bto):
+   quality + misfire + clock. Missing dte => skip_dte_unknown (no SMS, no BTO).
+   0DTE in 10:00–10:20 ET => skip_0dte_open_fade (admin only, no SMS, no BTO).
+   0DTE in 12:30–12:44 ET => skip_0dte_near_cutover (admin only, no SMS, no BTO).
    1DTE still sends/posts in those windows (9/25 TREND). 10:21–12:29 0DTE still posts.
    09:36–09:40 morning rip still sends. 12:45+ is the 1DTE book (15:16 runner).
 
@@ -74,12 +84,14 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
 5) DTE clock stays: 12:45 switch to 1DTE, trade it, skip leftover 0DTE.
    STC-hold stays. 1DTE FAILs after 12:45 count toward the 4-fail halt.
 
-Proof: rec_book_ship=2026-09-30-alert-quality, skip_0dte_open_fade=true,
+Proof: rec_book_ship=2026-10-01-channel-align, channels_aligned=true,
+sms_iff_sub_send=true, sms_from=sub_alert_send, skip_0dte_open_fade=true,
 open_fade_window=["10:00","10:20"], skip_0dte_near_cutover=true,
 near_cutover_0dte_et=12:30, skip_already_flat=true, flatten_limit_thru_usd=0,
 dte_cutover_et=12:45, trade_1dte_after_cutover=true.
-A 10:14 0DTE BEAR must be skip_0dte_open_fade. A 12:44 0DTE BULL must be
-skip_0dte_near_cutover. An 11:48 0DTE and a 15:16 1DTE must still POST.
+A 10:01 0DTE must be skip_0dte_open_fade on SMS AND BTO. A 10:14 0DTE BEAR
+must be skip_0dte_open_fade. A 12:44 0DTE BULL must be skip_0dte_near_cutover.
+An 11:48 0DTE and a 15:16 1DTE must still SEND and POST.
 
 ```
 

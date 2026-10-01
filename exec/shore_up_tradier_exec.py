@@ -200,7 +200,8 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-09-30-alert-quality, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-10-01-channel-align, session_loss_halt_usd=750
+   channels_aligned=true, sms_iff_sub_send=true, sms_from=sub_alert_send
    queue_opposite=false (overwrite Railway true)
    take_exit=ladder_to_market (flatten mode only; HOLD ticks take_exit=hold)
    stc_requires_envelope=true, stc_on_bto_fill=false, working_stc_on_fill=false
@@ -222,6 +223,9 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
 
 9) Size stays min(floor(2000/(ask*100)), 16). NEVER session_starter_cap 8.
    SMS/exec consume sub_alert_send only. admin_n >= sub_n.
+   Overlay skip_reason and before_bto share sub_action_skip_reason.
+   If overlay SMS, Tradier BTO that send (bounce/halt/inflight stay exec-only).
+   aligned_copy=false is SMS body, not a non-trade.
    Rec scenario is the production book. Do not keep a parallel knob set.
 """
 

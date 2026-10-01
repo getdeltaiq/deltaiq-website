@@ -3,6 +3,8 @@
 Admin ledger = 100% of scored candidates.
 Sub send = actionable subset only (armed_rip after quality gates).
 SMS and Tradier consume sub_alert_send only. Never BTO from admin rows.
+skip_reason calls sub_action_skip_reason so SMS and BTO share one skip stack.
+aligned_copy=false is SMS wording, not a non-trade.
 Invariant: admin_n >= sub_n >= 0.
 """
 
@@ -15,7 +17,7 @@ from engine.shared.gates import (
     DTE_CUTOVER_ET,
     NEAR_CUTOVER_0DTE_ET,
     OPEN_FADE_WINDOW,
-    clock_quality_skip_reason,
+    sub_action_skip_reason,
     ledger_invariant as _qty_ledger_ok,
 )
 
@@ -26,6 +28,8 @@ PLOT = "sub_alert_send"
 SMS_FROM = "sub_alert_send"
 COPY = "armed_rip"
 ALIGNED_COPY = False
+CHANNELS_ALIGNED = True
+SMS_IFF_SUB_SEND = True
 SCORED_FANOUT = "candidate_only"
 
 PUBLISH_ARM_SPY = 0.20
@@ -74,6 +78,7 @@ class Candidate:
     same_dir_age_sec: float | None = None
     dte: int | None = None
     regime: str | None = None
+    last_fail_hhmm: str | None = None
 
 
 def skip_reason(c: Candidate) -> str | None:
@@ -84,25 +89,19 @@ def skip_reason(c: Candidate) -> str | None:
         return "skip_copy"
     if not c.armed:
         return "skip_not_armed"
-    cq = clock_quality_skip_reason(dte=c.dte, et_hhmm=c.et_hhmm)
-    if cq is not None:
-        return cq
-    if SKIP_ARM_BAR and c.on_arm_bar:
-        return "skip_arm_bar"
-    if SKIP_CHOPPY and c.choppy:
-        return "skip_choppy"
-    if SKIP_WEAK_PRE_MOVE:
-        mag = abs(c.pre_move_spy)
-        if PRE_MOVE_WEAK_LO <= mag <= PRE_MOVE_WEAK_HI:
-            return "skip_weak_pre_move"
-        if SKIP_STRONG_PRE_MOVE and mag >= PRE_MOVE_STRONG:
-            return "skip_strong_pre_move"
-    elif SKIP_STRONG_PRE_MOVE and abs(c.pre_move_spy) >= PRE_MOVE_STRONG:
-        return "skip_strong_pre_move"
-    if SKIP_CHASE and c.chase_spy >= CHASE_SPY:
-        return "skip_chase"
-    if c.same_dir_age_sec is not None and c.same_dir_age_sec < SAME_DIR_LOCK_SEC:
-        return "skip_same_dir_lock"
+    act = sub_action_skip_reason(
+        choppy=c.choppy,
+        on_arm_bar=c.on_arm_bar,
+        pre_move_spy=c.pre_move_spy,
+        chase_spy=c.chase_spy,
+        regime=c.regime,
+        same_dir_age_sec=c.same_dir_age_sec,
+        dte=c.dte,
+        et_hhmm=c.et_hhmm,
+        last_fail_hhmm=c.last_fail_hhmm,
+    )
+    if act is not None:
+        return act
     return None
 
 
@@ -178,4 +177,6 @@ class PublishLedgers:
             "skip_0dte_near_cutover": True,
             "near_cutover_0dte_et": NEAR_CUTOVER_0DTE_ET,
             "dte_cutover_et": DTE_CUTOVER_ET,
+            "channels_aligned": CHANNELS_ALIGNED,
+            "sms_iff_sub_send": SMS_IFF_SUB_SEND,
         }

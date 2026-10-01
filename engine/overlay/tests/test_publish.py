@@ -20,6 +20,7 @@ def _c(**kwargs) -> Candidate:
         et_hhmm="11:02",
         copy="armed_rip",
         same_dir_age_sec=None,
+        dte=0,
     )
     base.update(kwargs)
     return Candidate(**base)
@@ -42,6 +43,8 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertTrue(h["invariant_ok"])
         self.assertTrue(h["skip_strong_pre_move"])
         self.assertEqual(h["pre_move_strong"], 0.50)
+        self.assertTrue(h["channels_aligned"])
+        self.assertTrue(h["sms_iff_sub_send"])
 
     def test_unarmed_is_admin_only(self):
         d = decide_sub_send(_c(armed=False))
@@ -113,6 +116,122 @@ class LedgerHierarchyTests(unittest.TestCase):
         d = decide_sub_send(_c(et_hhmm="09:20"))
         self.assertFalse(d["send"])
 
+    def test_1001_0dte_is_admin_only(self):
+        d = decide_sub_send(_c(et_hhmm="10:01", dte=0))
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_0dte_open_fade")
+
+    def test_missing_dte_is_admin_only(self):
+        d = decide_sub_send(_c(dte=None))
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_dte_unknown")
+
+
+class ChannelAlignTests(unittest.TestCase):
+    """SUB SMS and Tradier BTO share sub_action_skip_reason.
+
+    aligned_copy=false is SMS body ('sign in to view'), not 'not a trade'.
+    If overlay send=True, starter must post (no bounce/halt). If starter
+    skips on the shared stack, overlay must not SMS.
+    """
+
+    def _starter(self, c, **kw):
+        from engine.shared.gates import decide_starter, new_session
+
+        s = new_session("2026-09-30")
+        dte = c.dte
+        if dte is None or dte <= 0:
+            option_symbol = "SPY260930P00765000"
+        else:
+            option_symbol = "SPY261001P00765000"
+        args = dict(
+            send_ts=c.ts,
+            direction=c.direction,
+            send_spy=c.spy,
+            spy=c.spy,
+            bar_high=c.spy + 0.05,
+            bar_low=c.spy - 0.05,
+            et_hhmm=c.et_hhmm,
+            ask=1.50,
+            choppy=c.choppy,
+            on_arm_bar=c.on_arm_bar,
+            pre_move_spy=c.pre_move_spy,
+            chase_spy=c.chase_spy,
+            regime=c.regime,
+            same_dir_age_sec=c.same_dir_age_sec,
+            plot="sub_alert_send",
+            overlay_queued=True,
+            is_opposite=False,
+            option_symbol=option_symbol,
+            dte=dte,
+        )
+        args.update(kw)
+        return s, decide_starter(s, **args)
+
+    def test_1001_0dte_sms_and_bto_same_skip(self):
+        c = _c(et_hhmm="10:01", dte=0, ts=1001.0)
+        sms = decide_sub_send(c)
+        _, bto = self._starter(c)
+        self.assertFalse(sms["send"])
+        self.assertFalse(bto["post"])
+        self.assertEqual(sms["reason"], "skip_0dte_open_fade")
+        self.assertEqual(bto["action"], sms["reason"])
+
+    def test_clean_midbook_sms_and_bto_both_fire(self):
+        c = _c(et_hhmm="11:02", dte=0, ts=1102.0)
+        sms = decide_sub_send(c)
+        _, bto = self._starter(c)
+        self.assertTrue(sms["send"])
+        self.assertTrue(bto["post"])
+        self.assertEqual(sms["reason"], "sub_alert_send")
+        self.assertEqual(bto["action"], "bto")
+
+    def test_choppy_sms_and_bto_same_skip(self):
+        c = _c(choppy=True, ts=1200.0)
+        sms = decide_sub_send(c)
+        _, bto = self._starter(c)
+        self.assertFalse(sms["send"])
+        self.assertFalse(bto["post"])
+        self.assertEqual(sms["reason"], "skip_choppy")
+        self.assertEqual(bto["action"], sms["reason"])
+
+    def test_1dte_not_trend_before_cutover_sms_and_bto_same_skip(self):
+        c = _c(et_hhmm="11:02", dte=1, regime="RANGE", ts=1300.0)
+        sms = decide_sub_send(c)
+        _, bto = self._starter(c, option_symbol="SPY261001P00765000")
+        self.assertFalse(sms["send"])
+        self.assertFalse(bto["post"])
+        self.assertEqual(sms["reason"], "skip_1dte_not_trend")
+        self.assertEqual(bto["action"], sms["reason"])
+
+    def test_overlay_send_iff_starter_would_post(self):
+        cases = [
+            _c(et_hhmm="10:01", dte=0, ts=1.0),
+            _c(et_hhmm="10:14", dte=0, ts=2.0),
+            _c(et_hhmm="11:02", dte=0, ts=3.0),
+            _c(et_hhmm="11:48", dte=0, ts=4.0),
+            _c(et_hhmm="12:43", dte=0, ts=5.0),
+            _c(et_hhmm="15:16", dte=1, ts=6.0),
+            _c(choppy=True, ts=7.0),
+            _c(chase_spy=0.55, ts=8.0),
+            _c(et_hhmm="11:02", dte=1, regime="RANGE", ts=9.0),
+            _c(et_hhmm="09:38", dte=0, ts=10.0),
+        ]
+        for c in cases:
+            sms = decide_sub_send(c)
+            _, bto = self._starter(c)
+            self.assertEqual(
+                sms["send"],
+                bto["post"],
+                msg=f"{c.et_hhmm} dte={c.dte} sms={sms} bto={bto}",
+            )
+            if not sms["send"] and sms["reason"] not in (
+                "skip_outside_window",
+                "skip_not_armed",
+                "skip_copy",
+            ):
+                self.assertEqual(bto["action"], sms["reason"])
+
 
 class HookHaltTests(unittest.TestCase):
     def test_health_names_github_module(self):
@@ -144,7 +263,10 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["bto_source"], "sub_alert_send")
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
-        self.assertEqual(h["rec_book_ship"], "2026-09-30-alert-quality")
+        self.assertEqual(h["rec_book_ship"], "2026-10-01-channel-align")
+        self.assertTrue(h["channels_aligned"])
+        self.assertTrue(h["sms_iff_sub_send"])
+        self.assertEqual(h["sms_from"], "sub_alert_send")
         self.assertTrue(h["fail_streak_0dte_only"])
         self.assertTrue(h["extra_bto"])
         self.assertEqual(h["extra_bto_fill_to"], 16)

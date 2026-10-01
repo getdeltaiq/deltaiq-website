@@ -14,8 +14,10 @@ from exec.gates import (
     ledger_invariant,
     new_session,
     quality_skip_reason,
+    rec_book,
     starter_qty,
     stc_ladder_prices,
+    sub_action_skip_reason,
 )
 
 # 9/29 fail-closed: missing pre_move/chase is a refuse. Tests that should
@@ -865,6 +867,92 @@ class AlertQualityTests(unittest.TestCase):
         self.assertIsNone(clock_quality_skip_reason(dte=0, et_hhmm="11:48"))
         self.assertIsNone(clock_quality_skip_reason(dte=1, et_hhmm="10:14"))
         self.assertIsNone(clock_quality_skip_reason(dte=1, et_hhmm="15:16"))
+
+
+class ChannelAlignTests(unittest.TestCase):
+    """SUB SMS skip stack is the Tradier BTO skip stack (minus live-tape)."""
+
+    def test_rec_book_advertises_channel_align(self):
+        h = rec_book()
+        self.assertEqual(h["rec_book_ship"], "2026-10-01-channel-align")
+        self.assertTrue(h["channels_aligned"])
+        self.assertTrue(h["sms_iff_sub_send"])
+        self.assertEqual(h["sms_from"], "sub_alert_send")
+
+    def test_1001_0dte_is_open_fade_on_shared_stack(self):
+        self.assertEqual(
+            sub_action_skip_reason(
+                choppy=False,
+                on_arm_bar=False,
+                pre_move_spy=0.40,
+                chase_spy=0.10,
+                regime="TREND",
+                dte=0,
+                et_hhmm="10:01",
+            ),
+            "skip_0dte_open_fade",
+        )
+        s = new_session("2026-10-01")
+        args = dict(
+            send_ts=1001.0,
+            direction="BEAR",
+            send_spy=760.20,
+            spy=760.20,
+            bar_high=760.30,
+            bar_low=760.10,
+            et_hhmm="10:01",
+            ask=1.50,
+            **CLEAN_Q,
+        )
+        args["option_symbol"] = "SPY261001P00760000"
+        args["dte"] = 0
+        d = decide_starter(s, **args)
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_0dte_open_fade")
+        self.assertEqual(s.session_starters_n, 0)
+
+    def test_starter_skip_matches_sub_action(self):
+        cases = [
+            dict(et_hhmm="10:01", dte=0, option_symbol="SPY260930P00760000"),
+            dict(et_hhmm="10:14", dte=0, option_symbol="SPY260930P00768000"),
+            dict(et_hhmm="12:44", dte=0, option_symbol="SPY260930C00768000"),
+            dict(et_hhmm="11:48", dte=0, option_symbol="SPY260930P00768000"),
+            dict(
+                et_hhmm="11:02",
+                dte=1,
+                regime="RANGE",
+                option_symbol="SPY261001P00765000",
+            ),
+        ]
+        for i, kw in enumerate(cases):
+            act = sub_action_skip_reason(
+                choppy=False,
+                on_arm_bar=False,
+                pre_move_spy=0.40,
+                chase_spy=0.10,
+                regime=kw.get("regime", "TREND"),
+                dte=kw["dte"],
+                et_hhmm=kw["et_hhmm"],
+            )
+            s = new_session("2026-09-30")
+            args = dict(
+                send_ts=float(80 + i),
+                direction="BEAR",
+                send_spy=768.17,
+                spy=768.17,
+                bar_high=768.20,
+                bar_low=768.00,
+                ask=1.50,
+                **CLEAN_Q,
+            )
+            args.update(kw)
+            d = decide_starter(s, **args)
+            if act is None:
+                self.assertTrue(d["post"], msg=kw)
+                self.assertEqual(d["action"], "bto")
+            else:
+                self.assertFalse(d["post"], msg=kw)
+                self.assertEqual(d["action"], act)
 
 
 class ExtraBtoTests(unittest.TestCase):

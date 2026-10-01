@@ -78,7 +78,7 @@ WORKING_STC_ON_FILL = False
 # + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:45 (trade it).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-09-30-alert-quality"
+REC_BOOK_SHIP = "2026-10-01-channel-align"
 
 
 def rec_book() -> dict:
@@ -103,6 +103,9 @@ def rec_book() -> dict:
         "open_fade_window": list(OPEN_FADE_WINDOW),
         "skip_0dte_near_cutover": True,
         "near_cutover_0dte_et": NEAR_CUTOVER_0DTE_ET,
+        "channels_aligned": True,
+        "sms_iff_sub_send": True,
+        "sms_from": BTO_SOURCE,
         "cooldown_after_fail_sec": COOLDOWN_AFTER_FAIL_SEC,
         "session_loss_halt_usd": SESSION_LOSS_HALT_USD,
         "consecutive_fail_halt": CONSECUTIVE_FAIL_HALT,
@@ -280,6 +283,72 @@ def clock_quality_skip_reason(
     if et_hhmm >= NEAR_CUTOVER_0DTE_ET:
         return "skip_0dte_near_cutover"
     return None
+
+
+QUALITY_SKIP_CODES = frozenset(
+    {
+        "skip_choppy",
+        "skip_arm_bar",
+        "skip_weak_pre_move",
+        "skip_strong_pre_move",
+        "skip_chase",
+        "skip_quality_unknown",
+        "skip_same_dir_lock",
+        "skip_0dte_open_fade",
+        "skip_0dte_near_cutover",
+        "skip_not_sub",
+        "skip_queue_opposite",
+    }
+)
+MISFIRE_SKIP_CODES = frozenset(
+    {
+        "skip_dte_unknown",
+        "skip_1dte_not_trend",
+        "skip_0dte_after_cutover",
+        "skip_cooldown_after_fail",
+    }
+)
+
+
+def sub_action_skip_reason(
+    *,
+    choppy: bool = False,
+    on_arm_bar: bool = False,
+    pre_move_spy: float | None = None,
+    chase_spy: float | None = None,
+    regime: str | None = None,
+    same_dir_age_sec: float | None = None,
+    dte: int | None = None,
+    et_hhmm: str = "",
+    last_fail_hhmm: str | None = None,
+) -> str | None:
+    """One skip stack for SUB SMS and Tradier BTO. None = both may fire.
+
+    Overlay SMS and before_bto must call this. A SUB_signals text is a
+    sub_alert_send. If this returns a code, do not SMS and do not BTO.
+    Halt / bounce / inflight stay exec-only (live tape).
+    """
+    q = quality_skip_reason(
+        choppy=choppy,
+        on_arm_bar=on_arm_bar,
+        pre_move_spy=pre_move_spy,
+        chase_spy=chase_spy,
+        regime=regime,
+        same_dir_age_sec=same_dir_age_sec,
+    )
+    if q is not None:
+        return q
+    if dte is None:
+        return "skip_dte_unknown"
+    mf = misfire_skip_reason(
+        dte=dte,
+        regime=regime,
+        last_fail_hhmm=last_fail_hhmm,
+        et_hhmm=et_hhmm,
+    )
+    if mf is not None:
+        return mf
+    return clock_quality_skip_reason(dte=dte, et_hhmm=et_hhmm)
 
 
 def source_skip_reason(
@@ -650,48 +719,31 @@ def decide_starter(
         state.skip_quality_n += 1
         state.last_action = src
         return {"action": src, "qty": 0, "post": False}
-    q = quality_skip_reason(
+    dte_val = dte if dte is not None else option_dte(option_symbol, state.session_date)
+    act = sub_action_skip_reason(
         choppy=choppy,
         on_arm_bar=on_arm_bar,
         pre_move_spy=pre_move_spy,
         chase_spy=chase_spy,
         regime=regime,
         same_dir_age_sec=same_dir_age_sec,
-    )
-    if q is not None:
-        state.try_consume(send_ts, direction, count_starter=False, persist=persist)
-        state.skip_quality_n += 1
-        state.last_action = q
-        return {"action": q, "qty": 0, "post": False}
-    dte_val = dte if dte is not None else option_dte(option_symbol, state.session_date)
-    if dte_val is None:
-        # Rec 1DTE skip cannot fire without OCC expiry. Fail closed.
-        state.try_consume(send_ts, direction, count_starter=False, persist=persist)
-        state.skip_misfire_n += 1
-        state.last_action = "skip_dte_unknown"
-        return {"action": "skip_dte_unknown", "qty": 0, "post": False}
-    mf = misfire_skip_reason(
         dte=dte_val,
-        regime=regime,
-        last_fail_hhmm=state.last_fail_hhmm,
         et_hhmm=et_hhmm,
+        last_fail_hhmm=state.last_fail_hhmm,
     )
-    if mf is not None:
+    if act is not None:
         state.try_consume(send_ts, direction, count_starter=False, persist=persist)
-        state.skip_misfire_n += 1
-        state.last_action = mf
-        return {"action": mf, "qty": 0, "post": False}
+        if act in MISFIRE_SKIP_CODES:
+            state.skip_misfire_n += 1
+        else:
+            state.skip_quality_n += 1
+        state.last_action = act
+        return {"action": act, "qty": 0, "post": False}
     if bounce_against(direction, send_spy, spy, bar_high, bar_low, et_hhmm):
         state.try_consume(send_ts, direction, count_starter=False, persist=persist)
         state.skip_bounce_n += 1
         state.last_action = "skip_bounce_against"
         return {"action": "skip_bounce_against", "qty": 0, "post": False}
-    cq = clock_quality_skip_reason(dte=dte_val, et_hhmm=et_hhmm)
-    if cq is not None:
-        state.try_consume(send_ts, direction, count_starter=False, persist=persist)
-        state.skip_quality_n += 1
-        state.last_action = cq
-        return {"action": cq, "qty": 0, "post": False}
     if not state.may_starter_bto():
         # Consume so an illicit halt lift cannot fire this send later the same day.
         state.try_consume(send_ts, direction, count_starter=False, persist=persist)
