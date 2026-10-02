@@ -1,0 +1,22 @@
+# Overlay + Tradier exec (GitHub source of truth)
+
+on:
+  pull_request:
+  push:
+    paths:
+      - "engine/**"
+      - "exec/**"
+      - ".github/workflows/engine.yml"
+      - ".github/workflows/exec-gates.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run engine + exec unit tests
+        run: |
+          python3 -m unittest engine.overlay.tests.test_publish exec.tests.test_gates engine.tradier_exec.tests.test_runtime engine.tradier_exec.tests.test_week_replay

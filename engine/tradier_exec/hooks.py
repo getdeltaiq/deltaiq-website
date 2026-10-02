@@ -1,0 +1,144 @@
+"""Runtime hooks. tradier_exec must call these; do not bypass.
+
+Canonical module: engine.tradier_exec.hooks
+Railway copies or imports this. Do not keep a second knob-only copy.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from engine.shared.gates import (
+    ENGINE_EXIT_MODE,
+    SessionState,
+    apply_manage_result,
+    decide_manage,
+    decide_starter,
+    decide_stc,
+    extra_bto_qty,
+    new_session,
+    rec_book,
+    source_skip_reason,
+)
+
+ET = ZoneInfo("America/New_York")
+SESSION_KEEP_HALT_DATE = "2026-09-29"
+
+
+def today_et() -> str:
+    return datetime.now(ET).strftime("%Y-%m-%d")
+
+
+def enforce_keep_halt(state: SessionState) -> None:
+    """9/29 stay halted even if a dashboard flag was flipped."""
+    if today_et() != SESSION_KEEP_HALT_DATE:
+        return
+    if state.session_date != SESSION_KEEP_HALT_DATE:
+        return
+    state.session_halt = True
+    state.session_lost_blocks_send = True
+    state.halt_lifted = True
+    state.session_halt_reason = "session_loss_after_lift"
+
+
+def boot_state(loaded: SessionState | None = None) -> SessionState:
+    d = today_et()
+    st = loaded if loaded and loaded.session_date == d else new_session(d)
+    enforce_keep_halt(st)
+    st.engine_exit_mode = ENGINE_EXIT_MODE
+    st.refresh_halt()
+    return st
+
+
+def before_bto(state: SessionState, **kwargs) -> dict:
+    """Call immediately before any Tradier buy_to_open. If post is False, return."""
+    enforce_keep_halt(state)
+    return decide_starter(state, **kwargs)
+
+
+def on_manage(state: SessionState, **kwargs) -> dict:
+    """Call every manage tick with broker_qty, not intended qty.
+
+    If flatten is True, ignore trail and walk STC ladder to market.
+    If flatten is False, do not post STC. take_exit is hold.
+    """
+    enforce_keep_halt(state)
+    return apply_manage_result(state, decide_manage(state, **kwargs))
+
+
+def before_stc(state: SessionState, **kwargs) -> dict:
+    """Call immediately before any Tradier sell_to_close. If post is False, do not send.
+
+    9/30 10:39 BTO fill must not rest a bid STC. Envelope only.
+    """
+    enforce_keep_halt(state)
+    return decide_stc(state, **kwargs)
+
+
+def before_extra_bto(state: SessionState, **kwargs) -> dict:
+    """Size-up only when extra_bto_ok. Never a second starter.
+
+    Default add_qty is remaining room to 16. 9/24 winners left 3–5 unused.
+    """
+    enforce_keep_halt(state)
+    src = source_skip_reason(
+        plot=kwargs.get("plot"),
+        is_opposite=bool(kwargs.get("is_opposite")),
+        overlay_queued=bool(kwargs.get("overlay_queued")),
+    )
+    if src is not None:
+        state.last_action = src
+        return {"post": False, "action": src}
+    add = int(kwargs.get("add_qty") or 0)
+    if add <= 0:
+        add = extra_bto_qty(state.broker_qty)
+    ok = state.extra_bto_ok(
+        add,
+        float(kwargs.get("mfe_usd") or 0.0),
+        float(kwargs.get("mark_bid") or 0.0),
+        float(kwargs.get("avg_fill") or 0.0),
+    )
+    if not ok:
+        state.last_action = "top_up_blocked"
+        return {"post": False, "action": "top_up_blocked", "qty": 0}
+    state.last_action = "extra_bto"
+    return {"post": True, "action": "extra_bto", "qty": add}
+
+
+def health_overlay(state: SessionState) -> dict:
+    rec = rec_book()
+    rec.update(
+        {
+            "gates_module": "engine.shared.gates",
+            "decide_starter": True,
+            "before_bto": True,
+            "on_manage": True,
+            "before_stc": True,
+            "before_extra_bto": True,
+            "bto_requires_new_send": True,
+            "stc_requires_envelope": True,
+            "stc_on_bto_fill": False,
+            "working_stc_on_fill": False,
+            "skip_already_flat": True,
+            "skip_bounce_n": state.skip_bounce_n,
+            "skip_quality_n": state.skip_quality_n,
+            "consumed_send_ts": list(state.consumed.keys()),
+            "consumed_survives_flatten": True,
+            "consumed_never_delete": True,
+            "session_starters_n": state.session_starters_n,
+            "skipped_dup_submit_n": state.skipped_dup_submit_n,
+            "protect_fills_n": state.protect_fills_n,
+            "ticket_risk_hits_n": state.ticket_risk_hits_n,
+            "last_stc_ladder": state.last_stc_ladder,
+            "skip_choppy_is_refuse": True,
+            "skip_misfire_n": state.skip_misfire_n,
+            "session_halt": state.session_halt,
+            "session_halt_reason": state.session_halt_reason,
+            "session_lost_blocks_send": state.session_lost_blocks_send,
+            "recover_lost_posts_bto": False,
+            "recover_lost_owned": True,
+            "orphan_adopt_flattens": True,
+        }
+    )
+    return rec
