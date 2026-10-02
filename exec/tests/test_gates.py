@@ -10,6 +10,7 @@ from exec.gates import (
     clock_quality_skip_reason,
     decide_manage,
     decide_starter,
+    decide_stc,
     envelope_hit,
     ledger_invariant,
     new_session,
@@ -876,9 +877,11 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-01-1dte-protect")
+        self.assertEqual(h["rec_book_ship"], "2026-10-02-orphan-adopt")
         self.assertEqual(h["protective_stop_1dte_usd"], 0.30)
         self.assertIsNone(h["fail_sec_1dte"])
+        self.assertTrue(h["recover_lost_owned"])
+        self.assertTrue(h["orphan_adopt_flattens"])
         self.assertTrue(h["channels_aligned"])
         self.assertTrue(h["sms_iff_sub_send"])
         self.assertEqual(h["sms_from"], "sub_alert_send")
@@ -1048,6 +1051,92 @@ class AdaptiveProtectTests(unittest.TestCase):
         self.assertFalse(m["flatten"])
         self.assertEqual(m["take_exit"], "hold")
         self.assertEqual(s.protect_fills_n, 0)
+
+    def test_102_1dte_769_call_055_flattens(self):
+        # 10/2 12:52 7-lot SPY261005C00769000 2.71→2.16 sat 90m.
+        # Rec $0.30 must flatten; fail_90 must not be why.
+        self.assertEqual(
+            envelope_hit(
+                fill_px=2.71,
+                mark_bid=2.16,
+                qty=7,
+                spy_adverse=0.50,
+                seconds_since_fill=5400,
+                ticket_phase="FAIL",
+                dte=1,
+            ),
+            "protective",
+        )
+        s = new_session("2026-10-02")
+        s.last_option_symbol = "SPY261005C00769000"
+        m = decide_manage(
+            s,
+            fill_px=2.71,
+            mark_bid=2.16,
+            qty=7,
+            spy_adverse=0.50,
+            seconds_since_fill=5400,
+            ticket_phase="FAIL",
+            bid=2.16,
+            dte=1,
+        )
+        self.assertTrue(m["flatten"])
+        self.assertEqual(m["reason"], "protective")
+        self.assertEqual(m["take_exit"], "ladder_to_market")
+
+
+class OrphanAdoptTests(unittest.TestCase):
+    """10/2 12:52 1DTE sat 90m. Fresh fills stay owned; true orphans flatten."""
+
+    def test_stamped_ticket_after_grace_is_owned(self):
+        s = new_session("2026-10-02")
+        s.on_bto_fill(7, 2.71, now=1_000.0)
+        self.assertEqual(s.recover_lost(7, now=1_020.0), "owned")
+        self.assertEqual(s.last_action, "recover_lost_owned")
+        self.assertFalse(s.orphan_adopt)
+        d = decide_stc(
+            s,
+            fill_px=2.71,
+            mark_bid=2.60,
+            qty=7,
+            spy_adverse=0.10,
+            seconds_since_fill=20,
+            ticket_phase="FAIL",
+            bid=2.60,
+            now=1_020.0,
+            dte=1,
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d.get("reason"), "stc_requires_envelope")
+
+    def test_true_orphan_before_stc_flattens(self):
+        from engine.tradier_exec.hooks import before_stc
+
+        s = new_session("2026-10-02")
+        self.assertEqual(s.recover_lost(7), "adopt_stc_only")
+        self.assertTrue(s.orphan_adopt)
+        d = before_stc(
+            s,
+            fill_px=2.71,
+            mark_bid=2.60,
+            qty=7,
+            spy_adverse=0.10,
+            seconds_since_fill=90,
+            ticket_phase="FAIL",
+            bid=2.60,
+            dte=1,
+        )
+        self.assertTrue(d["post"])
+        self.assertTrue(d["flatten"])
+        self.assertEqual(d["reason"], "orphan_adopt")
+        self.assertEqual(d["take_exit"], "ladder_to_market")
+        self.assertEqual(s.last_action, "flatten_orphan_adopt")
+
+    def test_fresh_fill_still_not_an_orphan(self):
+        s = new_session("2026-10-02")
+        s.on_bto_fill(7, 2.71, now=1_000.0)
+        self.assertEqual(s.recover_lost(7, now=1_003.0), "fresh_fill")
+        self.assertFalse(s.orphan_adopt)
 
 
 class ExtraBtoTests(unittest.TestCase):

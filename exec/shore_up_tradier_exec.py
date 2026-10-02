@@ -169,10 +169,15 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    Disable native close_push / flatten_limit_thru_usd (set 0).
    then state.on_flatten(realized, phase)  # MUST NOT delete consumed_sends
    recover_lost: if last_action is recover_lost_fresh_fill, do NOT STC.
+   if last_action is recover_lost_owned: on_manage as normal (1DTE HOLD until $0.30).
+   if last_action is recover_lost_adopt_stc_only / orphan_adopt: before_stc MUST post.
 
 4) recover_lost
-   state.recover_lost(broker_qty)  # STC only for true orphans. NEVER BTO.
-   A fill younger than 15s / quote grace is fresh_fill — leave it on.
+   kind = state.recover_lost(broker_qty)  # NEVER BTO.
+   fresh_fill: age < 15s, leave it. owned: stamped ticket, manage loop.
+   adopt_stc_only: no fill stamp, orphan_adopt=true, flatten through before_stc.
+   10/2 12:52 1DTE 7-lot sat 90m because adopt after 15s on a stamped
+   ticket looked like an orphan and before_stc HOLD. Owned != orphan.
 
 5) Rec extra BTO (fill remaining room to 16 on RUN, MFE ≥ $0.20)
    Disable Railway extra_bto_on_run native path. Use gates only.
@@ -200,7 +205,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-10-01-1dte-protect, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-10-02-orphan-adopt, session_loss_halt_usd=750
    channels_aligned=true, sms_iff_sub_send=true, sms_from=sub_alert_send
    protective_stop_usd=0.15, protective_stop_1dte_usd=0.30, fail_sec_1dte=null
    queue_opposite=false (overwrite Railway true)
@@ -212,6 +217,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    skip_0dte_after_cutover=true, trade_1dte_after_cutover=true,
    skip_0dte_open_fade=true (10:00–10:20 0DTE), skip_0dte_near_cutover=true (12:30–12:44 0DTE),
    skip_already_flat=true, flatten_limit_thru_usd=0,
+   recover_lost_owned=true, orphan_adopt_flattens=true,
    cooldown_after_fail_sec=480
    engine_exit_mode == ladder_to_market (not trail).
    After a real starter: consumed_send_ts nonempty and still nonempty after flatten.

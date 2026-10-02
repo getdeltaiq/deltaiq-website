@@ -29,6 +29,7 @@ EnvelopeReason = Literal[
     "cata_opt",
     "cata_spy",
     "fail_90",
+    "orphan_adopt",
 ]
 
 
@@ -84,7 +85,7 @@ WORKING_STC_ON_FILL = False
 # + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:45 (trade it).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-01-1dte-protect"
+REC_BOOK_SHIP = "2026-10-02-orphan-adopt"
 
 
 def rec_book() -> dict:
@@ -128,6 +129,8 @@ def rec_book() -> dict:
         "working_stc_on_fill": WORKING_STC_ON_FILL,
         "before_stc": True,
         "skip_already_flat": True,
+        "recover_lost_owned": True,
+        "orphan_adopt_flattens": True,
         "flatten_limit_thru_usd": 0.0,
         "quote_grace_sec": QUOTE_GRACE_SEC,
         "fail_sec": FAIL_SEC,
@@ -535,6 +538,7 @@ class SessionState:
     last_option_symbol: str | None = None
     ticket_fill_ts: float | None = None
     avg_fill_px: float | None = None
+    orphan_adopt: bool = False
 
     def additional_loss_usd(self) -> float:
         return self.session_realized_usd - self.halt_baseline_usd
@@ -607,6 +611,7 @@ class SessionState:
         self.ticket_phase = None
         self.ticket_fill_ts = None
         self.avg_fill_px = None
+        self.orphan_adopt = False
         if phase == "FAIL" and et_hhmm:
             self.last_fail_hhmm = et_hhmm
         if counts_toward_fail_streak(dte, et_hhmm):
@@ -658,16 +663,26 @@ class SessionState:
 
         9/30 10:39: lost-scan ran 3s after a live fill and the native path
         STCd the bid. A fill younger than quote grace is not an orphan.
+
+        10/2 12:52 1DTE 7-lot sat 90m until a manual STC. After 15s the
+        lost-scan used to return adopt_stc_only even when on_bto_fill had
+        stamped the ticket, so a managed 1DTE HOLD looked like an orphan.
+        Owned tickets stay on the manage loop (1DTE $0.30 / no fail_90).
+        True orphans are broker qty > 0 with no fill stamp — flatten
+        through before_stc (orphan_adopt), do not HOLD for envelope.
         """
         self.refresh_halt()
+        self.orphan_adopt = False
         if broker_qty > 0:
+            self.broker_qty = int(broker_qty)
             if self.ticket_fill_ts is not None:
                 age = self.ticket_age_sec(1e9, now=now)
                 if age < max(QUOTE_GRACE_SEC, 15.0):
-                    self.broker_qty = int(broker_qty)
                     self.last_action = "recover_lost_fresh_fill"
                     return "fresh_fill"
-            self.broker_qty = broker_qty
+                self.last_action = "recover_lost_owned"
+                return "owned"
+            self.orphan_adopt = True
             self.last_action = "recover_lost_adopt_stc_only"
             return "adopt_stc_only"
         self.last_action = "recover_lost_flat"
@@ -681,6 +696,7 @@ class SessionState:
         self.ticket_phase = "FAIL"
         self.avg_fill_px = float(fill_px)
         self.ticket_fill_ts = float(now if now is not None else time.time())
+        self.orphan_adopt = False
         self.last_action = "bto_fill"
 
     def ticket_age_sec(
@@ -796,6 +812,36 @@ def ledger_ok_placeholder() -> bool:
     return True
 
 
+def flatten_now(
+    state: SessionState, reason: EnvelopeReason, bid: float
+) -> dict:
+    """Single flatten path. Orphans use this so before_stc cannot HOLD."""
+    if reason == "protective":
+        state.protect_fills_n += 1
+    elif reason == "ticket_risk":
+        state.ticket_risk_hits_n += 1
+    elif reason in ("cata_opt", "cata_spy"):
+        state.cata_fills_n += 1
+    state.last_action = f"flatten_{reason}"
+    ladder = stc_ladder_prices(float(bid or 0.0))
+    state.last_stc_ladder = "market"
+    return apply_manage_result(
+        state,
+        {
+            "action": "flatten",
+            "flatten": True,
+            "post_stc": True,
+            "working_stc": False,
+            "reason": reason,
+            "ladder": ladder,
+            "last_stc_ladder": "market",
+            "override_trail": True,
+            "engine_exit_mode": ENGINE_EXIT_MODE,
+            "ignore_trail": True,
+        },
+    )
+
+
 def decide_manage(
     state: SessionState,
     *,
@@ -811,6 +857,9 @@ def decide_manage(
 ) -> dict:
     if qty > 0:
         state.broker_qty = int(qty)
+    if state.orphan_adopt and qty > 0:
+        # 10/2 12:52 1DTE: recover_lost then before_stc HOLD left the 7-lot.
+        return flatten_now(state, "orphan_adopt", bid)
     age = state.ticket_age_sec(seconds_since_fill, now=now)
     dte_val = (
         dte
@@ -849,30 +898,7 @@ def decide_manage(
                 "extra_bto_qty": extra if extra_ok else 0,
             },
         )
-    if reason == "protective":
-        state.protect_fills_n += 1
-    elif reason == "ticket_risk":
-        state.ticket_risk_hits_n += 1
-    elif reason in ("cata_opt", "cata_spy"):
-        state.cata_fills_n += 1
-    state.last_action = f"flatten_{reason}"
-    ladder = stc_ladder_prices(bid)
-    state.last_stc_ladder = "market"
-    return apply_manage_result(
-        state,
-        {
-            "action": "flatten",
-            "flatten": True,
-            "post_stc": True,
-            "working_stc": False,
-            "reason": reason,
-            "ladder": ladder,
-            "last_stc_ladder": "market",
-            "override_trail": True,
-            "engine_exit_mode": ENGINE_EXIT_MODE,
-            "ignore_trail": True,
-        },
-    )
+    return flatten_now(state, reason, bid)
 
 
 def decide_stc(state: SessionState, **kwargs) -> dict:
@@ -881,6 +907,9 @@ def decide_stc(state: SessionState, **kwargs) -> dict:
     9/30 10:39 posted STC on BTO fill. Rec hold ticks must not sell.
     9/30 11:04 / 12:02 sprayed the ladder after the bid STC already filled
     (reject 0/14). Never STC when broker qty is 0.
+    10/2 12:52 1DTE: recover_lost adopt_stc_only must flatten here even
+    when envelope has not printed (orphan_adopt). Owned 1DTE HOLDs still
+    wait for $0.30 / ticket_risk / 15:50.
     """
     if "qty" in kwargs and kwargs["qty"] is not None:
         qty = int(kwargs["qty"])

@@ -137,6 +137,8 @@ def health_overlay(state: SessionState) -> dict:
             "session_halt_reason": state.session_halt_reason,
             "session_lost_blocks_send": state.session_lost_blocks_send,
             "recover_lost_posts_bto": False,
+            "recover_lost_owned": True,
+            "orphan_adopt_flattens": True,
         }
     )
     return rec
