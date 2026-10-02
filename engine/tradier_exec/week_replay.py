@@ -23,7 +23,9 @@ from engine.shared.gates import (
     counts_toward_fail_streak,
     extra_bto_qty,
     option_dte,
+    past_dte_cutover,
     protective_stop_usd,
+    trend_confirm_kwargs,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "week-2026-09-22-lots.json"
@@ -202,6 +204,7 @@ def replay_929(*, bounce_open: bool, cap_envelope: bool = True) -> dict:
 
         if od["side"] == "buy_to_open":
             q_tick = dict(CLEAN_Q)
+            q_tick.update(trend_confirm_kwargs(direction))
             if past_dte_cutover(hhmm) and q_tick.get("option_symbol"):
                 q_tick["option_symbol"] = q_tick["option_symbol"].replace(
                     "260929", "260930"

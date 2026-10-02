@@ -79,6 +79,8 @@ class Candidate:
     dte: int | None = None
     regime: str | None = None
     last_fail_hhmm: str | None = None
+    rip_1m_spy: float | None = None
+    trend_3m_spy: float | None = None
 
 
 def skip_reason(c: Candidate) -> str | None:
@@ -99,6 +101,9 @@ def skip_reason(c: Candidate) -> str | None:
         dte=c.dte,
         et_hhmm=c.et_hhmm,
         last_fail_hhmm=c.last_fail_hhmm,
+        direction=c.direction,
+        rip_1m_spy=c.rip_1m_spy,
+        trend_3m_spy=c.trend_3m_spy,
     )
     if act is not None:
         return act
@@ -179,4 +184,7 @@ class PublishLedgers:
             "dte_cutover_et": DTE_CUTOVER_ET,
             "channels_aligned": CHANNELS_ALIGNED,
             "sms_iff_sub_send": SMS_IFF_SUB_SEND,
+            "skip_1min_rip": True,
+            "one_min_rip_usd": 0.20,
+            "trend_3m_min_usd": 0.20,
         }

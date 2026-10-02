@@ -138,11 +138,14 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
        choppy=send.choppy, on_arm_bar=send.on_arm_bar,
        pre_move_spy=send.pre_move_spy, chase_spy=send.chase_spy,
        regime=send.regime, same_dir_age_sec=send.same_dir_age_sec,
+       rip_1m_spy=send.rip_1m_spy, trend_3m_spy=send.trend_3m_spy,
        persist=lambda date, ts, direction: _insert_consumed(date, ts, direction))
    if not d["post"]:
        log last_action; return
    place ONE limit BTO qty=d["qty"] client_order_id=d["client_order_id"]
    Missing pre_move_spy or chase_spy => skip_quality_unknown (fail closed).
+   Missing rip_1m_spy or trend_3m_spy => skip_1min_unconfirmed (fail closed).
+   1-minute print without a 3-minute trend => skip_1min_rip (no SMS, no BTO).
    CHOPPY / weak 0.15–0.29 / strong pre-move ≥0.50 / chase ≥0.50 => no BTO.
    chop_size must be False. Do not resize into CHOPPY.
 
@@ -205,7 +208,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-10-02-orphan-adopt, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-10-02-1min-rip, session_loss_halt_usd=750
    channels_aligned=true, sms_iff_sub_send=true, sms_from=sub_alert_send
    protective_stop_usd=0.15, protective_stop_1dte_usd=0.30, fail_sec_1dte=null
    queue_opposite=false (overwrite Railway true)
@@ -218,6 +221,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    skip_0dte_open_fade=true (10:00–10:20 0DTE), skip_0dte_near_cutover=true (12:30–12:44 0DTE),
    skip_already_flat=true, flatten_limit_thru_usd=0,
    recover_lost_owned=true, orphan_adopt_flattens=true,
+   skip_1min_rip=true, one_min_rip_usd=0.20, trend_3m_min_usd=0.20,
    cooldown_after_fail_sec=480
    engine_exit_mode == ladder_to_market (not trail).
    After a real starter: consumed_send_ts nonempty and still nonempty after flatten.

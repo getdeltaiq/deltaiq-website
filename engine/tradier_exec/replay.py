@@ -8,7 +8,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from engine.tradier_exec.runtime import CoverUsExec
-from engine.shared.gates import past_dte_cutover
+from engine.shared.gates import past_dte_cutover, trend_confirm_kwargs
 
 ET = ZoneInfo("America/New_York")
 FIXTURE = Path(__file__).parent / "fixtures" / "2026-09-29-orders.json"
@@ -25,6 +25,8 @@ CLEAN_Q = dict(
     overlay_queued=True,
     is_opposite=False,
     option_symbol="SPY260929P00765000",
+    rip_1m_spy=-0.25,
+    trend_3m_spy=-0.60,
 )
 
 
@@ -79,6 +81,7 @@ def replay(
 
         if od["side"] == "buy_to_open":
             q_tick = dict(q)
+            q_tick.update(trend_confirm_kwargs(direction))
             if past_dte_cutover(hhmm) and q_tick.get("option_symbol"):
                 # Rec afternoon book is 1DTE. Do not feed leftover 0DTE OCC.
                 q_tick["option_symbol"] = q_tick["option_symbol"].replace(

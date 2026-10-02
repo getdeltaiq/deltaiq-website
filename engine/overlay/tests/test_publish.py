@@ -23,6 +23,12 @@ def _c(**kwargs) -> Candidate:
         dte=0,
     )
     base.update(kwargs)
+    if "rip_1m_spy" not in kwargs:
+        sign = 1.0 if base["direction"] == "BULL" else -1.0
+        base["rip_1m_spy"] = sign * 0.25
+    if "trend_3m_spy" not in kwargs:
+        sign = 1.0 if base["direction"] == "BULL" else -1.0
+        base["trend_3m_spy"] = sign * 0.60
     return Candidate(**base)
 
 
@@ -81,7 +87,23 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertFalse(d["send"])
         self.assertEqual(d["reason"], "skip_same_dir_lock")
 
-    def test_quality_rip_is_sub_send(self):
+    def test_1min_climax_is_admin_only(self):
+        d = decide_sub_send(
+            _c(direction="BULL", rip_1m_spy=0.44, trend_3m_spy=0.12)
+        )
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_1min_rip")
+
+    def test_1054_3min_dump_is_sub_send(self):
+        d = decide_sub_send(
+            _c(direction="BEAR", rip_1m_spy=-0.28, trend_3m_spy=-0.87)
+        )
+        self.assertTrue(d["send"])
+
+    def test_missing_1m_3m_is_admin_only(self):
+        d = decide_sub_send(_c(rip_1m_spy=None, trend_3m_spy=None))
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_1min_unconfirmed")
         d = decide_sub_send(_c())
         self.assertTrue(d["send"])
         self.assertEqual(d["reason"], "sub_alert_send")
@@ -164,6 +186,8 @@ class ChannelAlignTests(unittest.TestCase):
             is_opposite=False,
             option_symbol=option_symbol,
             dte=dte,
+            rip_1m_spy=c.rip_1m_spy,
+            trend_3m_spy=c.trend_3m_spy,
         )
         args.update(kw)
         return s, decide_starter(s, **args)
@@ -185,6 +209,21 @@ class ChannelAlignTests(unittest.TestCase):
         self.assertTrue(bto["post"])
         self.assertEqual(sms["reason"], "sub_alert_send")
         self.assertEqual(bto["action"], "bto")
+
+    def test_1min_rip_sms_and_bto_same_skip(self):
+        c = _c(
+            direction="BULL",
+            rip_1m_spy=0.44,
+            trend_3m_spy=0.12,
+            ts=1142.0,
+            et_hhmm="11:42",
+        )
+        sms = decide_sub_send(c)
+        _, bto = self._starter(c)
+        self.assertFalse(sms["send"])
+        self.assertFalse(bto["post"])
+        self.assertEqual(sms["reason"], "skip_1min_rip")
+        self.assertEqual(bto["action"], sms["reason"])
 
     def test_choppy_sms_and_bto_same_skip(self):
         c = _c(choppy=True, ts=1200.0)
@@ -263,7 +302,9 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["bto_source"], "sub_alert_send")
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
-        self.assertEqual(h["rec_book_ship"], "2026-10-02-orphan-adopt")
+        self.assertEqual(h["rec_book_ship"], "2026-10-02-1min-rip")
+        self.assertTrue(h["skip_1min_rip"])
+        self.assertEqual(h["one_min_rip_usd"], 0.20)
         self.assertTrue(h["recover_lost_owned"])
         self.assertTrue(h["orphan_adopt_flattens"])
         self.assertEqual(h["protective_stop_usd"], 0.15)

@@ -30,9 +30,9 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **9/30 alert quality (morning losses >$150):** 0DTE in **10:00–10:20** is `skip_0dte_open_fade` (10:14 BEAR −$190; also 10/1 10:01 SUB ping). 0DTE in **12:30–12:44** is `skip_0dte_near_cutover` (12:44 BULL −$256, STC at the 12:45 cutover). 1DTE TREND still posts in those windows. 10:21–12:29 0DTE still posts. 09:36–09:40 morning rip still sends.
   - **Channel align (10/1):** SUB_signals SMS is a `sub_alert_send`. Overlay and Tradier call the same skip stack. A 10:01 0DTE is admin-only (no SMS, no BTO). Do not SMS a quality/misfire/clock skip.
   - **1DTE adaptive protect (10/1 close):** 0DTE stays `protective $0.15` + `fail_90`. 1DTE uses `protective $0.30` and does **not** 90s-FAIL (10/1 14:04 $0.15-clip then rally; 14:26 fail_90 scratch). Ticket risk −$240 and flatten 15:50 stay. Do not freeze 0DTE TREND.
-  - **Orphan adopt (10/2 12:52 1DTE):** 7-lot Monday 769-call 2.71→2.16 sat 90m until a manual STC. The 9/30 fresh-fill guard is not this gap. `recover_lost` now returns `owned` for stamped tickets; true orphans (`ticket_fill_ts` missing) flatten through `before_stc` (`orphan_adopt`). 1DTE −$0.30 still flattens on the manage loop.
+  - **1-minute rip (10/2):** SUB losers were 1-minute prints (11:42 +$0.44 bar / 3-minute +$0.12). The 10:54 BEAR winner had a 3-minute dump (−$0.87). Overlay must pass signed `rip_1m_spy` and `trend_3m_spy`. Missing is `skip_1min_unconfirmed`. A 1-minute print without a 3-minute trend in the send direction is `skip_1min_rip` (admin only, no SMS, no BTO). Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
-  - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` into `before_bto`.
+  - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
 - Live Railway repo is `getdeltaiq/deltaiq-signal-engine` branch `production`. Copy `engine/shared/gates.py`, `engine/tradier_exec/hooks.py`, and `engine/overlay/publish.py` there to ship. This website PR does not deploy the bot.
 
 ## Copy prompt for the signal-engine agent
@@ -42,9 +42,20 @@ Paste into the `deltaiq-signal-engine` production agent:
 ```
 Copy engine/shared/gates.py, engine/tradier_exec/hooks.py, engine/overlay/publish.py
 from getdeltaiq/deltaiq-website PR 24 onto production.
-rec_book_ship=2026-10-02-orphan-adopt. Do not lift a halt that is already off.
+rec_book_ship=2026-10-02-1min-rip. Do not lift a halt that is already off.
 
-ORPHAN ADOPT — 10/2 12:52 1DTE 7-lot SPY261005C00769000 2.71→2.16 sat 90m
+1-MINUTE RIP — 10/2 SUB losers were 1-minute prints. Do not send those.
+Overlay MUST pass signed SPY deltas: rip_1m_spy (last 60s), trend_3m_spy (last 180s).
+Up is +. Missing either field => skip_1min_unconfirmed (no SMS, no BTO).
+SUB requires the 3-minute move in the send direction of at least $0.20.
+If abs(1m) >= abs(3m) and abs(1m) >= $0.20, it is a one-bar climax => skip_1min_rip.
+10/2 11:42 BULL +0.44 / +0.12 => skip_1min_rip.
+10/2 10:34 BEAR +0.16 / +0.08 => skip_1min_rip.
+10/2 10:54 BEAR −0.28 / −0.87 => SEND (3-minute dump).
+10/2 12:52 1DTE BULL +0.14 / +0.27 => SEND.
+Do not freeze 0DTE TREND. Admin ledger still gets the 1-minute candidates.
+
+ORPHAN ADOPT — 10/2 12:52 1DTE 7-lot sat 90m until a manual STC.
 until a manual STC. This is NOT the 9/30 10:39 fresh-fill scratch.
 recover_lost:
   qty 0 => flat
@@ -113,19 +124,22 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
    if kind == "adopt_stc_only": before_stc MUST post (orphan_adopt). Walk ladder.
    NEVER BTO from recover_lost.
 
-Proof: rec_book_ship=2026-10-02-orphan-adopt, channels_aligned=true,
+Proof: rec_book_ship=2026-10-02-1min-rip, channels_aligned=true,
 sms_iff_sub_send=true, sms_from=sub_alert_send, skip_0dte_open_fade=true,
 open_fade_window=["10:00","10:20"], skip_0dte_near_cutover=true,
 near_cutover_0dte_et=12:30, skip_already_flat=true, flatten_limit_thru_usd=0,
 dte_cutover_et=12:45, trade_1dte_after_cutover=true,
 protective_stop_usd=0.15, protective_stop_1dte_usd=0.30, fail_sec_1dte=null,
-recover_lost_owned=true, orphan_adopt_flattens=true.
+recover_lost_owned=true, orphan_adopt_flattens=true,
+skip_1min_rip=true, one_min_rip_usd=0.20, trend_3m_min_usd=0.20.
 A 10:01 0DTE must be skip_0dte_open_fade on SMS AND BTO. A 10:14 0DTE BEAR
 must be skip_0dte_open_fade. A 12:44 0DTE BULL must be skip_0dte_near_cutover.
 An 11:48 0DTE and a 15:16 1DTE must still SEND and POST.
 A 1DTE −$0.21 mark in 60s must HOLD. A 0DTE −$0.15 mark must still flatten.
 A 1DTE 7-lot 2.71→2.16 must flatten_protective. A true orphan (no fill stamp)
 must flatten_orphan_adopt through before_stc. A 3s fill is still fresh_fill.
+A 11:42 1-min +0.44 / 3-min +0.12 must be skip_1min_rip on SMS AND BTO.
+A 10:54 BEAR 1-min −0.28 / 3-min −0.87 must still SEND and POST.
 
 ```
 

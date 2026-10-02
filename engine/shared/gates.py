@@ -85,7 +85,7 @@ WORKING_STC_ON_FILL = False
 # + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:45 (trade it).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-02-orphan-adopt"
+REC_BOOK_SHIP = "2026-10-02-1min-rip"
 
 
 def rec_book() -> dict:
@@ -131,6 +131,9 @@ def rec_book() -> dict:
         "skip_already_flat": True,
         "recover_lost_owned": True,
         "orphan_adopt_flattens": True,
+        "skip_1min_rip": True,
+        "one_min_rip_usd": ONE_MIN_RIP_USD,
+        "trend_3m_min_usd": TREND_3M_MIN_USD,
         "flatten_limit_thru_usd": 0.0,
         "quote_grace_sec": QUOTE_GRACE_SEC,
         "fail_sec": FAIL_SEC,
@@ -145,6 +148,12 @@ PRE_MOVE_WEAK_HI = 0.29
 PRE_MOVE_STRONG = 0.50
 CHASE_SPY = 0.50
 SAME_DIR_LOCK_SEC = 1080.0
+# 10/2 SUB losers were 1-minute prints (10:34, 10:46, 11:42, 11:52, 12:13,
+# 12:27). The 10:54 BEAR winner had a 3-minute dump (−$0.87) and a smaller
+# last minute (−$0.28). SUB requires the 3-minute trend; a 1-minute rip
+# is admin-only. Overlay must pass signed SPY deltas (up is +).
+ONE_MIN_RIP_USD = 0.20
+TREND_3M_MIN_USD = 0.20
 
 CONSUMED_CREATE_SQL = """\
 CREATE TABLE IF NOT EXISTS consumed_sends (
@@ -162,6 +171,40 @@ CONSUMED_INSERT_SQL = (
 CONSUMED_LOAD_SQL = (
     "SELECT send_ts, dir FROM consumed_sends WHERE session_date = %s"
 )
+
+
+def trend_confirm_kwargs(direction: Direction) -> dict:
+    """Signed 1m/3m that pass the 10/2 1-minute filter (3-minute trend)."""
+    sign = 1.0 if direction == "BULL" else -1.0
+    return {
+        "rip_1m_spy": round(sign * 0.25, 2),
+        "trend_3m_spy": round(sign * 0.60, 2),
+    }
+
+
+def one_bar_rip_skip_reason(
+    *,
+    direction: Direction | None = None,
+    rip_1m_spy: float | None = None,
+    trend_3m_spy: float | None = None,
+) -> str | None:
+    """Refuse a 1-minute print that is not a 3-minute trend.
+
+    10/2 11:42 +$0.44 bar / 3-minute +$0.12 → skip. 10/2 10:54 BEAR
+    1-minute −$0.28 / 3-minute −$0.87 → send. Missing fields fail closed.
+    """
+    if direction is None or rip_1m_spy is None or trend_3m_spy is None:
+        return "skip_1min_unconfirmed"
+    want = 1.0 if direction == "BULL" else -1.0
+    r1 = float(rip_1m_spy)
+    t3 = float(trend_3m_spy)
+    if t3 * want <= 0 or abs(t3) < TREND_3M_MIN_USD:
+        return "skip_1min_rip"
+    if abs(r1) >= abs(t3) - 1e-9 and abs(r1) >= ONE_MIN_RIP_USD:
+        return "skip_1min_rip"
+    if abs(r1) > abs(t3):
+        return "skip_1min_rip"
+    return None
 
 
 def starter_qty(ask: float) -> int:
@@ -305,6 +348,8 @@ QUALITY_SKIP_CODES = frozenset(
         "skip_chase",
         "skip_quality_unknown",
         "skip_same_dir_lock",
+        "skip_1min_rip",
+        "skip_1min_unconfirmed",
         "skip_0dte_open_fade",
         "skip_0dte_near_cutover",
         "skip_not_sub",
@@ -332,6 +377,9 @@ def sub_action_skip_reason(
     dte: int | None = None,
     et_hhmm: str = "",
     last_fail_hhmm: str | None = None,
+    direction: Direction | None = None,
+    rip_1m_spy: float | None = None,
+    trend_3m_spy: float | None = None,
 ) -> str | None:
     """One skip stack for SUB SMS and Tradier BTO. None = both may fire.
 
@@ -346,6 +394,9 @@ def sub_action_skip_reason(
         chase_spy=chase_spy,
         regime=regime,
         same_dir_age_sec=same_dir_age_sec,
+        direction=direction,
+        rip_1m_spy=rip_1m_spy,
+        trend_3m_spy=trend_3m_spy,
     )
     if q is not None:
         return q
@@ -384,11 +435,16 @@ def quality_skip_reason(
     chase_spy: float | None = None,
     regime: str | None = None,
     same_dir_age_sec: float | None = None,
+    direction: Direction | None = None,
+    rip_1m_spy: float | None = None,
+    trend_3m_spy: float | None = None,
 ) -> str | None:
     """Return a skip code if this send is in a 9/29 losing slice. None = ok to size.
 
     Missing pre_move/chase is a refuse (skip_quality_unknown). 9/29 BTO
     defaulted those kwargs off and bought the overlay-skipped tape.
+    10/2 1-minute rips: missing 1m/3m is skip_1min_unconfirmed. A 1-minute
+    print without a 3-minute trend is skip_1min_rip.
     """
     if choppy or (regime or "").strip().upper() == "CHOPPY":
         return "skip_choppy"
@@ -405,7 +461,11 @@ def quality_skip_reason(
         return "skip_chase"
     if same_dir_age_sec is not None and same_dir_age_sec < SAME_DIR_LOCK_SEC:
         return "skip_same_dir_lock"
-    return None
+    return one_bar_rip_skip_reason(
+        direction=direction,
+        rip_1m_spy=rip_1m_spy,
+        trend_3m_spy=trend_3m_spy,
+    )
 
 
 def bounce_against(
@@ -747,6 +807,8 @@ def decide_starter(
     overlay_queued: bool = False,
     option_symbol: str | None = None,
     dte: int | None = None,
+    rip_1m_spy: float | None = None,
+    trend_3m_spy: float | None = None,
 ) -> dict:
     """Single entry point before any Tradier buy_to_open."""
     if not ledger_ok_placeholder():
@@ -771,6 +833,9 @@ def decide_starter(
         dte=dte_val,
         et_hhmm=et_hhmm,
         last_fail_hhmm=state.last_fail_hhmm,
+        direction=direction,
+        rip_1m_spy=rip_1m_spy,
+        trend_3m_spy=trend_3m_spy,
     )
     if act is not None:
         state.try_consume(send_ts, direction, count_starter=False, persist=persist)

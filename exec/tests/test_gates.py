@@ -14,11 +14,13 @@ from exec.gates import (
     envelope_hit,
     ledger_invariant,
     new_session,
+    one_bar_rip_skip_reason,
     quality_skip_reason,
     rec_book,
     starter_qty,
     stc_ladder_prices,
     sub_action_skip_reason,
+    trend_confirm_kwargs,
 )
 
 # 9/29 fail-closed: missing pre_move/chase is a refuse. Tests that should
@@ -33,6 +35,8 @@ CLEAN_Q = dict(
     overlay_queued=True,
     is_opposite=False,
     option_symbol="SPY260929P00765000",
+    rip_1m_spy=-0.25,
+    trend_3m_spy=-0.60,
 )
 
 
@@ -529,6 +533,8 @@ class QualityLearnTests(unittest.TestCase):
             **CLEAN_Q,
         )
         args.update(kw)
+        if "rip_1m_spy" not in kw:
+            args.update(trend_confirm_kwargs(args["direction"]))
         return decide_starter(s, **args)
 
     def test_choppy_regime_is_not_a_starter(self):
@@ -568,7 +574,14 @@ class QualityLearnTests(unittest.TestCase):
         d = self._base(s, pre_move_spy=0.40, chase_spy=0.10, choppy=False)
         self.assertTrue(d["post"])
         self.assertIsNone(
-            quality_skip_reason(choppy=False, pre_move_spy=0.40, chase_spy=0.10)
+            quality_skip_reason(
+                choppy=False,
+                pre_move_spy=0.40,
+                chase_spy=0.10,
+                direction="BEAR",
+                rip_1m_spy=-0.25,
+                trend_3m_spy=-0.60,
+            )
         )
 
     def test_admin_ledger_is_not_a_starter(self):
@@ -611,6 +624,8 @@ class MisfireTests(unittest.TestCase):
             **CLEAN_Q,
         )
         args.update(kw)
+        if "rip_1m_spy" not in kw:
+            args.update(trend_confirm_kwargs(args["direction"]))
         return decide_starter(s, **args)
 
     def test_1dte_without_trend_is_refused(self):
@@ -771,6 +786,8 @@ class AlertQualityTests(unittest.TestCase):
             **CLEAN_Q,
         )
         args.update(kw)
+        if "rip_1m_spy" not in kw:
+            args.update(trend_confirm_kwargs(args["direction"]))
         return decide_starter(s, **args)
 
     def test_1014_0dte_bear_is_open_fade(self):
@@ -877,7 +894,10 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-02-orphan-adopt")
+        self.assertEqual(h["rec_book_ship"], "2026-10-02-1min-rip")
+        self.assertTrue(h["skip_1min_rip"])
+        self.assertEqual(h["one_min_rip_usd"], 0.20)
+        self.assertEqual(h["trend_3m_min_usd"], 0.20)
         self.assertEqual(h["protective_stop_1dte_usd"], 0.30)
         self.assertIsNone(h["fail_sec_1dte"])
         self.assertTrue(h["recover_lost_owned"])
@@ -896,6 +916,8 @@ class ChannelAlignTests(unittest.TestCase):
                 regime="TREND",
                 dte=0,
                 et_hhmm="10:01",
+                direction="BEAR",
+                **trend_confirm_kwargs("BEAR"),
             ),
             "skip_0dte_open_fade",
         )
@@ -940,6 +962,8 @@ class ChannelAlignTests(unittest.TestCase):
                 regime=kw.get("regime", "TREND"),
                 dte=kw["dte"],
                 et_hhmm=kw["et_hhmm"],
+                direction="BEAR",
+                **trend_confirm_kwargs("BEAR"),
             )
             s = new_session("2026-09-30")
             args = dict(
@@ -1137,6 +1161,141 @@ class OrphanAdoptTests(unittest.TestCase):
         s.on_bto_fill(7, 2.71, now=1_000.0)
         self.assertEqual(s.recover_lost(7, now=1_003.0), "fresh_fill")
         self.assertFalse(s.orphan_adopt)
+
+
+class OneMinRipTests(unittest.TestCase):
+    """10/2 SUB losers were 1-minute prints. 10:54 3-minute dump still sends."""
+
+    def test_helper_skips_todays_fade_rips(self):
+        # 1-min vs 3-min from the SPY tape at each fill.
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=0.59, trend_3m_spy=0.39
+            ),
+            "skip_1min_rip",
+        )
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BEAR", rip_1m_spy=0.16, trend_3m_spy=0.08
+            ),
+            "skip_1min_rip",
+        )
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BEAR", rip_1m_spy=0.24, trend_3m_spy=0.02
+            ),
+            "skip_1min_rip",
+        )
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=0.44, trend_3m_spy=0.12
+            ),
+            "skip_1min_rip",
+        )
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BEAR", rip_1m_spy=-0.15, trend_3m_spy=0.07
+            ),
+            "skip_1min_rip",
+        )
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=0.36, trend_3m_spy=-0.08
+            ),
+            "skip_1min_rip",
+        )
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=0.20, trend_3m_spy=0.04
+            ),
+            "skip_1min_rip",
+        )
+
+    def test_1054_bear_3min_dump_still_sends(self):
+        self.assertIsNone(
+            one_bar_rip_skip_reason(
+                direction="BEAR", rip_1m_spy=-0.28, trend_3m_spy=-0.87
+            )
+        )
+
+    def test_1252_1dte_3min_confirm_still_sends(self):
+        self.assertIsNone(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=0.14, trend_3m_spy=0.27
+            )
+        )
+
+    def test_missing_1m_3m_is_fail_closed(self):
+        self.assertEqual(
+            one_bar_rip_skip_reason(direction="BEAR"),
+            "skip_1min_unconfirmed",
+        )
+        s = new_session("2026-10-02")
+        d = decide_starter(
+            s,
+            send_ts=1142.0,
+            direction="BULL",
+            send_spy=768.97,
+            spy=769.41,
+            bar_high=769.41,
+            bar_low=768.91,
+            et_hhmm="11:42",
+            ask=1.28,
+            **{
+                **CLEAN_Q,
+                "option_symbol": "SPY261002C00769000",
+                "rip_1m_spy": None,
+                "trend_3m_spy": None,
+            },
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_1min_unconfirmed")
+
+    def test_1142_one_bar_rip_is_not_a_sub_starter(self):
+        s = new_session("2026-10-02")
+        d = decide_starter(
+            s,
+            send_ts=1142.0,
+            direction="BULL",
+            send_spy=768.97,
+            spy=769.41,
+            bar_high=769.41,
+            bar_low=768.91,
+            et_hhmm="11:42",
+            ask=1.28,
+            **{
+                **CLEAN_Q,
+                **trend_confirm_kwargs("BULL"),
+                "option_symbol": "SPY261002C00769000",
+                "rip_1m_spy": 0.44,
+                "trend_3m_spy": 0.12,
+            },
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_1min_rip")
+        self.assertEqual(s.session_starters_n, 0)
+
+    def test_1054_confirmed_trend_still_posts(self):
+        s = new_session("2026-10-02")
+        d = decide_starter(
+            s,
+            send_ts=1054.0,
+            direction="BEAR",
+            send_spy=771.22,
+            spy=770.94,
+            bar_high=771.32,
+            bar_low=770.82,
+            et_hhmm="10:54",
+            ask=1.91,
+            **{
+                **CLEAN_Q,
+                "option_symbol": "SPY261002P00771000",
+                "rip_1m_spy": -0.28,
+                "trend_3m_spy": -0.87,
+            },
+        )
+        self.assertTrue(d["post"])
+        self.assertEqual(d["action"], "bto")
 
 
 class ExtraBtoTests(unittest.TestCase):

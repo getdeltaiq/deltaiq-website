@@ -49,6 +49,7 @@ from engine.shared.gates import (  # noqa: F401
     misfire_skip_reason,
     clock_quality_skip_reason,
     option_dte,
+    one_bar_rip_skip_reason,
     protective_stop_usd,
     quality_skip_reason,
     sub_action_skip_reason,
@@ -59,5 +60,6 @@ from engine.shared.gates import (  # noqa: F401
     starter_qty,
     stc_ladder_prices,
     decide_stc,
+    trend_confirm_kwargs,
     unrealized_dollars,
 )
