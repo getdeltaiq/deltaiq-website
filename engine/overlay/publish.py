@@ -10,13 +10,15 @@ Invariant: admin_n >= sub_n >= 0.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from engine.shared.gates import (
     DTE_CUTOVER_ET,
     NEAR_CUTOVER_0DTE_ET,
     OPEN_FADE_WINDOW,
+    signed_spy_deltas,
     sub_action_skip_reason,
     ledger_invariant as _qty_ledger_ok,
 )
@@ -81,6 +83,11 @@ class Candidate:
     last_fail_hhmm: str | None = None
     rip_1m_spy: float | None = None
     trend_3m_spy: float | None = None
+
+
+def with_spy_deltas(c: Candidate, closes: Sequence[float] | None) -> Candidate:
+    """Production overlay: stamp signed 1m/3m from the last four 1-minute closes."""
+    return replace(c, **signed_spy_deltas(closes))
 
 
 def skip_reason(c: Candidate) -> str | None:

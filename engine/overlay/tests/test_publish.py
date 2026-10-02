@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import unittest
 
-from engine.overlay.publish import Candidate, PublishLedgers, decide_sub_send
+from engine.overlay.publish import (
+    Candidate,
+    PublishLedgers,
+    decide_sub_send,
+    with_spy_deltas,
+)
 
 
 def _c(**kwargs) -> Candidate:
@@ -107,6 +112,29 @@ class LedgerHierarchyTests(unittest.TestCase):
         d = decide_sub_send(_c())
         self.assertTrue(d["send"])
         self.assertEqual(d["reason"], "sub_alert_send")
+
+    def test_prod_tape_stamps_1m_3m(self):
+        # 10/2 11:42 +0.44 / +0.12 is admin-only. 10:54 −0.28 / −0.87 is SUB.
+        climax = with_spy_deltas(
+            _c(direction="BULL", rip_1m_spy=None, trend_3m_spy=None),
+            [769.29, 769.21, 768.97, 769.41],
+        )
+        self.assertAlmostEqual(climax.rip_1m_spy, 0.44, places=2)
+        self.assertAlmostEqual(climax.trend_3m_spy, 0.12, places=2)
+        d = decide_sub_send(climax)
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_1min_rip")
+        dump = with_spy_deltas(
+            _c(direction="BEAR", et_hhmm="10:54", rip_1m_spy=None, trend_3m_spy=None),
+            [771.81, 771.22, 771.22, 770.94],
+        )
+        self.assertAlmostEqual(dump.rip_1m_spy, -0.28, places=2)
+        self.assertAlmostEqual(dump.trend_3m_spy, -0.87, places=2)
+        d = decide_sub_send(dump)
+        self.assertTrue(d["send"])
+        short = with_spy_deltas(_c(rip_1m_spy=0.25, trend_3m_spy=-0.60), [1.0, 2.0])
+        self.assertIsNone(short.rip_1m_spy)
+        self.assertEqual(decide_sub_send(short)["reason"], "skip_1min_unconfirmed")
 
     def test_1014_0dte_is_admin_only(self):
         d = decide_sub_send(_c(et_hhmm="10:14", dte=0, direction="BEAR", spy=768.17))

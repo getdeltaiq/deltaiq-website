@@ -145,6 +145,9 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    place ONE limit BTO qty=d["qty"] client_order_id=d["client_order_id"]
    Missing pre_move_spy or chase_spy => skip_quality_unknown (fail closed).
    Missing rip_1m_spy or trend_3m_spy => skip_1min_unconfirmed (fail closed).
+   Stamp live tape with with_spy_deltas(c, last_four_1m_spy_closes) or
+   signed_spy_deltas(closes). Do NOT default 1m/3m. Do NOT use
+   trend_confirm_kwargs on live sends (replay only).
    1-minute print without a 3-minute trend => skip_1min_rip (no SMS, no BTO).
    CHOPPY / weak 0.15–0.29 / strong pre-move ≥0.50 / chase ≥0.50 => no BTO.
    chop_size must be False. Do not resize into CHOPPY.

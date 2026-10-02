@@ -30,29 +30,45 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **9/30 alert quality (morning losses >$150):** 0DTE in **10:00–10:20** is `skip_0dte_open_fade` (10:14 BEAR −$190; also 10/1 10:01 SUB ping). 0DTE in **12:30–12:44** is `skip_0dte_near_cutover` (12:44 BULL −$256, STC at the 12:45 cutover). 1DTE TREND still posts in those windows. 10:21–12:29 0DTE still posts. 09:36–09:40 morning rip still sends.
   - **Channel align (10/1):** SUB_signals SMS is a `sub_alert_send`. Overlay and Tradier call the same skip stack. A 10:01 0DTE is admin-only (no SMS, no BTO). Do not SMS a quality/misfire/clock skip.
   - **1DTE adaptive protect (10/1 close):** 0DTE stays `protective $0.15` + `fail_90`. 1DTE uses `protective $0.30` and does **not** 90s-FAIL (10/1 14:04 $0.15-clip then rally; 14:26 fail_90 scratch). Ticket risk −$240 and flatten 15:50 stay. Do not freeze 0DTE TREND.
-  - **1-minute rip (10/2):** SUB losers were 1-minute prints (11:42 +$0.44 bar / 3-minute +$0.12). The 10:54 BEAR winner had a 3-minute dump (−$0.87). Overlay must pass signed `rip_1m_spy` and `trend_3m_spy`. Missing is `skip_1min_unconfirmed`. A 1-minute print without a 3-minute trend in the send direction is `skip_1min_rip` (admin only, no SMS, no BTO). Do not freeze 0DTE TREND.
+  - **1-minute rip (10/2, production):** SUB losers were 1-minute prints (11:42 +$0.44 bar / 3-minute +$0.12). The 10:54 BEAR winner had a 3-minute dump (−$0.87). Overlay MUST stamp signed `rip_1m_spy` / `trend_3m_spy` via `signed_spy_deltas` / `with_spy_deltas` on the last four 1-minute SPY closes. Missing is `skip_1min_unconfirmed`. A 1-minute print without a 3-minute trend in the send direction is `skip_1min_rip` (admin only, no SMS, no BTO). Fewer SUB alerts is the bar. Extra BTO on RUN sizes impactful winners to 16. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
 - Live Railway repo is `getdeltaiq/deltaiq-signal-engine` branch `production`. Copy `engine/shared/gates.py`, `engine/tradier_exec/hooks.py`, and `engine/overlay/publish.py` there to ship. This website PR does not deploy the bot.
 
 ## Copy prompt for the signal-engine agent
 
-Paste into the `deltaiq-signal-engine` production agent:
+This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` **production** agent and ship now:
 
 ```
-Copy engine/shared/gates.py, engine/tradier_exec/hooks.py, engine/overlay/publish.py
-from getdeltaiq/deltaiq-website PR 24 onto production.
+SHIP TO PRODUCTION NOW. Copy these three files from getdeltaiq/deltaiq-website
+PR 24 onto production (replace Railway copies; do not keep a second knob set):
+  engine/shared/gates.py
+  engine/tradier_exec/hooks.py
+  engine/overlay/publish.py
 rec_book_ship=2026-10-02-1min-rip. Do not lift a halt that is already off.
+Do not freeze 0DTE TREND. Fewer SUB alerts is correct.
+
+QUALITY BAR — SUB SMS = Tradier BTO. Alerts that fire should be 3-minute
+confirmed trends, not 1-minute prints. Impactful winners (10:54 BEAR
+−0.28 / −0.87) still SEND and extra-BTO to 16 on RUN (MFE ≥ $0.20).
+Admin ledger still records the 1-minute candidates. Do not SMS a skip.
+
+OVERLAY TAPE — every Candidate MUST be stamped before ingest/decide_sub_send:
+  from engine.overlay.publish import with_spy_deltas
+  from engine.shared.gates import signed_spy_deltas
+  c = with_spy_deltas(c, last_four_1m_spy_closes)  # oldest → now
+  # or Candidate(..., **signed_spy_deltas(last_four_1m_spy_closes))
+Up is +. Need 4 closes. Short tape => None, None => skip_1min_unconfirmed
+(no SMS, no BTO). Do NOT default 1m/3m. Do NOT inject trend_confirm_kwargs
+on live sends (that is replay-only).
 
 1-MINUTE RIP — 10/2 SUB losers were 1-minute prints. Do not send those.
-Overlay MUST pass signed SPY deltas: rip_1m_spy (last 60s), trend_3m_spy (last 180s).
-Up is +. Missing either field => skip_1min_unconfirmed (no SMS, no BTO).
 SUB requires the 3-minute move in the send direction of at least $0.20.
 If abs(1m) >= abs(3m) and abs(1m) >= $0.20, it is a one-bar climax => skip_1min_rip.
 10/2 11:42 BULL +0.44 / +0.12 => skip_1min_rip.
 10/2 10:34 BEAR +0.16 / +0.08 => skip_1min_rip.
-10/2 10:54 BEAR −0.28 / −0.87 => SEND (3-minute dump).
-10/2 12:52 1DTE BULL +0.14 / +0.27 => SEND.
+10/2 10:54 BEAR −0.28 / −0.87 => SEND (3-minute dump). extra BTO on RUN.
+10/2 12:52 1DTE BULL +0.14 / +0.27 => SEND (exit/orphan, not a rip skip).
 Do not freeze 0DTE TREND. Admin ledger still gets the 1-minute candidates.
 
 ORPHAN ADOPT — 10/2 12:52 1DTE 7-lot sat 90m until a manual STC.

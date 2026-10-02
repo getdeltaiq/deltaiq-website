@@ -6,6 +6,7 @@ from engine.overlay.publish import (
     PublishLedgers,
     decide_sub_send,
     ledger_invariant,
+    with_spy_deltas,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "PublishLedgers",
     "decide_sub_send",
     "ledger_invariant",
+    "with_spy_deltas",
 ]

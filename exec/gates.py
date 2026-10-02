@@ -50,6 +50,7 @@ from engine.shared.gates import (  # noqa: F401
     clock_quality_skip_reason,
     option_dte,
     one_bar_rip_skip_reason,
+    signed_spy_deltas,
     protective_stop_usd,
     quality_skip_reason,
     sub_action_skip_reason,

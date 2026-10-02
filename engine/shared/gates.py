@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Literal
@@ -179,6 +180,28 @@ def trend_confirm_kwargs(direction: Direction) -> dict:
     return {
         "rip_1m_spy": round(sign * 0.25, 2),
         "trend_3m_spy": round(sign * 0.60, 2),
+    }
+
+
+def signed_spy_deltas(closes: Sequence[float] | None) -> dict[str, float | None]:
+    """Stamp overlay Candidate from the last four 1-minute SPY closes.
+
+    closes[-1] is now. Up is +. Production overlay MUST call this on every
+    candidate. Do not invent defaults — a short tape is skip_1min_unconfirmed.
+    10/2 11:42: last four closes that yield +0.44 / +0.12.
+    10/2 10:54: last four closes that yield −0.28 / −0.87.
+    """
+    if closes is None or len(closes) < 4:
+        return {"rip_1m_spy": None, "trend_3m_spy": None}
+    try:
+        now = float(closes[-1])
+        m1 = float(closes[-2])
+        m3 = float(closes[-4])
+    except (TypeError, ValueError):
+        return {"rip_1m_spy": None, "trend_3m_spy": None}
+    return {
+        "rip_1m_spy": round(now - m1, 4),
+        "trend_3m_spy": round(now - m3, 4),
     }
 
 

@@ -15,6 +15,7 @@ from exec.gates import (
     ledger_invariant,
     new_session,
     one_bar_rip_skip_reason,
+    signed_spy_deltas,
     quality_skip_reason,
     rec_book,
     starter_qty,
@@ -1230,6 +1231,20 @@ class OneMinRipTests(unittest.TestCase):
             one_bar_rip_skip_reason(direction="BEAR"),
             "skip_1min_unconfirmed",
         )
+        self.assertEqual(
+            signed_spy_deltas([770.0, 770.1]),
+            {"rip_1m_spy": None, "trend_3m_spy": None},
+        )
+        self.assertEqual(
+            signed_spy_deltas(None),
+            {"rip_1m_spy": None, "trend_3m_spy": None},
+        )
+        climax = signed_spy_deltas([769.29, 769.21, 768.97, 769.41])
+        self.assertAlmostEqual(climax["rip_1m_spy"], 0.44, places=2)
+        self.assertAlmostEqual(climax["trend_3m_spy"], 0.12, places=2)
+        dump = signed_spy_deltas([771.81, 771.22, 771.22, 770.94])
+        self.assertAlmostEqual(dump["rip_1m_spy"], -0.28, places=2)
+        self.assertAlmostEqual(dump["trend_3m_spy"], -0.87, places=2)
         s = new_session("2026-10-02")
         d = decide_starter(
             s,
