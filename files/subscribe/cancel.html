@@ -39,15 +39,19 @@
   <section class="hero" style="border-bottom:none;">
     <p class="eyebrow">// CHECKOUT</p>
     <h1 class="headline">Checkout canceled</h1>
-    <p class="subhead">No charge was made. You can restart checkout anytime, or sign in if you already subscribe.</p>
+    <p class="subhead">No charge was made. Your 14-day free trial is still available — restart below to finish signup securely with Stripe.</p>
     <div class="cta-row">
-      <a class="btn-primary" href="/#pricing">Back to Subscribe</a>
+      <div class="cta-primary-wrap">
+        <button type="button" class="btn-primary" data-checkout-start>Resume 14-Day Free Trial</button>
+        <p class="cta-hint">Card required · not charged for 14 days (new customers) · cancel anytime in My Account</p>
+      </div>
       <a class="link-secondary" href="/account.html">My Account</a>
     </div>
   </section>
 </div>
 <script src="../js/site-config.js"></script>
 <script src="../js/analytics.js"></script>
+<script src="../js/checkout.js?v=20261004a"></script>
 <!-- Cloudflare Web Analytics -->
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "03d72a0962314e1684699e1ff61dcb83"}'></script>
 <!-- End Cloudflare Web Analytics -->
