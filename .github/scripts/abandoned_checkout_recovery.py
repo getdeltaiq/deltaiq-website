@@ -151,6 +151,11 @@ def main() -> None:
         die("STRIPE_SECRET_KEY missing — add it under repo Secrets to enable recovery emails", 0)
     if not RESEND_KEY:
         die("RESEND_API_KEY missing — add it under repo Secrets to enable recovery emails", 0)
+    if STRIPE_KEY.startswith("pk_"):
+        die("STRIPE_SECRET_KEY is a publishable key (pk_…). Replace it with the Secret key (sk_live_…) from Stripe Dashboard → Developers → API keys.")
+    if not (STRIPE_KEY.startswith("sk_") or STRIPE_KEY.startswith("rk_")):
+        die("STRIPE_SECRET_KEY should start with sk_live_ or rk_live_. Open Stripe Dashboard → Developers → API keys and copy Secret key.")
+    print(f"stripe_key_prefix={STRIPE_KEY.split('_')[0]}_{STRIPE_KEY.split('_')[1] if '_' in STRIPE_KEY else '?'}")
 
     now = int(time.time())
     lookback = now - LOOKBACK_H * 3600
