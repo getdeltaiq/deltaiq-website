@@ -13,6 +13,7 @@ Optional:
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sys
@@ -22,9 +23,15 @@ import urllib.parse
 import urllib.request
 from collections import defaultdict
 
-STRIPE_KEY = os.environ.get("STRIPE_SECRET_KEY", "").strip()
-RESEND_KEY = os.environ.get("RESEND_API_KEY", "").strip()
-RESEND_FROM = os.environ.get("RESEND_FROM", "DeltaIQ <support@getdeltaiq.com>").strip()
+
+def _clean_secret(value: str) -> str:
+    s = (value or "").strip().strip('"').strip("'").replace("\r", "").replace("\n", "")
+    return s.strip()
+
+
+STRIPE_KEY = _clean_secret(os.environ.get("STRIPE_SECRET_KEY", ""))
+RESEND_KEY = _clean_secret(os.environ.get("RESEND_API_KEY", ""))
+RESEND_FROM = _clean_secret(os.environ.get("RESEND_FROM", "")) or "DeltaIQ <support@getdeltaiq.com>"
 LOOKBACK_H = int(os.environ.get("RECOVERY_LOOKBACK_HOURS", "36"))
 COOLDOWN_H = int(os.environ.get("RECOVERY_COOLDOWN_HOURS", "72"))
 CHECKOUT_API = os.environ.get(
@@ -39,16 +46,25 @@ def die(msg: str, code: int = 1) -> None:
     raise SystemExit(code)
 
 
+def stripe_auth_header() -> str:
+    token = base64.b64encode(f"{STRIPE_KEY}:".encode("utf-8")).decode("ascii")
+    return f"Basic {token}"
+
+
 def stripe_get(path: str, params: dict | None = None) -> dict:
     qs = urllib.parse.urlencode(params or {}, doseq=True)
     url = f"https://api.stripe.com/v1{path}" + (f"?{qs}" if qs else "")
     req = urllib.request.Request(
         url,
-        headers={"Authorization": f"Bearer {STRIPE_KEY}"},
+        headers={"Authorization": stripe_auth_header()},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return json.load(resp)
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.load(resp)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")[:500]
+        die(f"Stripe {e.code} {path}: {body}")
 
 
 def create_checkout(email: str, plan: str) -> dict:
@@ -135,6 +151,11 @@ def main() -> None:
         die("STRIPE_SECRET_KEY missing — add it under repo Secrets to enable recovery emails", 0)
     if not RESEND_KEY:
         die("RESEND_API_KEY missing — add it under repo Secrets to enable recovery emails", 0)
+    if STRIPE_KEY.startswith("pk_"):
+        die("STRIPE_SECRET_KEY is a publishable key (pk_…). Replace it with the Secret key (sk_live_…) from Stripe Dashboard → Developers → API keys.")
+    if not (STRIPE_KEY.startswith("sk_") or STRIPE_KEY.startswith("rk_")):
+        die("STRIPE_SECRET_KEY should start with sk_live_ or rk_live_. Open Stripe Dashboard → Developers → API keys and copy Secret key.")
+    print(f"stripe_key_prefix={STRIPE_KEY.split('_')[0]}_{STRIPE_KEY.split('_')[1] if '_' in STRIPE_KEY else '?'}")
 
     now = int(time.time())
     lookback = now - LOOKBACK_H * 3600
