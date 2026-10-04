@@ -189,8 +189,10 @@ h1.headline {
   margin: 0;
   font-size: 13px;
   font-weight: 400;
-  color: var(--text-faint);
+  color: var(--text-dim);
   letter-spacing: 0.01em;
+  max-width: 34em;
+  line-height: 1.45;
 }
 
 .btn-primary {

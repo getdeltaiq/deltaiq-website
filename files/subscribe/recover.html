@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>DeltaIQ — Finish your free trial</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="DeltaIQ">
+<meta property="og:title" content="DeltaIQ — Finish your free trial">
+<meta property="og:description" content="Complete your DeltaIQ 14-day free trial signup. Educational only — not investment advice.">
+<meta property="og:url" content="https://getdeltaiq.com/subscribe/recover.html">
+<meta property="og:image" content="https://getdeltaiq.com/assets/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DeltaIQ — Finish your free trial">
+<meta name="twitter:description" content="Complete your DeltaIQ 14-day free trial signup. Educational only — not investment advice.">
+<meta name="twitter:image" content="https://getdeltaiq.com/assets/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="chrome-bar">
+  <div class="chrome-inner">
+    <div class="chrome-dots"><span></span><span></span><span></span></div>
+    <div class="brand"><a href="/" style="color:inherit;text-decoration:none;">delta<span>iq</span></a></div>
+    <nav class="top-nav">
+      <a href="/#pricing">Subscribe</a>
+      <a href="/account.html" class="nav-account">My Account</a>
+    </nav>
+  </div>
+</div>
+<div class="wrap">
+  <section class="hero" style="border-bottom:none;">
+    <p class="eyebrow">// TRIAL</p>
+    <h1 class="headline">Finish your 14-day free trial</h1>
+    <p class="subhead">You started checkout but didn’t finish. Resume below — card required, not charged for 14 days for new customers, then $69/mo. Cancel anytime in My Account.</p>
+    <div class="cta-row">
+      <div class="cta-primary-wrap">
+        <button type="button" class="btn-primary" data-checkout-start id="recoverCta">Resume free trial</button>
+        <p class="cta-hint" id="recoverHint">Opening secure checkout…</p>
+      </div>
+      <a class="link-secondary" href="/account.html">Already subscribed? My Account</a>
+    </div>
+  </section>
+</div>
+<script src="../js/site-config.js"></script>
+<script src="../js/analytics.js"></script>
+<script src="../js/checkout.js?v=20261004a"></script>
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var email = (params.get("email") || "").trim();
+  var hint = document.getElementById("recoverHint");
+  if (email) {
+    try { sessionStorage.setItem("deltaiq_checkout_email", email); } catch (e) {}
+    if (hint) hint.textContent = "Continue with " + email + " · card required, not charged during trial";
+  } else if (hint) {
+    hint.textContent = "14 days free for new customers · then $69/mo · cancel anytime";
+  }
+  if (typeof window.deltaiqTrack === "function") {
+    window.deltaiqTrack("recover_checkout_view", { has_email: !!email });
+  }
+  // Auto-open consent modal so recovery is one click from email.
+  setTimeout(function () {
+    var btn = document.getElementById("recoverCta");
+    if (btn) btn.click();
+  }, 150);
+})();
+</script>
+<!-- Cloudflare Web Analytics -->
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "03d72a0962314e1684699e1ff61dcb83"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</body>
+</html>

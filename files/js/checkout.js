@@ -1,6 +1,7 @@
 /**
- * Subscribe Now → consent gate (required ToS/disclosures; optional SMS) → Checkout.
+ * Subscribe Now → consent gate (required ToS/disclosures + email; optional SMS) → Checkout.
  * Monthly is the default; Annual can be selected on the Offers cards.
+ * Email is collected pre-Stripe so abandoned checkouts can be recovered.
  */
 (function () {
   var API =
@@ -10,7 +11,7 @@
   var pendingBtn = null;
   var SMS_PHONE_KEY = "deltaiq_sms_phone";
   var SMS_ACK_KEY = "deltaiq_ack_sms";
-
+  var EMAIL_KEY = "deltaiq_checkout_email";
 
   function selectedPlan() {
     var checked = document.querySelector('input[name="plan"]:checked');
@@ -67,6 +68,24 @@
     return el("div", { className: "consent-row" }, [input, label]);
   }
 
+  function isValidEmail(value) {
+    var s = String(value || "").trim();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+  }
+
+  function storedEmail() {
+    var params = new URLSearchParams(location.search);
+    var fromQuery = params.get("email") || "";
+    if (isValidEmail(fromQuery)) return fromQuery.trim();
+    var field = document.getElementById("ack_email");
+    if (field && field.value.trim()) return field.value.trim();
+    try {
+      return sessionStorage.getItem(EMAIL_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
   function ensureModal() {
     if (modalEl) return modalEl;
     modalEl = el("div", {
@@ -81,31 +100,49 @@
     var panel = el("div", { className: "consent-panel" });
     panel.appendChild(
       el("h2", { id: "deltaiq-consent-title", className: "consent-title" }, [
-        "Before you subscribe",
+        "Start your 14-day free trial",
       ])
     );
     panel.appendChild(
       el("p", { className: "consent-lede" }, [
-        "Two acknowledgments are required (Terms §3). Optional text notifications are separate (Terms §5). All boxes start unchecked.",
+        "Card required to start — not charged for 14 days (new customers). Then $69/mo or $690/yr. Cancel anytime in My Account. Two acknowledgments are required (Terms §3). Email lets us send a one-time link if checkout isn’t finished.",
       ])
     );
+
+    var emailWrap = el("div", { className: "sms-form", style: "margin:0 0 16px;max-width:none;" });
+    emailWrap.appendChild(
+      el("label", { className: "sms-label", for: "ack_email" }, ["Email address"])
+    );
+    emailWrap.appendChild(
+      el("input", {
+        className: "pay-input",
+        type: "email",
+        id: "ack_email",
+        name: "ack_email",
+        autocomplete: "email",
+        inputmode: "email",
+        required: "required",
+        placeholder: "you@example.com",
+      })
+    );
+    panel.appendChild(emailWrap);
 
     panel.appendChild(
       checkboxRow(
         "ack_tos_privacy",
-        'I have read and agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>, and I confirm I am at least 18 and a U.S. resident.'
+        'I have read and agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>, and I confirm I am at least 18 and a U.S. resident.'
       )
     );
     panel.appendChild(
       checkboxRow(
         "ack_disclosures",
-        'I have read and understand the <a href="disclosures.html" target="_blank" rel="noopener">Important Disclosures</a> and the “We Are Not” disclosures (including that DeltaIQ is a publisher, not an investment adviser, and publications that analyze market conditions are not personalized recommendations).'
+        'I have read and understand the <a href="/disclosures.html" target="_blank" rel="noopener">Important Disclosures</a> and the “We Are Not” disclosures (including that DeltaIQ is a publisher, not an investment adviser, and publications that analyze market conditions are not personalized recommendations).'
       )
     );
     panel.appendChild(
       checkboxRow(
         "ack_sms",
-        'By providing your number, you agree to receive automated publication reminders via SMS from DeltaIQ. Optional. Recurring texts prompt you to sign in at <a href="account.html" target="_blank" rel="noopener">My Account</a> when new dashboard content is available; they do not include market or ticker detail. Message frequency varies. Msg &amp; data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help. No mobile information will be shared with third parties/affiliates for marketing/promotional purposes. <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a>. You can finish checkout without SMS.'
+        'By providing your number, you agree to receive automated publication reminders via SMS from DeltaIQ. Optional. Recurring texts prompt you to sign in at <a href="/account.html" target="_blank" rel="noopener">My Account</a> when new dashboard content is available; they do not include market or ticker detail. Message frequency varies. Msg &amp; data rates may apply. Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help. No mobile information will be shared with third parties/affiliates for marketing/promotional purposes. <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a href="/terms.html" target="_blank" rel="noopener">Terms of Service</a>. You can finish checkout without SMS.'
       )
     );
 
@@ -199,12 +236,19 @@
     var homeSms = document.getElementById("sms-consent-box");
     var smsBox = document.getElementById("ack_sms");
     var phone = document.getElementById("ack_sms_phone");
+    var email = document.getElementById("ack_email");
     var fromForm = !!(homeSms && homeSms.checked);
     try {
       fromForm = fromForm || sessionStorage.getItem(SMS_ACK_KEY) === "1";
     } catch (e) {}
     if (smsBox && fromForm) smsBox.checked = true;
     if (phone) phone.value = storedPhone();
+    if (email) email.value = storedEmail();
+    if (email && !email.value) {
+      try {
+        email.focus();
+      } catch (e) {}
+    }
   }
 
   function closeModal() {
@@ -216,18 +260,27 @@
 
   function readAcks() {
     var phoneEl = document.getElementById("ack_sms_phone");
+    var emailEl = document.getElementById("ack_email");
     return {
       ack_tos_privacy: !!(document.getElementById("ack_tos_privacy") || {}).checked,
       ack_disclosures: !!(document.getElementById("ack_disclosures") || {}).checked,
       ack_sms: !!(document.getElementById("ack_sms") || {}).checked,
       ack_age_us: !!(document.getElementById("ack_tos_privacy") || {}).checked,
       phone: phoneEl ? String(phoneEl.value || "").trim() : storedPhone(),
+      email: emailEl ? String(emailEl.value || "").trim() : storedEmail(),
     };
   }
 
   function onContinue() {
     var acks = readAcks();
     var err = document.getElementById("deltaiq-consent-error");
+    if (!isValidEmail(acks.email)) {
+      if (err) {
+        err.hidden = false;
+        err.textContent = "Enter a valid email address to continue.";
+      }
+      return;
+    }
     if (!acks.ack_tos_privacy || !acks.ack_disclosures) {
       if (err) {
         err.hidden = false;
@@ -261,6 +314,7 @@
     try {
       if (acks.phone) sessionStorage.setItem(SMS_PHONE_KEY, acks.phone);
       sessionStorage.setItem(SMS_ACK_KEY, acks.ack_sms ? "1" : "0");
+      if (acks.email) sessionStorage.setItem(EMAIL_KEY, acks.email);
     } catch (e) {}
     return fetch(API, {
       method: "POST",
@@ -272,6 +326,8 @@
         ack_sms: !!acks.ack_sms,
         ack_age_us: !!acks.ack_age_us,
         phone: acks.phone || "",
+        email: acks.email || "",
+        customer_email: acks.email || "",
       }),
     })
       .then(function (res) {
@@ -297,7 +353,7 @@
         );
         if (btn) {
           btn.disabled = false;
-          btn.textContent = label || "Subscribe Now";
+          btn.textContent = label || "Start 14-Day Free Trial";
         }
         if (continueBtn) {
           continueBtn.disabled = false;
@@ -343,7 +399,11 @@
   });
 
   // Public reviewer URL: https://getdeltaiq.com/?sms-consent=1 opens the live modal.
+  // Recovery links: https://getdeltaiq.com/subscribe/recover.html?email=...
   if (/(?:^|[?&])sms-consent=1(?:&|$)/.test(location.search) || location.hash === "#sms-consent") {
+    openModal(document.querySelector("[data-checkout-start]"));
+  }
+  if (/(?:^|[?&])start-trial=1(?:&|$)/.test(location.search) || location.hash === "#start-trial") {
     openModal(document.querySelector("[data-checkout-start]"));
   }
 

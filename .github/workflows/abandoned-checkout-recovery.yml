@@ -1,0 +1,41 @@
+name: Abandoned checkout recovery
+
+# Emails a one-time finish-checkout link for Stripe Checkout Sessions that
+# expired with a customer_email on file. Requires repo secrets:
+#   STRIPE_SECRET_KEY
+#   RESEND_API_KEY
+# Optional:
+#   RESEND_FROM  (e.g. "DeltaIQ <support@getdeltaiq.com>")
+
+on:
+  schedule:
+    # Every 6 hours
+    - cron: "15 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        id: secrets
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          if [ -z "$STRIPE_SECRET_KEY" ] || [ -z "$RESEND_API_KEY" ]; then
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping recovery emails — add STRIPE_SECRET_KEY and RESEND_API_KEY repo secrets."
+          else
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send recovery emails
+        if: steps.secrets.outputs.missing == 'false'
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM: ${{ secrets.RESEND_FROM }}
+        run: python3 .github/scripts/abandoned_checkout_recovery.py
