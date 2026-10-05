@@ -31,6 +31,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **Channel align (10/1):** SUB_signals SMS is a `sub_alert_send`. Overlay and Tradier call the same skip stack. A 10:01 0DTE is admin-only (no SMS, no BTO). Do not SMS a quality/misfire/clock skip.
   - **1DTE adaptive protect (10/1 close):** 0DTE stays `protective $0.15` + `fail_90`. 1DTE uses `protective $0.30` and does **not** 90s-FAIL (10/1 14:04 $0.15-clip then rally; 14:26 fail_90 scratch). Ticket risk −$240 and flatten 15:50 stay. Do not freeze 0DTE TREND.
   - **1-minute rip (10/2, production):** SUB losers were 1-minute prints (11:42 +$0.44 bar / 3-minute +$0.12). The 10:54 BEAR winner had a 3-minute dump (−$0.87). Overlay MUST stamp signed `rip_1m_spy` / `trend_3m_spy` via `signed_spy_deltas` / `with_spy_deltas` on the last four 1-minute SPY closes. Missing is `skip_1min_unconfirmed`. A 1-minute print without a 3-minute trend in the send direction is `skip_1min_rip` (admin only, no SMS, no BTO). Fewer SUB alerts is the bar. Extra BTO on RUN sizes impactful winners to 16. Do not freeze 0DTE TREND.
+  - **Peak lock (10/5):** A runner’s bid high is the high-water mark. Once unrealized ≥ **$50**, flatten if the ticket gives back **$50** from that high (`peak_giveback`). 10/5 16-lot 773C 0.79→1.67 (~+$1,408) must NOT sit to the fill $0.15 stop at 0.64. Fill $0.15 / 1DTE $0.30 still protect tickets that never made a high. Quote grace 8s and no STC on fill stay. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
 - Live Railway repo is `getdeltaiq/deltaiq-signal-engine` branch `production`. Copy `engine/shared/gates.py`, `engine/tradier_exec/hooks.py`, and `engine/overlay/publish.py` there to ship. This website PR does not deploy the bot.
@@ -45,8 +46,16 @@ PR 24 onto production (replace Railway copies; do not keep a second knob set):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/overlay/publish.py
-rec_book_ship=2026-10-02-1min-rip. Do not lift a halt that is already off.
+rec_book_ship=2026-10-05-peak-lock. Do not lift a halt that is already off.
 Do not freeze 0DTE TREND. Fewer SUB alerts is correct.
+
+HIGH-WATER $50 — 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408).
+The fill $0.15 stop (0.64) would give back ~$1,650. That is not the exit.
+Ratchet ticket_peak_unrealized on the BID every manage tick.
+Once peak >= $50, if peak - unrealized >= $50 => flatten peak_giveback
+(ladder to market). A 1.67 high flattens near 1.63, not 0.64.
+Fill $0.15 (0DTE) / $0.30 (1DTE) still protect tickets with no high.
+Quote grace 8s. Do NOT STC on BTO fill. Extra BTO on RUN stays.
 
 QUALITY BAR — SUB SMS = Tradier BTO. Alerts that fire should be 3-minute
 confirmed trends, not 1-minute prints. Impactful winners (10:54 BEAR
@@ -140,7 +149,8 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
    if kind == "adopt_stc_only": before_stc MUST post (orphan_adopt). Walk ladder.
    NEVER BTO from recover_lost.
 
-Proof: rec_book_ship=2026-10-02-1min-rip, channels_aligned=true,
+Proof: rec_book_ship=2026-10-05-peak-lock, protect_from_high=true,
+peak_giveback_usd=50, channels_aligned=true,
 sms_iff_sub_send=true, sms_from=sub_alert_send, skip_0dte_open_fade=true,
 open_fade_window=["10:00","10:20"], skip_0dte_near_cutover=true,
 near_cutover_0dte_et=12:30, skip_already_flat=true, flatten_limit_thru_usd=0,
@@ -156,6 +166,8 @@ A 1DTE 7-lot 2.71→2.16 must flatten_protective. A true orphan (no fill stamp)
 must flatten_orphan_adopt through before_stc. A 3s fill is still fresh_fill.
 A 11:42 1-min +0.44 / 3-min +0.12 must be skip_1min_rip on SMS AND BTO.
 A 10:54 BEAR 1-min −0.28 / 3-min −0.87 must still SEND and POST.
+A 16-lot 0.79 fill marked 1.67 must HOLD. Marked 1.63 after that high
+must flatten_peak_giveback. Do not sit to fill-0.15 (0.64).
 
 ```
 

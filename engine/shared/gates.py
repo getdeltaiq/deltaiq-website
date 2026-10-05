@@ -31,6 +31,7 @@ EnvelopeReason = Literal[
     "cata_spy",
     "fail_90",
     "orphan_adopt",
+    "peak_giveback",
 ]
 
 
@@ -59,6 +60,12 @@ OPEN_FADE_WINDOW = ("10:00", "10:20")
 # open a fresh 0DTE in the last 15 minutes of the 0DTE book.
 NEAR_CUTOVER_0DTE_ET = "12:30"
 EXTRA_BTO_MFE_USD = 0.20
+# 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408). Fill $0.15 stop was 0.64
+# (~$1,650 giveback). Once the ticket prints a high of at least $50,
+# flatten if unrealized gives back $50 from that high. Ratchet the high
+# on the bid. Fill $0.15 / 1DTE $0.30 still protect tickets that never
+# made a high. Do not STC on fill (9/30 10:39).
+PEAK_GIVEBACK_USD = 50.0
 SESSION_LOSS_HALT_USD = 750.0  # 3 envelope misses (~$240) before the day stops
 CONSECUTIVE_FAIL_HALT = 4
 # 9/28: 1DTE wiggles printed 4 FAILs and halted before the 0DTE 767-put.
@@ -86,7 +93,7 @@ WORKING_STC_ON_FILL = False
 # + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:45 (trade it).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-02-1min-rip"
+REC_BOOK_SHIP = "2026-10-05-peak-lock"
 
 
 def rec_book() -> dict:
@@ -132,6 +139,8 @@ def rec_book() -> dict:
         "skip_already_flat": True,
         "recover_lost_owned": True,
         "orphan_adopt_flattens": True,
+        "protect_from_high": True,
+        "peak_giveback_usd": PEAK_GIVEBACK_USD,
         "skip_1min_rip": True,
         "one_min_rip_usd": ONE_MIN_RIP_USD,
         "trend_3m_min_usd": TREND_3M_MIN_USD,
@@ -551,6 +560,7 @@ def envelope_hit(
     seconds_since_fill: float,
     ticket_phase: str | None,
     dte: int | None = None,
+    peak_unrealized: float = 0.0,
 ) -> EnvelopeReason | None:
     """Evaluate combined broker qty. qty is broker longs, not intended starter size."""
     if qty <= 0:
@@ -559,6 +569,9 @@ def envelope_hit(
         return None
     down = round(fill_px - mark_bid, 4)
     u = round(unrealized_dollars(mark_bid, fill_px, qty), 2)
+    peak = max(float(peak_unrealized or 0.0), u)
+    if peak >= PEAK_GIVEBACK_USD - 1e-9 and peak - u >= PEAK_GIVEBACK_USD - 1e-9:
+        return "peak_giveback"
     stop = protective_stop_usd(dte)
     if down >= stop:
         return "protective"
@@ -622,6 +635,7 @@ class SessionState:
     ticket_fill_ts: float | None = None
     avg_fill_px: float | None = None
     orphan_adopt: bool = False
+    ticket_peak_unrealized: float = 0.0
 
     def additional_loss_usd(self) -> float:
         return self.session_realized_usd - self.halt_baseline_usd
@@ -695,6 +709,7 @@ class SessionState:
         self.ticket_fill_ts = None
         self.avg_fill_px = None
         self.orphan_adopt = False
+        self.ticket_peak_unrealized = 0.0
         if phase == "FAIL" and et_hhmm:
             self.last_fail_hhmm = et_hhmm
         if counts_toward_fail_streak(dte, et_hhmm):
@@ -773,6 +788,7 @@ class SessionState:
 
     def on_bto_fill(self, qty: int, fill_px: float, *, now: float | None = None) -> None:
         """Stamp this ticket's clock. Never post STC from this hook."""
+        new_ticket = self.ticket_fill_ts is None
         self.inflight = False
         self.pending_entry = False
         self.broker_qty = int(qty)
@@ -780,6 +796,8 @@ class SessionState:
         self.avg_fill_px = float(fill_px)
         self.ticket_fill_ts = float(now if now is not None else time.time())
         self.orphan_adopt = False
+        if new_ticket:
+            self.ticket_peak_unrealized = 0.0
         self.last_action = "bto_fill"
 
     def ticket_age_sec(
@@ -904,7 +922,7 @@ def flatten_now(
     state: SessionState, reason: EnvelopeReason, bid: float
 ) -> dict:
     """Single flatten path. Orphans use this so before_stc cannot HOLD."""
-    if reason == "protective":
+    if reason == "protective" or reason == "peak_giveback":
         state.protect_fills_n += 1
     elif reason == "ticket_risk":
         state.ticket_risk_hits_n += 1
@@ -945,6 +963,8 @@ def decide_manage(
 ) -> dict:
     if qty > 0:
         state.broker_qty = int(qty)
+        u = round(unrealized_dollars(mark_bid, fill_px, qty), 2)
+        state.ticket_peak_unrealized = max(state.ticket_peak_unrealized, max(0.0, u))
     if state.orphan_adopt and qty > 0:
         # 10/2 12:52 1DTE: recover_lost then before_stc HOLD left the 7-lot.
         return flatten_now(state, "orphan_adopt", bid)
@@ -962,6 +982,7 @@ def decide_manage(
         seconds_since_fill=age,
         ticket_phase=ticket_phase,
         dte=dte_val,
+        peak_unrealized=state.ticket_peak_unrealized,
     )
     if reason is None:
         mfe = round(mark_bid - fill_px, 4)

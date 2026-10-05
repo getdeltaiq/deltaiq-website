@@ -211,7 +211,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-10-02-1min-rip, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-10-05-peak-lock, session_loss_halt_usd=750
    channels_aligned=true, sms_iff_sub_send=true, sms_from=sub_alert_send
    protective_stop_usd=0.15, protective_stop_1dte_usd=0.30, fail_sec_1dte=null
    queue_opposite=false (overwrite Railway true)
@@ -225,6 +225,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    skip_already_flat=true, flatten_limit_thru_usd=0,
    recover_lost_owned=true, orphan_adopt_flattens=true,
    skip_1min_rip=true, one_min_rip_usd=0.20, trend_3m_min_usd=0.20,
+   protect_from_high=true, peak_giveback_usd=50,
    cooldown_after_fail_sec=480
    engine_exit_mode == ladder_to_market (not trail).
    After a real starter: consumed_send_ts nonempty and still nonempty after flatten.
@@ -233,7 +234,8 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    skip_misfire_n increments on 1DTE-not-trend / cooldown / missing OCC.
    last_stc_ladder == "market" on envelope hit.
    0DTE −$0.15 still flatten_protective. 1DTE −$0.21 must HOLD. 1DTE 90s FAIL must HOLD.
-   chop_size == false. protect_fills_n increments on $0.15 down.
+   A 16-lot 0.79 marked 1.67 HOLDs. Marked 1.63 after that high is flatten_peak_giveback.
+   chop_size == false. protect_fills_n increments on $0.15 down or peak_giveback.
    A 1-cent bid scratch in <90s must NOT increment protect_fills_n.
 
 9) Size stays min(floor(2000/(ask*100)), 16). NEVER session_starter_cap 8.

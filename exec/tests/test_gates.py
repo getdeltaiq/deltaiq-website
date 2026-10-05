@@ -895,7 +895,9 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-02-1min-rip")
+        self.assertEqual(h["rec_book_ship"], "2026-10-05-peak-lock")
+        self.assertTrue(h["protect_from_high"])
+        self.assertEqual(h["peak_giveback_usd"], 50.0)
         self.assertTrue(h["skip_1min_rip"])
         self.assertEqual(h["one_min_rip_usd"], 0.20)
         self.assertEqual(h["trend_3m_min_usd"], 0.20)
@@ -1311,6 +1313,144 @@ class OneMinRipTests(unittest.TestCase):
         )
         self.assertTrue(d["post"])
         self.assertEqual(d["action"], "bto")
+
+
+class PeakGivebackTests(unittest.TestCase):
+    """10/5 773C 16-lot: lock the bid high, flatten $50 off it."""
+
+    def test_helper_locks_high_not_fill_stop(self):
+        # 16 @ 0.79, bid 1.67 → +$1,408. Fill $0.15 stop is 0.64.
+        self.assertIsNone(
+            envelope_hit(
+                fill_px=0.79,
+                mark_bid=1.67,
+                qty=16,
+                spy_adverse=0.0,
+                seconds_since_fill=120,
+                ticket_phase="RUN",
+                dte=0,
+                peak_unrealized=1408.0,
+            )
+        )
+        self.assertIsNone(
+            envelope_hit(
+                fill_px=0.79,
+                mark_bid=1.64,
+                qty=16,
+                spy_adverse=0.0,
+                seconds_since_fill=180,
+                ticket_phase="RUN",
+                dte=0,
+                peak_unrealized=1408.0,
+            )
+        )
+        self.assertEqual(
+            envelope_hit(
+                fill_px=0.79,
+                mark_bid=1.63,
+                qty=16,
+                spy_adverse=0.0,
+                seconds_since_fill=180,
+                ticket_phase="RUN",
+                dte=0,
+                peak_unrealized=1408.0,
+            ),
+            "peak_giveback",
+        )
+
+    def test_manage_ratchets_high_then_flattens_50_off(self):
+        s = new_session("2026-10-05")
+        s.on_bto_fill(16, 0.79, now=1_000.0)
+        s.last_option_symbol = "SPY261005C00773000"
+        hold = decide_manage(
+            s,
+            fill_px=0.79,
+            mark_bid=1.67,
+            qty=16,
+            spy_adverse=0.0,
+            seconds_since_fill=120,
+            ticket_phase="RUN",
+            bid=1.67,
+            now=1_120.0,
+            dte=0,
+        )
+        self.assertFalse(hold["flatten"])
+        self.assertEqual(hold["take_exit"], "hold")
+        self.assertAlmostEqual(s.ticket_peak_unrealized, 1408.0, places=0)
+        dip = decide_manage(
+            s,
+            fill_px=0.79,
+            mark_bid=1.64,
+            qty=16,
+            spy_adverse=0.0,
+            seconds_since_fill=180,
+            ticket_phase="RUN",
+            bid=1.64,
+            now=1_180.0,
+            dte=0,
+        )
+        self.assertFalse(dip["flatten"])
+        out = decide_manage(
+            s,
+            fill_px=0.79,
+            mark_bid=1.63,
+            qty=16,
+            spy_adverse=0.0,
+            seconds_since_fill=200,
+            ticket_phase="RUN",
+            bid=1.63,
+            now=1_200.0,
+            dte=0,
+        )
+        self.assertTrue(out["flatten"])
+        self.assertEqual(out["reason"], "peak_giveback")
+        self.assertEqual(out["take_exit"], "ladder_to_market")
+        stc = decide_stc(
+            s,
+            fill_px=0.79,
+            mark_bid=1.63,
+            qty=16,
+            spy_adverse=0.0,
+            seconds_since_fill=200,
+            ticket_phase="RUN",
+            bid=1.63,
+            now=1_200.0,
+            dte=0,
+        )
+        self.assertTrue(stc["post"])
+        self.assertEqual(stc["reason"], "peak_giveback")
+
+    def test_never_made_a_high_still_uses_fill_stop(self):
+        self.assertEqual(
+            envelope_hit(
+                fill_px=1.14,
+                mark_bid=0.99,
+                qty=16,
+                spy_adverse=0.10,
+                seconds_since_fill=12,
+                ticket_phase="FAIL",
+                peak_unrealized=0.0,
+            ),
+            "protective",
+        )
+
+    def test_grace_does_not_sell_the_open(self):
+        s = new_session("2026-10-05")
+        s.on_bto_fill(16, 0.79, now=1_000.0)
+        m = decide_manage(
+            s,
+            fill_px=0.79,
+            mark_bid=1.67,
+            qty=16,
+            spy_adverse=0.0,
+            seconds_since_fill=3,
+            ticket_phase="RUN",
+            bid=1.67,
+            now=1_003.0,
+            dte=0,
+        )
+        self.assertFalse(m["flatten"])
+        self.assertAlmostEqual(s.ticket_peak_unrealized, 1408.0, places=0)
 
 
 class ExtraBtoTests(unittest.TestCase):
