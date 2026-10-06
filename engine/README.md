@@ -42,13 +42,23 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` **production** agent and ship now:
 
 ```
-SHIP TO PRODUCTION NOW. Copy these three files from getdeltaiq/deltaiq-website
-PR 24 onto production (replace Railway copies; do not keep a second knob set):
+SHIP TO PRODUCTION NOW. Live /health is still rec_book_ship=2026-10-02-1min-rip
+(missing stall-1m and peak-lock). RTH is closed — copy before the next open.
+Do not keep a second knob set. Do not lift a halt that is already off.
+Do not freeze 0DTE TREND. Fewer SUB alerts is correct.
+
+Copy these three files from getdeltaiq/deltaiq-website SHA 33f8d2a (PR 24)
+onto getdeltaiq/deltaiq-signal-engine production (replace Railway copies):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/overlay/publish.py
-rec_book_ship=2026-10-06-1min-stall. Do not lift a halt that is already off.
-Do not freeze 0DTE TREND. Fewer SUB alerts is correct.
+Public raw (website is public; curl these, do not rewrite knobs):
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/33f8d2a6d3822d964b3eafa58b173591ecbb7432/engine/shared/gates.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/33f8d2a6d3822d964b3eafa58b173591ecbb7432/engine/tradier_exec/hooks.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/33f8d2a6d3822d964b3eafa58b173591ecbb7432/engine/overlay/publish.py
+Wire overlay ingest to stamp every Candidate with with_spy_deltas /
+signed_spy_deltas on the last four 1m SPY closes before decide_sub_send.
+rec_book_ship MUST become 2026-10-06-1min-stall on /health.
 
 HIGH-WATER $50 — 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408).
 The fill $0.15 stop (0.64) would give back ~$1,650. That is not the exit.
