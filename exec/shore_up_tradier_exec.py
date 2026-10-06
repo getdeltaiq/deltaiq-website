@@ -149,6 +149,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    signed_spy_deltas(closes). Do NOT default 1m/3m. Do NOT use
    trend_confirm_kwargs on live sends (replay only).
    1-minute print without a 3-minute trend => skip_1min_rip (no SMS, no BTO).
+   Last minute not still with the send by $0.08 => skip_1min_stall.
    CHOPPY / weak 0.15–0.29 / strong pre-move ≥0.50 / chase ≥0.50 => no BTO.
    chop_size must be False. Do not resize into CHOPPY.
 
@@ -211,7 +212,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-10-05-peak-lock, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-10-06-1min-stall, session_loss_halt_usd=750
    channels_aligned=true, sms_iff_sub_send=true, sms_from=sub_alert_send
    protective_stop_usd=0.15, protective_stop_1dte_usd=0.30, fail_sec_1dte=null
    queue_opposite=false (overwrite Railway true)
@@ -225,6 +226,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    skip_already_flat=true, flatten_limit_thru_usd=0,
    recover_lost_owned=true, orphan_adopt_flattens=true,
    skip_1min_rip=true, one_min_rip_usd=0.20, trend_3m_min_usd=0.20,
+   skip_1min_stall=true, stall_1m_usd=0.08,
    protect_from_high=true, peak_giveback_usd=50,
    cooldown_after_fail_sec=480
    engine_exit_mode == ladder_to_market (not trail).

@@ -12,6 +12,7 @@ from engine.shared.gates import (  # noqa: F401
     ENGINE_EXIT_MODE,
     EXTRA_BTO_MFE_USD,
     PEAK_GIVEBACK_USD,
+    STALL_1M_USD,
     FAIL_SEC,
     OPEN_REVERSAL_WINDOW,
     OPEN_FADE_WINDOW,

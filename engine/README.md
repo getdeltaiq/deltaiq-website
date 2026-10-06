@@ -31,6 +31,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **Channel align (10/1):** SUB_signals SMS is a `sub_alert_send`. Overlay and Tradier call the same skip stack. A 10:01 0DTE is admin-only (no SMS, no BTO). Do not SMS a quality/misfire/clock skip.
   - **1DTE adaptive protect (10/1 close):** 0DTE stays `protective $0.15` + `fail_90`. 1DTE uses `protective $0.30` and does **not** 90s-FAIL (10/1 14:04 $0.15-clip then rally; 14:26 fail_90 scratch). Ticket risk −$240 and flatten 15:50 stay. Do not freeze 0DTE TREND.
   - **1-minute rip (10/2, production):** SUB losers were 1-minute prints (11:42 +$0.44 bar / 3-minute +$0.12). The 10:54 BEAR winner had a 3-minute dump (−$0.87). Overlay MUST stamp signed `rip_1m_spy` / `trend_3m_spy` via `signed_spy_deltas` / `with_spy_deltas` on the last four 1-minute SPY closes. Missing is `skip_1min_unconfirmed`. A 1-minute print without a 3-minute trend in the send direction is `skip_1min_rip` (admin only, no SMS, no BTO). Fewer SUB alerts is the bar. Extra BTO on RUN sizes impactful winners to 16. Do not freeze 0DTE TREND.
+  - **1-minute stall (10/5):** 10:58 BULL −$182 and 11:42 BULL −$320 had a 3-minute move (≥ $0.20) with a dead last minute (+$0.03 / +$0.02). SUB also requires the last minute still print WITH the send by at least **$0.08** (`skip_1min_stall`). 10/5 12:22 +$1,344 was +$0.175 / +$0.235 and still SENDS. 9/24 10:43 BEAR, 9/25 11:55 BULL, 9/28 10:42 BEAR, 10/2 10:54 BEAR still SEND. Do not raise the 3-minute floor to $0.30 (that would skip 12:22). Do not freeze 0DTE TREND.
   - **Peak lock (10/5):** A runner’s bid high is the high-water mark. Once unrealized ≥ **$50**, flatten if the ticket gives back **$50** from that high (`peak_giveback`). 10/5 16-lot 773C 0.79→1.67 (~+$1,408) must NOT sit to the fill $0.15 stop at 0.64. Fill $0.15 / 1DTE $0.30 still protect tickets that never made a high. Quote grace 8s and no STC on fill stay. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
@@ -46,7 +47,7 @@ PR 24 onto production (replace Railway copies; do not keep a second knob set):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/overlay/publish.py
-rec_book_ship=2026-10-05-peak-lock. Do not lift a halt that is already off.
+rec_book_ship=2026-10-06-1min-stall. Do not lift a halt that is already off.
 Do not freeze 0DTE TREND. Fewer SUB alerts is correct.
 
 HIGH-WATER $50 — 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408).
@@ -58,9 +59,10 @@ Fill $0.15 (0DTE) / $0.30 (1DTE) still protect tickets with no high.
 Quote grace 8s. Do NOT STC on BTO fill. Extra BTO on RUN stays.
 
 QUALITY BAR — SUB SMS = Tradier BTO. Alerts that fire should be 3-minute
-confirmed trends, not 1-minute prints. Impactful winners (10:54 BEAR
-−0.28 / −0.87) still SEND and extra-BTO to 16 on RUN (MFE ≥ $0.20).
-Admin ledger still records the 1-minute candidates. Do not SMS a skip.
+confirmed trends still moving in the last minute, not 1-minute prints
+and not stalled 3-minute rips. Impactful winners (10:54 BEAR
+−0.28 / −0.87, 10/5 12:22 +0.175 / +0.235) still SEND and extra-BTO
+to 16 on RUN (MFE ≥ $0.20). Admin ledger still records the skips.
 
 OVERLAY TAPE — every Candidate MUST be stamped before ingest/decide_sub_send:
   from engine.overlay.publish import with_spy_deltas
@@ -78,6 +80,16 @@ If abs(1m) >= abs(3m) and abs(1m) >= $0.20, it is a one-bar climax => skip_1min_
 10/2 10:34 BEAR +0.16 / +0.08 => skip_1min_rip.
 10/2 10:54 BEAR −0.28 / −0.87 => SEND (3-minute dump). extra BTO on RUN.
 10/2 12:52 1DTE BULL +0.14 / +0.27 => SEND (exit/orphan, not a rip skip).
+1-MINUTE STALL — 10/5 10:58 / 11:42 3-minute rips had already stalled.
+Last minute must still print WITH the send by at least $0.08.
+10/5 10:58 BULL +0.03 / +0.505 => skip_1min_stall (−$182).
+10/5 11:42 BULL +0.02 / +0.25 => skip_1min_stall (−$320).
+10/5 10:40 BULL +0.015 / +0.22 => skip_1min_stall (−$64).
+10/5 12:22 BULL +0.175 / +0.235 => SEND (+$1,344).
+10/5 10:33 BEAR −0.18 / −0.50 => SEND (+$48).
+9/24 10:43 BEAR −0.19 / −0.43, 9/25 11:55 BULL +0.25 / +0.94,
+9/28 10:42 BEAR −0.24 / −0.26, 10/2 10:54 BEAR −0.28 / −0.87 => SEND.
+Do not raise trend_3m_min to $0.30 (skips 12:22).
 Do not freeze 0DTE TREND. Admin ledger still gets the 1-minute candidates.
 
 ORPHAN ADOPT — 10/2 12:52 1DTE 7-lot sat 90m until a manual STC.
@@ -149,7 +161,7 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
    if kind == "adopt_stc_only": before_stc MUST post (orphan_adopt). Walk ladder.
    NEVER BTO from recover_lost.
 
-Proof: rec_book_ship=2026-10-05-peak-lock, protect_from_high=true,
+Proof: rec_book_ship=2026-10-06-1min-stall, protect_from_high=true,
 peak_giveback_usd=50, channels_aligned=true,
 sms_iff_sub_send=true, sms_from=sub_alert_send, skip_0dte_open_fade=true,
 open_fade_window=["10:00","10:20"], skip_0dte_near_cutover=true,
@@ -157,7 +169,8 @@ near_cutover_0dte_et=12:30, skip_already_flat=true, flatten_limit_thru_usd=0,
 dte_cutover_et=12:45, trade_1dte_after_cutover=true,
 protective_stop_usd=0.15, protective_stop_1dte_usd=0.30, fail_sec_1dte=null,
 recover_lost_owned=true, orphan_adopt_flattens=true,
-skip_1min_rip=true, one_min_rip_usd=0.20, trend_3m_min_usd=0.20.
+skip_1min_rip=true, one_min_rip_usd=0.20, trend_3m_min_usd=0.20,
+skip_1min_stall=true, stall_1m_usd=0.08.
 A 10:01 0DTE must be skip_0dte_open_fade on SMS AND BTO. A 10:14 0DTE BEAR
 must be skip_0dte_open_fade. A 12:44 0DTE BULL must be skip_0dte_near_cutover.
 An 11:48 0DTE and a 15:16 1DTE must still SEND and POST.
@@ -166,6 +179,8 @@ A 1DTE 7-lot 2.71→2.16 must flatten_protective. A true orphan (no fill stamp)
 must flatten_orphan_adopt through before_stc. A 3s fill is still fresh_fill.
 A 11:42 1-min +0.44 / 3-min +0.12 must be skip_1min_rip on SMS AND BTO.
 A 10:54 BEAR 1-min −0.28 / 3-min −0.87 must still SEND and POST.
+A 10/5 10:58 BULL +0.03 / +0.505 must be skip_1min_stall.
+A 10/5 12:22 BULL +0.175 / +0.235 must still SEND and POST.
 A 16-lot 0.79 fill marked 1.67 must HOLD. Marked 1.63 after that high
 must flatten_peak_giveback. Do not sit to fill-0.15 (0.64).
 

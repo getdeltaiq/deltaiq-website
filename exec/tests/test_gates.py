@@ -895,12 +895,14 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-05-peak-lock")
+        self.assertEqual(h["rec_book_ship"], "2026-10-06-1min-stall")
         self.assertTrue(h["protect_from_high"])
         self.assertEqual(h["peak_giveback_usd"], 50.0)
         self.assertTrue(h["skip_1min_rip"])
         self.assertEqual(h["one_min_rip_usd"], 0.20)
         self.assertEqual(h["trend_3m_min_usd"], 0.20)
+        self.assertTrue(h["skip_1min_stall"])
+        self.assertEqual(h["stall_1m_usd"], 0.08)
         self.assertEqual(h["protective_stop_1dte_usd"], 0.30)
         self.assertIsNone(h["fail_sec_1dte"])
         self.assertTrue(h["recover_lost_owned"])
@@ -1225,6 +1227,59 @@ class OneMinRipTests(unittest.TestCase):
         self.assertIsNone(
             one_bar_rip_skip_reason(
                 direction="BULL", rip_1m_spy=0.14, trend_3m_spy=0.27
+            )
+        )
+
+    def test_oct5_stalled_last_minute_is_skip(self):
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=0.03, trend_3m_spy=0.505
+            ),
+            "skip_1min_stall",
+        )
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=0.02, trend_3m_spy=0.25
+            ),
+            "skip_1min_stall",
+        )
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=0.015, trend_3m_spy=0.22
+            ),
+            "skip_1min_stall",
+        )
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=-0.06, trend_3m_spy=0.64
+            ),
+            "skip_1min_stall",
+        )
+
+    def test_oct5_and_recent_winners_still_send(self):
+        self.assertIsNone(
+            one_bar_rip_skip_reason(
+                direction="BEAR", rip_1m_spy=-0.18, trend_3m_spy=-0.50
+            )
+        )
+        self.assertIsNone(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=0.175, trend_3m_spy=0.235
+            )
+        )
+        self.assertIsNone(
+            one_bar_rip_skip_reason(
+                direction="BEAR", rip_1m_spy=-0.19, trend_3m_spy=-0.43
+            )
+        )
+        self.assertIsNone(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=0.25, trend_3m_spy=0.94
+            )
+        )
+        self.assertIsNone(
+            one_bar_rip_skip_reason(
+                direction="BEAR", rip_1m_spy=-0.24, trend_3m_spy=-0.2577
             )
         )
 

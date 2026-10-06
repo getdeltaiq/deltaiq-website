@@ -18,6 +18,7 @@ from engine.shared.gates import (
     DTE_CUTOVER_ET,
     NEAR_CUTOVER_0DTE_ET,
     OPEN_FADE_WINDOW,
+    STALL_1M_USD,
     signed_spy_deltas,
     sub_action_skip_reason,
     ledger_invariant as _qty_ledger_ok,
@@ -194,4 +195,6 @@ class PublishLedgers:
             "skip_1min_rip": True,
             "one_min_rip_usd": 0.20,
             "trend_3m_min_usd": 0.20,
+            "skip_1min_stall": True,
+            "stall_1m_usd": STALL_1M_USD,
         }

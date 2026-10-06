@@ -105,6 +105,26 @@ class LedgerHierarchyTests(unittest.TestCase):
         )
         self.assertTrue(d["send"])
 
+    def test_1058_stalled_last_minute_is_admin_only(self):
+        d = decide_sub_send(
+            _c(direction="BULL", et_hhmm="10:58", rip_1m_spy=0.03, trend_3m_spy=0.505)
+        )
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_1min_stall")
+
+    def test_1142_oct5_stall_is_admin_only(self):
+        d = decide_sub_send(
+            _c(direction="BULL", et_hhmm="11:42", rip_1m_spy=0.02, trend_3m_spy=0.25)
+        )
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_1min_stall")
+
+    def test_1222_continuing_rip_still_sends(self):
+        d = decide_sub_send(
+            _c(direction="BULL", et_hhmm="12:22", rip_1m_spy=0.175, trend_3m_spy=0.235)
+        )
+        self.assertTrue(d["send"])
+
     def test_missing_1m_3m_is_admin_only(self):
         d = decide_sub_send(_c(rip_1m_spy=None, trend_3m_spy=None))
         self.assertFalse(d["send"])
@@ -330,11 +350,13 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["bto_source"], "sub_alert_send")
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
-        self.assertEqual(h["rec_book_ship"], "2026-10-05-peak-lock")
+        self.assertEqual(h["rec_book_ship"], "2026-10-06-1min-stall")
         self.assertTrue(h["protect_from_high"])
         self.assertEqual(h["peak_giveback_usd"], 50.0)
         self.assertTrue(h["skip_1min_rip"])
         self.assertEqual(h["one_min_rip_usd"], 0.20)
+        self.assertTrue(h["skip_1min_stall"])
+        self.assertEqual(h["stall_1m_usd"], 0.08)
         self.assertTrue(h["recover_lost_owned"])
         self.assertTrue(h["orphan_adopt_flattens"])
         self.assertEqual(h["protective_stop_usd"], 0.15)

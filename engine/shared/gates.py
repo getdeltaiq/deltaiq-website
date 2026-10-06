@@ -93,7 +93,7 @@ WORKING_STC_ON_FILL = False
 # + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:45 (trade it).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-05-peak-lock"
+REC_BOOK_SHIP = "2026-10-06-1min-stall"
 
 
 def rec_book() -> dict:
@@ -144,6 +144,8 @@ def rec_book() -> dict:
         "skip_1min_rip": True,
         "one_min_rip_usd": ONE_MIN_RIP_USD,
         "trend_3m_min_usd": TREND_3M_MIN_USD,
+        "skip_1min_stall": True,
+        "stall_1m_usd": STALL_1M_USD,
         "flatten_limit_thru_usd": 0.0,
         "quote_grace_sec": QUOTE_GRACE_SEC,
         "fail_sec": FAIL_SEC,
@@ -164,6 +166,12 @@ SAME_DIR_LOCK_SEC = 1080.0
 # is admin-only. Overlay must pass signed SPY deltas (up is +).
 ONE_MIN_RIP_USD = 0.20
 TREND_3M_MIN_USD = 0.20
+# 10/5 large losers were 3-minute rips that had already stalled: last
+# minute +$0.02–$0.03 while 3-minute was still ≥ $0.20 (10:58 BULL −$182,
+# 11:42 BULL −$320, 10:40 BULL −$64). Require the last minute still print
+# WITH the send by at least $0.08. 10/5 12:22 +$1,344 was +$0.175 / +$0.235.
+# 9/24 10:43 BEAR, 9/25 11:55 BULL, 9/28 10:42 BEAR, 10/2 10:54 BEAR keep.
+STALL_1M_USD = 0.08
 
 CONSUMED_CREATE_SQL = """\
 CREATE TABLE IF NOT EXISTS consumed_sends (
@@ -220,10 +228,12 @@ def one_bar_rip_skip_reason(
     rip_1m_spy: float | None = None,
     trend_3m_spy: float | None = None,
 ) -> str | None:
-    """Refuse a 1-minute print that is not a 3-minute trend.
+    """Refuse a 1-minute print that is not a 3-minute trend still in motion.
 
     10/2 11:42 +$0.44 bar / 3-minute +$0.12 → skip. 10/2 10:54 BEAR
-    1-minute −$0.28 / 3-minute −$0.87 → send. Missing fields fail closed.
+    1-minute −$0.28 / 3-minute −$0.87 → send. 10/5 10:58 / 11:42 stalled
+    last minute (+$0.03 / +$0.02) after a 3-minute rip → skip_1min_stall.
+    Missing fields fail closed.
     """
     if direction is None or rip_1m_spy is None or trend_3m_spy is None:
         return "skip_1min_unconfirmed"
@@ -236,6 +246,8 @@ def one_bar_rip_skip_reason(
         return "skip_1min_rip"
     if abs(r1) > abs(t3):
         return "skip_1min_rip"
+    if r1 * want < STALL_1M_USD - 1e-9:
+        return "skip_1min_stall"
     return None
 
 
@@ -382,6 +394,7 @@ QUALITY_SKIP_CODES = frozenset(
         "skip_same_dir_lock",
         "skip_1min_rip",
         "skip_1min_unconfirmed",
+        "skip_1min_stall",
         "skip_0dte_open_fade",
         "skip_0dte_near_cutover",
         "skip_not_sub",
@@ -476,7 +489,8 @@ def quality_skip_reason(
     Missing pre_move/chase is a refuse (skip_quality_unknown). 9/29 BTO
     defaulted those kwargs off and bought the overlay-skipped tape.
     10/2 1-minute rips: missing 1m/3m is skip_1min_unconfirmed. A 1-minute
-    print without a 3-minute trend is skip_1min_rip.
+    print without a 3-minute trend is skip_1min_rip. 10/5 stalled last
+    minute (< $0.08 with the send) is skip_1min_stall.
     """
     if choppy or (regime or "").strip().upper() == "CHOPPY":
         return "skip_choppy"
