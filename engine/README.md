@@ -219,10 +219,17 @@ must flatten_peak_giveback. Do not sit to fill-0.15 (0.64).
 ## Test
 
 ```bash
-python3 -m unittest engine.overlay.tests.test_publish exec.tests.test_gates engine.tradier_exec.tests.test_runtime engine.tradier_exec.tests.test_week_replay
+python3 -m unittest engine.overlay.tests.test_publish exec.tests.test_gates engine.tradier_exec.tests.test_runtime engine.tradier_exec.tests.test_week_replay engine.tradier_exec.tests.test_two_week_gates
 python3 -m engine.tradier_exec.replay
 python3 -m engine.tradier_exec.week_replay
+python3 -m engine.tradier_exec.two_week_gates
 ```
+
+Climax + 12:30 1DTE book vs stall-1m, last 11 sessions (9/24–10/8 SPY 1m):
+`python3 -m engine.tradier_exec.two_week_gates`. 17 climax minutes the old
+book would have sent are skipped (including 10/8 12:17). 41 1DTE TREND
+minutes in 12:30–12:44 light up, including 10/8 12:37–12:38. 9/24 10:43,
+9/25 11:55, 9/28 10:42, 10/2 10:54, 10/5 12:22 still SEND.
 
 30 trading days through 9/29, weekly Rec vs live: `python3 -m engine.tradier_exec.week_replay`.
 Rec tape is 9/15–9/29 (envelope + 0DTE fail-streak + extra BTO on RUN + 1DTE skip
