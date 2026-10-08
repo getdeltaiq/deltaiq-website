@@ -8,6 +8,7 @@ from engine.overlay.publish import (
     Candidate,
     PublishLedgers,
     decide_sub_send,
+    in_publish_window,
     with_spy_deltas,
 )
 
@@ -56,6 +57,11 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertEqual(h["pre_move_strong"], 0.50)
         self.assertTrue(h["channels_aligned"])
         self.assertTrue(h["sms_iff_sub_send"])
+        self.assertTrue(h["open_fade_1dte_book"])
+        self.assertEqual(h["rth_start_et"], "09:30")
+        self.assertEqual(h["rth_end_et"], "15:50")
+        self.assertTrue(h["hold_unstamped_fill"])
+        self.assertTrue(h["fail_90_requires_reversal"])
 
     def test_unarmed_is_admin_only(self):
         d = decide_sub_send(_c(armed=False))
@@ -201,6 +207,14 @@ class LedgerHierarchyTests(unittest.TestCase):
         d = decide_sub_send(_c(et_hhmm="09:38"))
         self.assertTrue(d["send"])
 
+    def test_0950_rth_still_sends(self):
+        d = decide_sub_send(_c(et_hhmm="09:50"))
+        self.assertTrue(d["send"])
+
+    def test_0930_rth_open_can_send(self):
+        d = decide_sub_send(_c(et_hhmm="09:30"))
+        self.assertTrue(d["send"])
+
     def test_open_fade_1dte_trend_still_sends(self):
         d = decide_sub_send(_c(et_hhmm="10:14", dte=1, regime="TREND"))
         self.assertTrue(d["send"])
@@ -216,6 +230,12 @@ class LedgerHierarchyTests(unittest.TestCase):
     def test_outside_window_admin_only(self):
         d = decide_sub_send(_c(et_hhmm="09:20"))
         self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_outside_window")
+        self.assertFalse(in_publish_window("09:29"))
+        self.assertTrue(in_publish_window("09:30"))
+        self.assertTrue(in_publish_window("09:50"))
+        self.assertTrue(in_publish_window("15:50"))
+        self.assertFalse(in_publish_window("15:51"))
 
     def test_1001_0dte_is_admin_only(self):
         d = decide_sub_send(_c(et_hhmm="10:01", dte=0))
@@ -351,6 +371,8 @@ class ChannelAlignTests(unittest.TestCase):
             _c(chase_spy=0.55, ts=8.0),
             _c(et_hhmm="11:02", dte=1, regime="RANGE", ts=9.0),
             _c(et_hhmm="09:38", dte=0, ts=10.0),
+            _c(et_hhmm="09:50", dte=0, ts=13.0),
+            _c(et_hhmm="10:14", dte=1, regime="TREND", ts=14.0),
         ]
         for c in cases:
             sms = decide_sub_send(c)
@@ -398,7 +420,7 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["bto_source"], "sub_alert_send")
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
-        self.assertEqual(h["rec_book_ship"], "2026-10-08-climax-1dte-book")
+        self.assertEqual(h["rec_book_ship"], "2026-10-08-rth-hold")
         self.assertTrue(h["protect_from_high"])
         self.assertEqual(h["peak_giveback_usd"], 50.0)
         self.assertTrue(h["skip_1min_rip"])
@@ -409,6 +431,12 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["stall_1m_usd"], 0.08)
         self.assertTrue(h["recover_lost_owned"])
         self.assertTrue(h["orphan_adopt_flattens"])
+        self.assertTrue(h["hold_unstamped_fill"])
+        self.assertEqual(h["fresh_fill_sec"], 15.0)
+        self.assertTrue(h["fail_90_requires_reversal"])
+        self.assertTrue(h["open_fade_1dte_book"])
+        self.assertEqual(h["rth_start_et"], "09:30")
+        self.assertEqual(h["rth_end_et"], "15:50")
         self.assertEqual(h["protective_stop_usd"], 0.15)
         self.assertEqual(h["protective_stop_1dte_usd"], 0.30)
         self.assertIsNone(h["fail_sec_1dte"])

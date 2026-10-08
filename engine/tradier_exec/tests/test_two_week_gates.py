@@ -1,4 +1,4 @@
-"""Climax + 12:30 1DTE book on the last two weeks of SPY 1-minute tape."""
+"""RTH-hold + climax + 1DTE book on the last two weeks of SPY 1-minute tape."""
 
 from __future__ import annotations
 
@@ -93,27 +93,32 @@ class TwoWeekGateReplayTests(unittest.TestCase):
         self.assertEqual(r["dte"], 1)
         self.assertEqual(r["dir"], "BULL")
 
-    def test_1230_book_adds_only_1dte_in_the_old_dark_window(self):
+    def test_1230_book_adds_1dte_in_the_old_dark_window(self):
         added = self.diff["added"]
-        self.assertEqual(len(added), 41)
+        self.assertEqual(len(added), 115)
         for r in added:
             self.assertEqual(r["dte"], 1)
-            self.assertGreaterEqual(r["et"], "12:30")
-            self.assertLess(r["et"], "12:45")
+            fade = "10:00" <= r["et"] <= "10:20"
+            book = "12:30" <= r["et"] < "12:45"
+            self.assertTrue(fade or book, msg=r)
             self.assertTrue(r["send"])
+        book = [r for r in added if "12:30" <= r["et"] < "12:45"]
+        fade = [r for r in added if "10:00" <= r["et"] <= "10:20"]
+        self.assertEqual(len(book), 41)
+        self.assertEqual(len(fade), 74)
         oct8 = [r for r in added if r["day"] == "2026-10-08"]
         ets = {r["et"] for r in oct8}
         self.assertIn("12:37", ets)
         self.assertIn("12:38", ets)
 
-    def test_climax_removes_seventeen_old_sends_including_1217(self):
+    def test_climax_removes_old_sends_including_1217(self):
         removed = self.diff["removed"]
-        self.assertEqual(len(removed), 17)
+        self.assertEqual(len(removed), 19)
         for r in removed:
             self.assertGreaterEqual(abs(r["rip_1m_spy"]), 0.50)
             self.assertGreaterEqual(r["frac"], 0.80)
-        self.assertEqual(self.diff["old_send_n"], 791)
-        self.assertEqual(self.diff["new_send_n"], 815)
+        self.assertEqual(self.diff["old_send_n"], 878)
+        self.assertEqual(self.diff["new_send_n"], 974)
 
     def test_open_fade_0dte_has_no_tape_sends(self):
         fade = [
@@ -123,7 +128,23 @@ class TwoWeekGateReplayTests(unittest.TestCase):
         ]
         self.assertEqual(fade, [])
 
+    def test_former_dark_rth_minutes_are_in_window(self):
+        from engine.overlay.publish import in_publish_window
+
+        self.assertTrue(in_publish_window("09:30"))
+        self.assertTrue(in_publish_window("09:50"))
+        self.assertTrue(in_publish_window("10:14"))
+        self.assertTrue(in_publish_window("15:50"))
+        self.assertFalse(in_publish_window("09:29"))
+        self.assertFalse(in_publish_window("15:51"))
+        gap = [
+            r
+            for r in self.diff["new_sends"]
+            if "09:41" <= r["et"] <= "09:59" or "09:30" <= r["et"] <= "09:35"
+        ]
+        self.assertEqual(len(gap), 85)
+
     def test_walk_tape_matches_overlay_decide(self):
         rows = walk_tape(self.tape)
         self.assertGreater(len(rows), 3000)
-        self.assertEqual(sum(1 for r in rows if r["send"]), 815)
+        self.assertEqual(sum(1 for r in rows if r["send"]), 974)

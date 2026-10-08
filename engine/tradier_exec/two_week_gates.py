@@ -1,8 +1,10 @@
-"""Replay climax + 12:30 1DTE book on two weeks of SPY 1-minute closes.
+"""Replay RTH-hold + climax + 1DTE book on two weeks of SPY 1-minute closes.
 
 Yahoo RTH tape 2026-09-24 through 2026-10-08. No account ids. No broker
 orders. Each bar is TREND, not choppy, chase $0.10. OCC tenor is
-starter_dte_for_clock. This is the skip stack, not inflight / consume-once.
+starter_dte_for_clock (1DTE TREND in 10:00–10:20 and from 12:30).
+Publish window is continuous 09:30–15:50. This is the skip stack, not
+inflight / consume-once.
 
 Oct 8 tape ends 13:47 ET (session still open when the fixture was pulled).
 """

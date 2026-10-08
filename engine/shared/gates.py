@@ -44,6 +44,16 @@ PROTECTIVE_STOP_USD = 0.15
 # into the 15:50 close. 0DTE keeps $0.15 (9/29 16-lot). 1DTE uses $0.30.
 PROTECTIVE_STOP_1DTE_USD = 0.30
 QUOTE_GRACE_SEC = 8.0
+# 10/8 13:20 1DTE filled and recover_lost flattened in 9s because the
+# fill stamp never landed. Unstamped broker qty is a new ticket, not a
+# 90-minute orphan. Stamp and HOLD. Envelope after 15s still clips a
+# real 10/2-style leftover (1DTE $0.30).
+HOLD_UNSTAMPED_FILL = True
+FRESH_FILL_SEC = 15.0
+# 10/8 10:23 / 11:11 0DTE fail_90 fired with no SPY reversal. Immediate
+# STC is only for a major move against the send (bounce $0.30) or the
+# option/protective/cata envelope above. 1DTE still has no fail_90.
+FAIL_90_REQUIRES_REVERSAL = True
 CATASTROPHIC_OPTION_USD = 0.40
 CATASTROPHIC_SPY = 0.50
 FAIL_SEC = 90.0
@@ -53,9 +63,11 @@ FAIL_SEC_1DTE = None
 BOUNCE_AGAINST_SPY = 0.30
 OPEN_REVERSAL_WINDOW = ("10:00", "10:02")
 # 9/30 10:14 BEAR 10-lot 1.84→1.65 −$190. First 20 minutes of the midday
-# 0DTE book is fade tape. 1DTE TREND still posts (9/25). 10:21–12:29 0DTE
-# still posts. Morning 09:36–09:40 rip is a different window.
+# 0DTE book is fade tape, not a dark gap: overlay scores 1DTE TREND here
+# (9/25 runner). 10:21–12:29 0DTE still posts. RTH publish is 09:30–15:50.
 OPEN_FADE_WINDOW = ("10:00", "10:20")
+RTH_START_ET = "09:30"
+RTH_END_ET = "15:50"
 # 9/30 12:44 BULL 16-lot 1.19→1.03 −$256, STC at 12:45 cutover. Do not
 # open a fresh 0DTE in the last 15 minutes of the 0DTE book.
 NEAR_CUTOVER_0DTE_ET = "12:30"
@@ -98,9 +110,12 @@ WORKING_STC_ON_FILL = False
 # Rec scenario (9/15–9/29 replay): envelope + 0DTE halt + extra BTO to 16
 # + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:30 (TREND
 # until 12:45, then trade it). Overlay MUST call starter_dte_for_clock.
+# RTH is 09:30–15:50 with a product at every clock. Open-fade 0DTE stays
+# skip; overlay scores 1DTE TREND in 10:00–10:20. Do not scratch a fill
+# that has no stamp. fail_90 only on a $0.30 SPY reversal.
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-08-climax-1dte-book"
+REC_BOOK_SHIP = "2026-10-08-rth-hold"
 
 
 def rec_book() -> dict:
@@ -121,6 +136,7 @@ def rec_book() -> dict:
         "dte_cutover_et": DTE_CUTOVER_ET,
         "dte_book_et": DTE_BOOK_ET,
         "trade_1dte_from_book_et": True,
+        "open_fade_1dte_book": True,
         "skip_0dte_after_cutover": True,
         "trade_1dte_after_cutover": True,
         "skip_0dte_open_fade": True,
@@ -148,6 +164,9 @@ def rec_book() -> dict:
         "skip_already_flat": True,
         "recover_lost_owned": True,
         "orphan_adopt_flattens": True,
+        "hold_unstamped_fill": HOLD_UNSTAMPED_FILL,
+        "fresh_fill_sec": FRESH_FILL_SEC,
+        "fail_90_requires_reversal": FAIL_90_REQUIRES_REVERSAL,
         "protect_from_high": True,
         "peak_giveback_usd": PEAK_GIVEBACK_USD,
         "skip_1min_rip": True,
@@ -159,6 +178,8 @@ def rec_book() -> dict:
         "stall_1m_usd": STALL_1M_USD,
         "flatten_limit_thru_usd": 0.0,
         "quote_grace_sec": QUOTE_GRACE_SEC,
+        "rth_start_et": RTH_START_ET,
+        "rth_end_et": RTH_END_ET,
         "fail_sec": FAIL_SEC,
         "hold_exit": HOLD_EXIT,
     }
@@ -324,11 +345,14 @@ def past_dte_book(et_hhmm: str, book_et: str = DTE_BOOK_ET) -> bool:
 def starter_dte_for_clock(et_hhmm: str) -> int:
     """OCC tenor overlay must select for a new starter.
 
-    0 before 12:30 (midday 0DTE book: 10:21–12:29 and 09:36–09:40).
-    1 from 12:30 (1DTE TREND until 12:45, then 1DTE book).
-    Do not freeze 0DTE TREND before 12:30.
+    0DTE: 09:30–09:59 and 10:21–12:29 (quality bar still applies).
+    1DTE TREND: 10:00–10:20 (0DTE is skip_0dte_open_fade, not a dark gap)
+    and from 12:30 (TREND until 12:45, then 1DTE book).
+    Do not freeze 0DTE TREND before 12:30 except the 10:00–10:20 fade tape.
     """
     if past_dte_book(et_hhmm):
+        return 1
+    if et_hhmm and hhmm_in_window(et_hhmm, *OPEN_FADE_WINDOW):
         return 1
     return 0
 
@@ -641,6 +665,11 @@ def envelope_hit(
         return "cata_spy"
     fail_s = fail_sec_for(dte)
     if fail_s is not None and seconds_since_fill >= fail_s and ticket_phase == "FAIL":
+        # 10/8: 91s STC with no reversal. Timer scratch only if SPY has
+        # already moved $0.30 against the send. Protective $0.15 / cata
+        # still flatten a real option dump without waiting for SPY.
+        if FAIL_90_REQUIRES_REVERSAL and spy_adverse < BOUNCE_AGAINST_SPY - 1e-9:
+            return None
         return "fail_90"
     return None
 
@@ -824,16 +853,27 @@ class SessionState:
         lost-scan used to return adopt_stc_only even when on_bto_fill had
         stamped the ticket, so a managed 1DTE HOLD looked like an orphan.
         Owned tickets stay on the manage loop (1DTE $0.30 / no fail_90).
-        True orphans are broker qty > 0 with no fill stamp — flatten
-        through before_stc (orphan_adopt), do not HOLD for envelope.
+        Unstamped qty is a live fill when HOLD_UNSTAMPED_FILL: stamp and
+        HOLD. True orphans (HOLD_UNSTAMPED_FILL off) flatten through
+        before_stc (orphan_adopt).
         """
         self.refresh_halt()
         self.orphan_adopt = False
         if broker_qty > 0:
             self.broker_qty = int(broker_qty)
+            t = float(now if now is not None else time.time())
+            if self.ticket_fill_ts is None and HOLD_UNSTAMPED_FILL:
+                # 10/8 13:20: qty up, no stamp, STC in 9s. Missing stamp
+                # is a live fill, not a 90-minute orphan. Stamp and HOLD.
+                # Next scans are owned; envelope still clips a marked-down
+                # leftover (10/2 1DTE $0.30) after FRESH_FILL_SEC.
+                self.ticket_fill_ts = t
+                self.orphan_adopt = False
+                self.last_action = "recover_lost_fresh_fill"
+                return "fresh_fill"
             if self.ticket_fill_ts is not None:
                 age = self.ticket_age_sec(1e9, now=now)
-                if age < max(QUOTE_GRACE_SEC, 15.0):
+                if age < max(QUOTE_GRACE_SEC, FRESH_FILL_SEC):
                     self.last_action = "recover_lost_fresh_fill"
                     return "fresh_fill"
                 self.last_action = "recover_lost_owned"
@@ -1074,9 +1114,10 @@ def decide_stc(state: SessionState, **kwargs) -> dict:
     9/30 10:39 posted STC on BTO fill. Rec hold ticks must not sell.
     9/30 11:04 / 12:02 sprayed the ladder after the bid STC already filled
     (reject 0/14). Never STC when broker qty is 0.
-    10/2 12:52 1DTE: recover_lost adopt_stc_only must flatten here even
-    when envelope has not printed (orphan_adopt). Owned 1DTE HOLDs still
-    wait for $0.30 / ticket_risk / 15:50.
+    10/2 12:52 1DTE: recover_lost adopt_stc_only (HOLD_UNSTAMPED_FILL
+    off) must flatten here even when envelope has not printed
+    (orphan_adopt). Unstamped live fills are fresh_fill. Owned 1DTE
+    HOLDs still wait for $0.30 / ticket_risk / 15:50.
     """
     if "qty" in kwargs and kwargs["qty"] is not None:
         qty = int(kwargs["qty"])

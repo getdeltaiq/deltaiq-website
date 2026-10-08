@@ -17,10 +17,15 @@ from typing import Literal
 from engine.shared.gates import (
     DTE_BOOK_ET,
     DTE_CUTOVER_ET,
+    FAIL_90_REQUIRES_REVERSAL,
+    FRESH_FILL_SEC,
+    HOLD_UNSTAMPED_FILL,
     NEAR_CUTOVER_0DTE_ET,
     ONE_MIN_CLIMAX_FRAC,
     ONE_MIN_CLIMAX_USD,
     OPEN_FADE_WINDOW,
+    RTH_END_ET,
+    RTH_START_ET,
     STALL_1M_USD,
     signed_spy_deltas,
     sub_action_skip_reason,
@@ -50,9 +55,12 @@ SKIP_CHOPPY = True
 SKIP_WEAK_PRE_MOVE = True
 SKIP_STRONG_PRE_MOVE = True
 SKIP_CHASE = True
-MORNING_WINDOW = ("09:36", "09:40")
-MIDDAY_WINDOW = ("10:00", "15:50")
-PUBLISH_END_ET = "15:50"
+# Continuous RTH. 09:41–09:59 used to be skip_outside_window (dark).
+# 10:00–10:20 0DTE stays skip_0dte_open_fade; overlay scores 1DTE TREND.
+RTH_WINDOW = (RTH_START_ET, RTH_END_ET)
+MORNING_WINDOW = RTH_WINDOW
+MIDDAY_WINDOW = RTH_WINDOW
+PUBLISH_END_ET = RTH_END_ET
 
 
 def ledger_invariant(admin_n: int, sub_n: int) -> bool:
@@ -60,11 +68,9 @@ def ledger_invariant(admin_n: int, sub_n: int) -> bool:
 
 
 def in_publish_window(et_hhmm: str) -> bool:
-    if MORNING_WINDOW[0] <= et_hhmm <= MORNING_WINDOW[1]:
-        return True
-    if MIDDAY_WINDOW[0] <= et_hhmm <= MIDDAY_WINDOW[1]:
-        return True
-    return False
+    if not et_hhmm:
+        return False
+    return RTH_START_ET <= et_hhmm <= RTH_END_ET
 
 
 @dataclass(frozen=True)
@@ -190,11 +196,17 @@ class PublishLedgers:
             "same_dir_lock_sec": SAME_DIR_LOCK_SEC,
             "skip_0dte_open_fade": True,
             "open_fade_window": list(OPEN_FADE_WINDOW),
+            "open_fade_1dte_book": True,
             "skip_0dte_near_cutover": True,
             "near_cutover_0dte_et": NEAR_CUTOVER_0DTE_ET,
             "dte_book_et": DTE_BOOK_ET,
             "trade_1dte_from_book_et": True,
             "dte_cutover_et": DTE_CUTOVER_ET,
+            "rth_start_et": RTH_START_ET,
+            "rth_end_et": RTH_END_ET,
+            "hold_unstamped_fill": HOLD_UNSTAMPED_FILL,
+            "fresh_fill_sec": FRESH_FILL_SEC,
+            "fail_90_requires_reversal": FAIL_90_REQUIRES_REVERSAL,
             "channels_aligned": CHANNELS_ALIGNED,
             "sms_iff_sub_send": SMS_IFF_SUB_SEND,
             "skip_1min_rip": True,
