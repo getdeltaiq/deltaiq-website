@@ -50,12 +50,15 @@ Do not lift a halt that is already off. Do not freeze 0DTE TREND before
 12:30. Do not loosen stall $0.08, 3-minute $0.20, chase $0.50, or
 queue_opposite=false. Fewer SUB alerts is correct if they are winners.
 
-Copy these three files from getdeltaiq/deltaiq-website SHA (this PR HEAD)
+Copy these three files from getdeltaiq/deltaiq-website SHA d1a4e30
 onto getdeltaiq/deltaiq-signal-engine production (replace Railway copies):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/overlay/publish.py
-Public raw URLs are pinned after this PR lands. Until then use the PR SHA.
+Public raw (website is public; curl these, do not rewrite knobs):
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/d1a4e308722f5fe30ac6a41c02db93fee66c3c83/engine/shared/gates.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/d1a4e308722f5fe30ac6a41c02db93fee66c3c83/engine/tradier_exec/hooks.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/d1a4e308722f5fe30ac6a41c02db93fee66c3c83/engine/overlay/publish.py
 Wire overlay ingest to stamp every Candidate with with_spy_deltas /
 signed_spy_deltas on the last four 1m SPY closes before decide_sub_send.
 OCC tenor MUST be starter_dte_for_clock(et_hhmm): 0 before 12:30, 1 from
