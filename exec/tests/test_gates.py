@@ -8,6 +8,7 @@ from exec.gates import (
     SessionState,
     bounce_against,
     clock_quality_skip_reason,
+    starter_dte_for_clock,
     decide_manage,
     decide_starter,
     decide_stc,
@@ -805,6 +806,52 @@ class AlertQualityTests(unittest.TestCase):
         self.assertEqual(s.skip_quality_n, 1)
         self.assertEqual(s.session_starters_n, 0)
 
+    def test_1237_1dte_trend_bear_posts(self):
+        """10/8 dump: 12:37 0DTE is dark; 1DTE TREND is the book."""
+        self.assertEqual(starter_dte_for_clock("11:48"), 0)
+        self.assertEqual(starter_dte_for_clock("12:29"), 0)
+        self.assertEqual(starter_dte_for_clock("12:30"), 1)
+        self.assertEqual(starter_dte_for_clock("12:37"), 1)
+        s = new_session("2026-10-08")
+        d = self._starter(
+            s,
+            send_ts=80.0,
+            direction="BEAR",
+            send_spy=775.06,
+            spy=775.06,
+            bar_high=775.20,
+            bar_low=774.90,
+            et_hhmm="12:37",
+            ask=1.40,
+            option_symbol="SPY261009P00775000",
+            regime="TREND",
+            rip_1m_spy=-0.08,
+            trend_3m_spy=-0.35,
+        )
+        self.assertTrue(d["post"])
+        self.assertEqual(d["dte"], 1)
+
+    def test_oct8_1217_climax_is_not_a_sub_starter(self):
+        s = new_session("2026-10-08")
+        d = self._starter(
+            s,
+            send_ts=1217.0,
+            direction="BULL",
+            send_spy=774.77,
+            spy=776.32,
+            bar_high=776.40,
+            bar_low=774.70,
+            et_hhmm="12:17",
+            ask=1.40,
+            option_symbol="SPY261008C00776000",
+            regime="TREND",
+            rip_1m_spy=1.55,
+            trend_3m_spy=1.61,
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_1min_rip")
+        self.assertEqual(s.session_starters_n, 0)
+
     def test_1244_0dte_bull_is_near_cutover(self):
         s = new_session("2026-09-30")
         d = self._starter(
@@ -888,6 +935,11 @@ class AlertQualityTests(unittest.TestCase):
         self.assertIsNone(clock_quality_skip_reason(dte=0, et_hhmm="11:48"))
         self.assertIsNone(clock_quality_skip_reason(dte=1, et_hhmm="10:14"))
         self.assertIsNone(clock_quality_skip_reason(dte=1, et_hhmm="15:16"))
+        self.assertEqual(
+            clock_quality_skip_reason(dte=0, et_hhmm="12:37"),
+            "skip_0dte_near_cutover",
+        )
+        self.assertIsNone(clock_quality_skip_reason(dte=1, et_hhmm="12:37"))
 
 
 class ChannelAlignTests(unittest.TestCase):
@@ -895,14 +947,18 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-06-1min-stall")
+        self.assertEqual(h["rec_book_ship"], "2026-10-08-climax-1dte-book")
         self.assertTrue(h["protect_from_high"])
         self.assertEqual(h["peak_giveback_usd"], 50.0)
         self.assertTrue(h["skip_1min_rip"])
         self.assertEqual(h["one_min_rip_usd"], 0.20)
+        self.assertEqual(h["one_min_climax_frac"], 0.80)
+        self.assertEqual(h["one_min_climax_usd"], 0.50)
         self.assertEqual(h["trend_3m_min_usd"], 0.20)
         self.assertTrue(h["skip_1min_stall"])
         self.assertEqual(h["stall_1m_usd"], 0.08)
+        self.assertEqual(h["dte_book_et"], "12:30")
+        self.assertTrue(h["trade_1dte_from_book_et"])
         self.assertEqual(h["protective_stop_1dte_usd"], 0.30)
         self.assertIsNone(h["fail_sec_1dte"])
         self.assertTrue(h["recover_lost_owned"])
@@ -1220,6 +1276,23 @@ class OneMinRipTests(unittest.TestCase):
         self.assertIsNone(
             one_bar_rip_skip_reason(
                 direction="BEAR", rip_1m_spy=-0.28, trend_3m_spy=-0.87
+            )
+        )
+
+    def test_oct8_1217_spike_is_climax_skip(self):
+        # 10/8 12:17 BULL +$1.55 / +$1.61 — 96% of the 3-minute in one bar.
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=1.55, trend_3m_spy=1.61
+            ),
+            "skip_1min_rip",
+        )
+
+    def test_oct8_dump_minutes_still_send(self):
+        # 12:38 ET: 3-minute dump still printing. 1m is 33% of 3m, not a climax.
+        self.assertIsNone(
+            one_bar_rip_skip_reason(
+                direction="BEAR", rip_1m_spy=-0.22, trend_3m_spy=-0.67
             )
         )
 

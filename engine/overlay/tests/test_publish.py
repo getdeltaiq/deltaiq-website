@@ -166,6 +166,37 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertFalse(d["send"])
         self.assertEqual(d["reason"], "skip_0dte_near_cutover")
 
+    def test_1237_0dte_is_admin_only_1dte_trend_sends(self):
+        d0 = decide_sub_send(
+            _c(
+                et_hhmm="12:37",
+                dte=0,
+                direction="BEAR",
+                rip_1m_spy=-0.08,
+                trend_3m_spy=-0.35,
+            )
+        )
+        self.assertFalse(d0["send"])
+        self.assertEqual(d0["reason"], "skip_0dte_near_cutover")
+        d1 = decide_sub_send(
+            _c(
+                et_hhmm="12:37",
+                dte=1,
+                regime="TREND",
+                direction="BEAR",
+                rip_1m_spy=-0.22,
+                trend_3m_spy=-0.67,
+            )
+        )
+        self.assertTrue(d1["send"])
+
+    def test_oct8_1217_spike_is_admin_only(self):
+        d = decide_sub_send(
+            _c(direction="BULL", et_hhmm="12:17", rip_1m_spy=1.55, trend_3m_spy=1.61)
+        )
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_1min_rip")
+
     def test_morning_rip_still_sends(self):
         d = decide_sub_send(_c(et_hhmm="09:38"))
         self.assertTrue(d["send"])
@@ -299,6 +330,23 @@ class ChannelAlignTests(unittest.TestCase):
             _c(et_hhmm="11:48", dte=0, ts=4.0),
             _c(et_hhmm="12:43", dte=0, ts=5.0),
             _c(et_hhmm="15:16", dte=1, ts=6.0),
+            _c(
+                et_hhmm="12:17",
+                dte=0,
+                direction="BULL",
+                rip_1m_spy=1.55,
+                trend_3m_spy=1.61,
+                ts=11.0,
+            ),
+            _c(
+                et_hhmm="12:37",
+                dte=1,
+                regime="TREND",
+                direction="BEAR",
+                rip_1m_spy=-0.22,
+                trend_3m_spy=-0.67,
+                ts=12.0,
+            ),
             _c(choppy=True, ts=7.0),
             _c(chase_spy=0.55, ts=8.0),
             _c(et_hhmm="11:02", dte=1, regime="RANGE", ts=9.0),
@@ -350,11 +398,13 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["bto_source"], "sub_alert_send")
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
-        self.assertEqual(h["rec_book_ship"], "2026-10-06-1min-stall")
+        self.assertEqual(h["rec_book_ship"], "2026-10-08-climax-1dte-book")
         self.assertTrue(h["protect_from_high"])
         self.assertEqual(h["peak_giveback_usd"], 50.0)
         self.assertTrue(h["skip_1min_rip"])
         self.assertEqual(h["one_min_rip_usd"], 0.20)
+        self.assertEqual(h["one_min_climax_frac"], 0.80)
+        self.assertEqual(h["one_min_climax_usd"], 0.50)
         self.assertTrue(h["skip_1min_stall"])
         self.assertEqual(h["stall_1m_usd"], 0.08)
         self.assertTrue(h["recover_lost_owned"])
@@ -370,6 +420,8 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["extra_bto_fill_to"], 16)
         self.assertTrue(h["skip_1dte_not_trend"])
         self.assertEqual(h["dte_cutover_et"], "12:45")
+        self.assertEqual(h["dte_book_et"], "12:30")
+        self.assertTrue(h["trade_1dte_from_book_et"])
         self.assertTrue(h["skip_0dte_after_cutover"])
         self.assertTrue(h["trade_1dte_after_cutover"])
         self.assertTrue(h["skip_0dte_open_fade"])

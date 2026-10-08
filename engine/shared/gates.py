@@ -59,6 +59,11 @@ OPEN_FADE_WINDOW = ("10:00", "10:20")
 # 9/30 12:44 BULL 16-lot 1.19→1.03 −$256, STC at 12:45 cutover. Do not
 # open a fresh 0DTE in the last 15 minutes of the 0DTE book.
 NEAR_CUTOVER_0DTE_ET = "12:30"
+# 10/8: 12:30–12:44 skipped 0DTE but overlay still scored 0DTE, so the
+# 12:37–12:38 BEAR dump had no product. From 12:30 overlay MUST select
+# 1DTE OCC (TREND still required until 12:45). 0DTE stays the book
+# 10:21–12:29. Do not freeze 0DTE TREND before 12:30.
+DTE_BOOK_ET = NEAR_CUTOVER_0DTE_ET
 EXTRA_BTO_MFE_USD = 0.20
 # 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408). Fill $0.15 stop was 0.64
 # (~$1,650 giveback). Once the ticket prints a high of at least $50,
@@ -73,8 +78,9 @@ CONSECUTIVE_FAIL_HALT = 4
 FAIL_STREAK_0DTE_ONLY = True
 COOLDOWN_AFTER_FAIL_SEC = 480.0
 # 9/28–9/29 misfire: next-day paper in CHOPPY/RANGE/unknown BEFORE cutover.
-# 0DTE may still starter until 12:45. After 12:45 the book is 1DTE — trade it,
-# do not look for 0DTE. Morning 1DTE still needs TREND (9/25 runner).
+# 0DTE may still starter until 12:29. From 12:30 overlay scores 1DTE
+# (TREND required until 12:45). After 12:45 leftover 0DTE is refused.
+# Morning 1DTE still needs TREND (9/25 runner).
 TREND_REGIMES = frozenset({"TREND", "TRENDING"})
 DTE_CUTOVER_ET = "12:45"
 # Cover-us exits are STC ladder → market. Do not hold a loser on trail.
@@ -90,10 +96,11 @@ STC_REQUIRES_ENVELOPE = True
 STC_ON_BTO_FILL = False
 WORKING_STC_ON_FILL = False
 # Rec scenario (9/15–9/29 replay): envelope + 0DTE halt + extra BTO to 16
-# + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:45 (trade it).
+# + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:30 (TREND
+# until 12:45, then trade it). Overlay MUST call starter_dte_for_clock.
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-06-1min-stall"
+REC_BOOK_SHIP = "2026-10-08-climax-1dte-book"
 
 
 def rec_book() -> dict:
@@ -112,6 +119,8 @@ def rec_book() -> dict:
         "extra_bto_mfe_usd": EXTRA_BTO_MFE_USD,
         "skip_1dte_not_trend": True,
         "dte_cutover_et": DTE_CUTOVER_ET,
+        "dte_book_et": DTE_BOOK_ET,
+        "trade_1dte_from_book_et": True,
         "skip_0dte_after_cutover": True,
         "trade_1dte_after_cutover": True,
         "skip_0dte_open_fade": True,
@@ -143,6 +152,8 @@ def rec_book() -> dict:
         "peak_giveback_usd": PEAK_GIVEBACK_USD,
         "skip_1min_rip": True,
         "one_min_rip_usd": ONE_MIN_RIP_USD,
+        "one_min_climax_frac": ONE_MIN_CLIMAX_FRAC,
+        "one_min_climax_usd": ONE_MIN_CLIMAX_USD,
         "trend_3m_min_usd": TREND_3M_MIN_USD,
         "skip_1min_stall": True,
         "stall_1m_usd": STALL_1M_USD,
@@ -166,6 +177,13 @@ SAME_DIR_LOCK_SEC = 1080.0
 # is admin-only. Overlay must pass signed SPY deltas (up is +).
 ONE_MIN_RIP_USD = 0.20
 TREND_3M_MIN_USD = 0.20
+# 10/8 12:17 BULL +$1.55 / +$1.61 (96% of the 3-minute in one bar) was a
+# climax, not a trend. Skip when the last minute is ≥ 80% of the 3-minute
+# AND at least $0.50. Floor stays $0.50 so 9/28 10:42 BEAR −$0.24 / −$0.26
+# (93% but a grind, not a spike) still sends. 10/2 10:54 −$0.28 / −$0.87
+# and 10/5 12:22 +$0.175 / +$0.235 still send.
+ONE_MIN_CLIMAX_FRAC = 0.80
+ONE_MIN_CLIMAX_USD = 0.50
 # 10/5 large losers were 3-minute rips that had already stalled: last
 # minute +$0.02–$0.03 while 3-minute was still ≥ $0.20 (10:58 BULL −$182,
 # 11:42 BULL −$320, 10:40 BULL −$64). Require the last minute still print
@@ -246,6 +264,12 @@ def one_bar_rip_skip_reason(
         return "skip_1min_rip"
     if abs(r1) > abs(t3):
         return "skip_1min_rip"
+    # 10/8 12:17 +$1.55 / +$1.61: one bar did 96% of the 3-minute.
+    if (
+        abs(r1) >= ONE_MIN_CLIMAX_USD - 1e-9
+        and abs(r1) >= abs(t3) * ONE_MIN_CLIMAX_FRAC - 1e-9
+    ):
+        return "skip_1min_rip"
     if r1 * want < STALL_1M_USD - 1e-9:
         return "skip_1min_stall"
     return None
@@ -284,10 +308,29 @@ def option_dte(option_symbol: str | None, session_date: str) -> int | None:
 
 
 def past_dte_cutover(et_hhmm: str, cutover: str = DTE_CUTOVER_ET) -> bool:
-    """True from 12:45 ET onward. Afternoon book is 1DTE."""
+    """True from 12:45 ET onward. Leftover 0DTE is refused."""
     if not et_hhmm:
         return False
     return et_hhmm >= cutover
+
+
+def past_dte_book(et_hhmm: str, book_et: str = DTE_BOOK_ET) -> bool:
+    """True from 12:30 ET. Overlay must score 1DTE; 0DTE is admin-only."""
+    if not et_hhmm:
+        return False
+    return et_hhmm >= book_et
+
+
+def starter_dte_for_clock(et_hhmm: str) -> int:
+    """OCC tenor overlay must select for a new starter.
+
+    0 before 12:30 (midday 0DTE book: 10:21–12:29 and 09:36–09:40).
+    1 from 12:30 (1DTE TREND until 12:45, then 1DTE book).
+    Do not freeze 0DTE TREND before 12:30.
+    """
+    if past_dte_book(et_hhmm):
+        return 1
+    return 0
 
 
 def counts_toward_fail_streak(dte: int | None, et_hhmm: str | None = None) -> bool:
@@ -339,8 +382,9 @@ def misfire_skip_reason(
 ) -> str | None:
     """DTE clock + FAIL cooldown.
 
-    Before 12:45: 0DTE is the book. 1DTE in CHOP/RANGE is skip_1dte_not_trend
-    (9/28 misfire). TREND 1DTE still posts (9/25 runner).
+    0DTE is the midday book through 12:29. From 12:30 overlay scores 1DTE
+    (TREND required until 12:45). 1DTE in CHOP/RANGE is skip_1dte_not_trend
+    (9/28 misfire). TREND 1DTE still posts (9/25 runner, 10/8 12:37 dump).
     From 12:45: all orders are 1DTE. Trade them. Refuse leftover 0DTE
     (skip_0dte_after_cutover). Do not require TREND after cutover — 9/30
     14:06 BEAR was a real sub send that Rec ate as misfire.

@@ -15,8 +15,11 @@ from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from engine.shared.gates import (
+    DTE_BOOK_ET,
     DTE_CUTOVER_ET,
     NEAR_CUTOVER_0DTE_ET,
+    ONE_MIN_CLIMAX_FRAC,
+    ONE_MIN_CLIMAX_USD,
     OPEN_FADE_WINDOW,
     STALL_1M_USD,
     signed_spy_deltas,
@@ -189,11 +192,15 @@ class PublishLedgers:
             "open_fade_window": list(OPEN_FADE_WINDOW),
             "skip_0dte_near_cutover": True,
             "near_cutover_0dte_et": NEAR_CUTOVER_0DTE_ET,
+            "dte_book_et": DTE_BOOK_ET,
+            "trade_1dte_from_book_et": True,
             "dte_cutover_et": DTE_CUTOVER_ET,
             "channels_aligned": CHANNELS_ALIGNED,
             "sms_iff_sub_send": SMS_IFF_SUB_SEND,
             "skip_1min_rip": True,
             "one_min_rip_usd": 0.20,
+            "one_min_climax_frac": ONE_MIN_CLIMAX_FRAC,
+            "one_min_climax_usd": ONE_MIN_CLIMAX_USD,
             "trend_3m_min_usd": 0.20,
             "skip_1min_stall": True,
             "stall_1m_usd": STALL_1M_USD,

@@ -204,7 +204,9 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    1DTE FAILs do not increment consecutive_fail_n.
    Pass option_symbol into before_bto (missing is skip_dte_unknown).
    1DTE without overlay TREND is skip_1dte_not_trend BEFORE 12:45 only.
-   From 12:45 ET: select NEXT-DAY OCC (1DTE). before_bto must POST that 1DTE.
+   From 12:30 ET: overlay selects NEXT-DAY OCC (starter_dte_for_clock=1).
+   TREND still required until 12:45. Leftover 0DTE is skip_0dte_near_cutover.
+   From 12:45 ET: trade 1DTE without TREND. before_bto must POST that 1DTE.
    If option_symbol is still 0DTE after 12:45 => skip_0dte_after_cutover.
    Do not require TREND after cutover. 9/30 14:06 BEAR was skip_misfire — that is the bug.
    on_flatten(realized, phase, dte=option_dte(symbol, session_date), et_hhmm=).
@@ -212,7 +214,7 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-10-06-1min-stall, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-10-08-climax-1dte-book, session_loss_halt_usd=750
    channels_aligned=true, sms_iff_sub_send=true, sms_from=sub_alert_send
    protective_stop_usd=0.15, protective_stop_1dte_usd=0.30, fail_sec_1dte=null
    queue_opposite=false (overwrite Railway true)
@@ -220,12 +222,14 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    stc_requires_envelope=true, stc_on_bto_fill=false, working_stc_on_fill=false
    before_stc=true, post_stc=false until envelope
    fail_streak_0dte_only=true, extra_bto=true, extra_bto_fill_to=16
-   skip_1dte_not_trend=true (morning only), dte_cutover_et=12:45,
+   skip_1dte_not_trend=true (morning only), dte_book_et=12:30,
+   trade_1dte_from_book_et=true, dte_cutover_et=12:45,
    skip_0dte_after_cutover=true, trade_1dte_after_cutover=true,
    skip_0dte_open_fade=true (10:00–10:20 0DTE), skip_0dte_near_cutover=true (12:30–12:44 0DTE),
    skip_already_flat=true, flatten_limit_thru_usd=0,
    recover_lost_owned=true, orphan_adopt_flattens=true,
-   skip_1min_rip=true, one_min_rip_usd=0.20, trend_3m_min_usd=0.20,
+   skip_1min_rip=true, one_min_rip_usd=0.20, one_min_climax_frac=0.80,
+   one_min_climax_usd=0.50, trend_3m_min_usd=0.20,
    skip_1min_stall=true, stall_1m_usd=0.08,
    protect_from_high=true, peak_giveback_usd=50,
    cooldown_after_fail_sec=480
