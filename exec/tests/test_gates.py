@@ -8,6 +8,12 @@ from exec.gates import (
     SessionState,
     bounce_against,
     clock_quality_skip_reason,
+    et_hhmm_from_ts,
+    et_hms_from_ts,
+    locked_et_hhmm,
+    seal_identity,
+    strike_copy,
+    starter_dte_for_clock,
     decide_manage,
     decide_starter,
     decide_stc,
@@ -68,7 +74,7 @@ class ConsumeTests(unittest.TestCase):
         s = new_session("2026-09-29")
         a = decide_starter(
             s,
-            send_ts=1790690414.23,
+            send_ts=1790694120.0,
             direction="BEAR",
             send_spy=764.78,
             spy=764.78,
@@ -84,10 +90,10 @@ class ConsumeTests(unittest.TestCase):
         s.inflight = False
         # flatten without un-consume
         s.on_flatten(-434.0, "FAIL")
-        self.assertIn(1790690414.23, s.consumed)
+        self.assertIn(1790694120.0, s.consumed)
         b = decide_starter(
             s,
-            send_ts=1790690414.23,
+            send_ts=1790694120.0,
             direction="BEAR",
             send_spy=764.78,
             spy=764.90,
@@ -136,8 +142,10 @@ class ConsumeTests(unittest.TestCase):
 
     def test_recover_lost_never_bto(self):
         s = new_session("2026-09-29")
-        self.assertEqual(s.recover_lost(10), "adopt_stc_only")
-        self.assertIn("stc_only", s.last_action)
+        # Unstamped broker qty is a live fill (10/8 13:20), not an orphan.
+        self.assertEqual(s.recover_lost(10), "fresh_fill")
+        self.assertEqual(s.last_action, "recover_lost_fresh_fill")
+        self.assertNotIn("bto", s.last_action)
 
 
 class BounceTests(unittest.TestCase):
@@ -805,6 +813,56 @@ class AlertQualityTests(unittest.TestCase):
         self.assertEqual(s.skip_quality_n, 1)
         self.assertEqual(s.session_starters_n, 0)
 
+    def test_1237_1dte_trend_bear_posts(self):
+        """10/8 dump: 12:37 0DTE is dark; 1DTE TREND is the book."""
+        self.assertEqual(starter_dte_for_clock("09:50"), 0)
+        self.assertEqual(starter_dte_for_clock("10:14"), 1)
+        self.assertEqual(starter_dte_for_clock("10:20"), 1)
+        self.assertEqual(starter_dte_for_clock("10:21"), 0)
+        self.assertEqual(starter_dte_for_clock("11:48"), 0)
+        self.assertEqual(starter_dte_for_clock("12:29"), 0)
+        self.assertEqual(starter_dte_for_clock("12:30"), 1)
+        self.assertEqual(starter_dte_for_clock("12:37"), 1)
+        s = new_session("2026-10-08")
+        d = self._starter(
+            s,
+            send_ts=80.0,
+            direction="BEAR",
+            send_spy=775.06,
+            spy=775.06,
+            bar_high=775.20,
+            bar_low=774.90,
+            et_hhmm="12:37",
+            ask=1.40,
+            option_symbol="SPY261009P00775000",
+            regime="TREND",
+            rip_1m_spy=-0.08,
+            trend_3m_spy=-0.35,
+        )
+        self.assertTrue(d["post"])
+        self.assertEqual(d["dte"], 1)
+
+    def test_oct8_1217_climax_is_not_a_sub_starter(self):
+        s = new_session("2026-10-08")
+        d = self._starter(
+            s,
+            send_ts=1217.0,
+            direction="BULL",
+            send_spy=774.77,
+            spy=776.32,
+            bar_high=776.40,
+            bar_low=774.70,
+            et_hhmm="12:17",
+            ask=1.40,
+            option_symbol="SPY261008C00776000",
+            regime="TREND",
+            rip_1m_spy=1.55,
+            trend_3m_spy=1.61,
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_1min_rip")
+        self.assertEqual(s.session_starters_n, 0)
+
     def test_1244_0dte_bull_is_near_cutover(self):
         s = new_session("2026-09-30")
         d = self._starter(
@@ -888,6 +946,28 @@ class AlertQualityTests(unittest.TestCase):
         self.assertIsNone(clock_quality_skip_reason(dte=0, et_hhmm="11:48"))
         self.assertIsNone(clock_quality_skip_reason(dte=1, et_hhmm="10:14"))
         self.assertIsNone(clock_quality_skip_reason(dte=1, et_hhmm="15:16"))
+        self.assertEqual(
+            clock_quality_skip_reason(dte=0, et_hhmm="12:37"),
+            "skip_0dte_near_cutover",
+        )
+        self.assertIsNone(clock_quality_skip_reason(dte=1, et_hhmm="12:37"))
+
+
+class ClockIdentityTests(unittest.TestCase):
+    def test_live_unix_overrides_legacy_hhmm(self):
+        seal = 1791557156.23214
+        self.assertEqual(et_hhmm_from_ts(seal), "10:45")
+        self.assertEqual(et_hms_from_ts(seal), "10:45:56")
+        self.assertEqual(locked_et_hhmm(seal, "10:32"), "10:45")
+        self.assertEqual(locked_et_hhmm(1102.0, "11:02"), "11:02")
+
+    def test_bear_seal_is_not_bull_sms_copy(self):
+        ident = seal_identity(1791558455.695518, "BEAR", 776.92, "11:04")
+        self.assertEqual(ident["et_hhmm"], "11:07")
+        self.assertEqual(ident["et_hms"], "11:07:35")
+        self.assertEqual(ident["publication_et"], "11:07:35")
+        self.assertEqual(ident["strike_kind"], "put")
+        self.assertEqual(strike_copy("BULL", 777.41)["kind"], "call")
 
 
 class ChannelAlignTests(unittest.TestCase):
@@ -895,14 +975,30 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-06-1min-stall")
+        self.assertEqual(h["rec_book_ship"], "2026-10-09-min-hold")
+        self.assertEqual(h["min_hold_sec"], 90.0)
+        self.assertTrue(h["clock_identity_lock"])
+        self.assertTrue(h["sms_at_seal"])
+        self.assertEqual(h["clock"], "America/New_York unix send instant")
+        self.assertEqual(h["clock_fallback"], "historical_audits_only")
         self.assertTrue(h["protect_from_high"])
         self.assertEqual(h["peak_giveback_usd"], 50.0)
+        self.assertEqual(h["peak_giveback_min_sec"], 90.0)
         self.assertTrue(h["skip_1min_rip"])
         self.assertEqual(h["one_min_rip_usd"], 0.20)
+        self.assertEqual(h["one_min_climax_frac"], 0.80)
+        self.assertEqual(h["one_min_climax_usd"], 0.50)
         self.assertEqual(h["trend_3m_min_usd"], 0.20)
         self.assertTrue(h["skip_1min_stall"])
         self.assertEqual(h["stall_1m_usd"], 0.08)
+        self.assertEqual(h["dte_book_et"], "12:30")
+        self.assertTrue(h["trade_1dte_from_book_et"])
+        self.assertTrue(h["open_fade_1dte_book"])
+        self.assertEqual(h["rth_start_et"], "09:30")
+        self.assertEqual(h["rth_end_et"], "15:50")
+        self.assertTrue(h["hold_unstamped_fill"])
+        self.assertEqual(h["fresh_fill_sec"], 15.0)
+        self.assertTrue(h["fail_90_requires_reversal"])
         self.assertEqual(h["protective_stop_1dte_usd"], 0.30)
         self.assertIsNone(h["fail_sec_1dte"])
         self.assertTrue(h["recover_lost_owned"])
@@ -1049,13 +1145,27 @@ class AdaptiveProtectTests(unittest.TestCase):
             )
         )
 
-    def test_0dte_still_fail_90(self):
-        self.assertEqual(
+    def test_0dte_fail_90_holds_without_reversal(self):
+        # 10/8 10:23 / 11:11: 91s STC with SPY still with the send.
+        self.assertIsNone(
             envelope_hit(
                 fill_px=1.90,
                 mark_bid=1.85,
                 qty=10,
                 spy_adverse=0.10,
+                seconds_since_fill=95,
+                ticket_phase="FAIL",
+                dte=0,
+            )
+        )
+
+    def test_0dte_fail_90_on_major_reversal(self):
+        self.assertEqual(
+            envelope_hit(
+                fill_px=1.90,
+                mark_bid=1.85,
+                qty=10,
+                spy_adverse=0.30,
                 seconds_since_fill=95,
                 ticket_phase="FAIL",
                 dte=0,
@@ -1138,28 +1248,77 @@ class OrphanAdoptTests(unittest.TestCase):
         self.assertFalse(d["post"])
         self.assertEqual(d.get("reason"), "stc_requires_envelope")
 
-    def test_true_orphan_before_stc_flattens(self):
+    def test_unstamped_qty_is_fresh_fill_not_orphan(self):
+        # 10/8 13:20: filled then recover_lost flattened in 9s (no stamp).
+        from engine.tradier_exec.hooks import before_stc
+
+        s = new_session("2026-10-08")
+        self.assertEqual(s.recover_lost(2, now=1_000.0), "fresh_fill")
+        self.assertFalse(s.orphan_adopt)
+        self.assertEqual(s.last_action, "recover_lost_fresh_fill")
+        self.assertIsNotNone(s.ticket_fill_ts)
+        self.assertEqual(s.recover_lost(2, now=1_009.0), "fresh_fill")
+        d = before_stc(
+            s,
+            fill_px=1.40,
+            mark_bid=1.38,
+            qty=2,
+            spy_adverse=0.05,
+            seconds_since_fill=9,
+            ticket_phase="FAIL",
+            bid=1.38,
+            now=1_009.0,
+            dte=1,
+        )
+        self.assertFalse(d["post"])
+        self.assertFalse(d["flatten"])
+
+    def test_unstamped_then_owned_still_protective_after_15s(self):
+        # 10/2 leftover: first sight stamps; after 15s owned; $0.30 dumps.
+        s = new_session("2026-10-02")
+        self.assertEqual(s.recover_lost(7, now=1_000.0), "fresh_fill")
+        self.assertEqual(s.recover_lost(7, now=1_016.0), "owned")
+        self.assertFalse(s.orphan_adopt)
+        m = decide_manage(
+            s,
+            fill_px=2.71,
+            mark_bid=2.16,
+            qty=7,
+            spy_adverse=0.50,
+            seconds_since_fill=16,
+            ticket_phase="FAIL",
+            bid=2.16,
+            now=1_016.0,
+            dte=1,
+        )
+        self.assertTrue(m["flatten"])
+        self.assertEqual(m["reason"], "protective")
+
+    def test_true_orphan_when_hold_unstamped_off(self):
+        from unittest.mock import patch
+
         from engine.tradier_exec.hooks import before_stc
 
         s = new_session("2026-10-02")
-        self.assertEqual(s.recover_lost(7), "adopt_stc_only")
-        self.assertTrue(s.orphan_adopt)
-        d = before_stc(
-            s,
-            fill_px=2.71,
-            mark_bid=2.60,
-            qty=7,
-            spy_adverse=0.10,
-            seconds_since_fill=90,
-            ticket_phase="FAIL",
-            bid=2.60,
-            dte=1,
-        )
-        self.assertTrue(d["post"])
-        self.assertTrue(d["flatten"])
-        self.assertEqual(d["reason"], "orphan_adopt")
-        self.assertEqual(d["take_exit"], "ladder_to_market")
-        self.assertEqual(s.last_action, "flatten_orphan_adopt")
+        with patch("engine.shared.gates.HOLD_UNSTAMPED_FILL", False):
+            self.assertEqual(s.recover_lost(7), "adopt_stc_only")
+            self.assertTrue(s.orphan_adopt)
+            d = before_stc(
+                s,
+                fill_px=2.71,
+                mark_bid=2.60,
+                qty=7,
+                spy_adverse=0.10,
+                seconds_since_fill=90,
+                ticket_phase="FAIL",
+                bid=2.60,
+                dte=1,
+            )
+            self.assertTrue(d["post"])
+            self.assertTrue(d["flatten"])
+            self.assertEqual(d["reason"], "orphan_adopt")
+            self.assertEqual(d["take_exit"], "ladder_to_market")
+            self.assertEqual(s.last_action, "flatten_orphan_adopt")
 
     def test_fresh_fill_still_not_an_orphan(self):
         s = new_session("2026-10-02")
@@ -1220,6 +1379,23 @@ class OneMinRipTests(unittest.TestCase):
         self.assertIsNone(
             one_bar_rip_skip_reason(
                 direction="BEAR", rip_1m_spy=-0.28, trend_3m_spy=-0.87
+            )
+        )
+
+    def test_oct8_1217_spike_is_climax_skip(self):
+        # 10/8 12:17 BULL +$1.55 / +$1.61 — 96% of the 3-minute in one bar.
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=1.55, trend_3m_spy=1.61
+            ),
+            "skip_1min_rip",
+        )
+
+    def test_oct8_dump_minutes_still_send(self):
+        # 12:38 ET: 3-minute dump still printing. 1m is 33% of 3m, not a climax.
+        self.assertIsNone(
+            one_bar_rip_skip_reason(
+                direction="BEAR", rip_1m_spy=-0.22, trend_3m_spy=-0.67
             )
         )
 
@@ -1487,6 +1663,138 @@ class PeakGivebackTests(unittest.TestCase):
                 peak_unrealized=0.0,
             ),
             "protective",
+        )
+
+    def test_109_62s_flicker_holds_peak_until_90s(self):
+        """10/9 10:45 BULL 13-lot 1.17→1.23 ($78) then STC 62s at 1.10.
+
+        First 90s: HOLD. Fill stop is 1.02, not the print high. After 90s
+        the same giveback is peak_giveback. Skip stack is unchanged.
+        """
+        self.assertIsNone(
+            envelope_hit(
+                fill_px=1.17,
+                mark_bid=1.10,
+                qty=13,
+                spy_adverse=0.05,
+                seconds_since_fill=62,
+                ticket_phase="FAIL",
+                dte=0,
+                peak_unrealized=78.0,
+            )
+        )
+        self.assertEqual(
+            envelope_hit(
+                fill_px=1.17,
+                mark_bid=1.10,
+                qty=13,
+                spy_adverse=0.05,
+                seconds_since_fill=90,
+                ticket_phase="FAIL",
+                dte=0,
+                peak_unrealized=78.0,
+            ),
+            "peak_giveback",
+        )
+        # Fill $0.15 still clips a real dump in the first 90s.
+        self.assertEqual(
+            envelope_hit(
+                fill_px=1.17,
+                mark_bid=1.02,
+                qty=13,
+                spy_adverse=0.05,
+                seconds_since_fill=20,
+                ticket_phase="FAIL",
+                dte=0,
+                peak_unrealized=78.0,
+            ),
+            "protective",
+        )
+
+    def test_109_5s_to_12s_fills_hold_even_if_mislabeled_orphan(self):
+        """10/9 C 5s, D 7s, E 12s: live sold before SPY could move.
+
+        Same 90s min hold as fail_90 / peak. Not a one-day patch.
+        A real dump still clips (fill $0.15 / 1DTE $0.30).
+        """
+        from unittest.mock import patch
+
+        from engine.tradier_exec.hooks import before_stc
+        from exec.gates import flatten_allowed
+
+        self.assertFalse(flatten_allowed(5, "orphan_adopt"))
+        self.assertFalse(flatten_allowed(12, "fail_90"))
+        self.assertFalse(flatten_allowed(62, "peak_giveback"))
+        self.assertTrue(flatten_allowed(12, "protective"))
+        self.assertTrue(flatten_allowed(90, "orphan_adopt"))
+
+        cases = [
+            ("C", 24, 1.235, 1.21, 5, 0),
+            ("D", 14, 1.02, 0.99, 7, 0),
+            ("E", 7, 2.00, 2.02, 12, 1),
+        ]
+        for name, qty, fill, bid, age, dte in cases:
+            s = new_session("2026-10-09")
+            s.on_bto_fill(qty, fill, now=1_000.0)
+            d = decide_stc(
+                s,
+                fill_px=fill,
+                mark_bid=bid,
+                qty=qty,
+                spy_adverse=0.05,
+                seconds_since_fill=age,
+                ticket_phase="FAIL",
+                bid=bid,
+                now=1_000.0 + age,
+                dte=dte,
+            )
+            self.assertFalse(d["post"], msg=name)
+            self.assertFalse(d["flatten"], msg=name)
+
+        s = new_session("2026-10-09")
+        with patch("engine.shared.gates.HOLD_UNSTAMPED_FILL", False):
+            self.assertEqual(s.recover_lost(24, now=1_000.0), "adopt_stc_only")
+            d = before_stc(
+                s,
+                fill_px=1.235,
+                mark_bid=1.21,
+                qty=24,
+                spy_adverse=0.05,
+                seconds_since_fill=5,
+                ticket_phase="FAIL",
+                bid=1.21,
+                now=1_005.0,
+                dte=0,
+            )
+            self.assertFalse(d["post"])
+            self.assertFalse(d["flatten"])
+
+    def test_109_bear_185s_holds_without_spy_reversal(self):
+        s = new_session("2026-10-09")
+        s.on_bto_fill(15, 0.94, now=1_000.0)
+        d = decide_stc(
+            s,
+            fill_px=0.94,
+            mark_bid=0.90,
+            qty=15,
+            spy_adverse=0.10,
+            seconds_since_fill=185,
+            ticket_phase="FAIL",
+            bid=0.90,
+            now=1_185.0,
+            dte=0,
+        )
+        self.assertFalse(d["post"])
+        self.assertIsNone(
+            envelope_hit(
+                fill_px=0.94,
+                mark_bid=0.90,
+                qty=15,
+                spy_adverse=0.10,
+                seconds_since_fill=185,
+                ticket_phase="FAIL",
+                dte=0,
+            )
         )
 
     def test_grace_does_not_sell_the_open(self):

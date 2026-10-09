@@ -175,14 +175,17 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    STC ladder: bid, bid-0.05, bid-0.10, MARKET
    Disable native close_push / flatten_limit_thru_usd (set 0).
    then state.on_flatten(realized, phase)  # MUST NOT delete consumed_sends
-   recover_lost: if last_action is recover_lost_fresh_fill, do NOT STC.
+   recover_lost: if last_action is recover_lost_fresh_fill, do NOT STC
+   (unstamped qty stamps now — 10/8 13:20 9s hole).
    if last_action is recover_lost_owned: on_manage as normal (1DTE HOLD until $0.30).
    if last_action is recover_lost_adopt_stc_only / orphan_adopt: before_stc MUST post.
 
 4) recover_lost
    kind = state.recover_lost(broker_qty)  # NEVER BTO.
+   qty>0 and no stamp: stamp now, fresh_fill (HOLD_UNSTAMPED_FILL).
    fresh_fill: age < 15s, leave it. owned: stamped ticket, manage loop.
-   adopt_stc_only: no fill stamp, orphan_adopt=true, flatten through before_stc.
+   adopt_stc_only: HOLD_UNSTAMPED_FILL false and no fill stamp.
+   10/8 13:20 unstamped qty is a live fill, not a 90-minute orphan.
    10/2 12:52 1DTE 7-lot sat 90m because adopt after 15s on a stamped
    ticket looked like an orphan and before_stc HOLD. Owned != orphan.
 
@@ -204,7 +207,10 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    1DTE FAILs do not increment consecutive_fail_n.
    Pass option_symbol into before_bto (missing is skip_dte_unknown).
    1DTE without overlay TREND is skip_1dte_not_trend BEFORE 12:45 only.
-   From 12:45 ET: select NEXT-DAY OCC (1DTE). before_bto must POST that 1DTE.
+   From 12:30 ET and in 10:00–10:20: overlay selects NEXT-DAY OCC
+   (starter_dte_for_clock=1). TREND still required until 12:45.
+   Leftover 0DTE is skip_0dte_near_cutover. Publish 09:30–15:50.
+   From 12:45 ET: trade 1DTE without TREND. before_bto must POST that 1DTE.
    If option_symbol is still 0DTE after 12:45 => skip_0dte_after_cutover.
    Do not require TREND after cutover. 9/30 14:06 BEAR was skip_misfire — that is the bug.
    on_flatten(realized, phase, dte=option_dte(symbol, session_date), et_hhmm=).
@@ -212,7 +218,13 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-10-06-1min-stall, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-10-09-min-hold, session_loss_halt_usd=750
+   open_fade_1dte_book=true, rth_start_et=09:30, rth_end_et=15:50
+   hold_unstamped_fill=true, fail_90_requires_reversal=true
+   peak_giveback_min_sec=90, min_hold_sec=90
+   clock_identity_lock=true, sms_at_seal=true
+   clock=America/New_York unix send instant
+   clock_fallback=historical_audits_only
    channels_aligned=true, sms_iff_sub_send=true, sms_from=sub_alert_send
    protective_stop_usd=0.15, protective_stop_1dte_usd=0.30, fail_sec_1dte=null
    queue_opposite=false (overwrite Railway true)
@@ -220,14 +232,16 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    stc_requires_envelope=true, stc_on_bto_fill=false, working_stc_on_fill=false
    before_stc=true, post_stc=false until envelope
    fail_streak_0dte_only=true, extra_bto=true, extra_bto_fill_to=16
-   skip_1dte_not_trend=true (morning only), dte_cutover_et=12:45,
+   skip_1dte_not_trend=true (morning only), dte_book_et=12:30,
+   trade_1dte_from_book_et=true, dte_cutover_et=12:45,
    skip_0dte_after_cutover=true, trade_1dte_after_cutover=true,
    skip_0dte_open_fade=true (10:00–10:20 0DTE), skip_0dte_near_cutover=true (12:30–12:44 0DTE),
    skip_already_flat=true, flatten_limit_thru_usd=0,
    recover_lost_owned=true, orphan_adopt_flattens=true,
-   skip_1min_rip=true, one_min_rip_usd=0.20, trend_3m_min_usd=0.20,
+   skip_1min_rip=true, one_min_rip_usd=0.20, one_min_climax_frac=0.80,
+   one_min_climax_usd=0.50, trend_3m_min_usd=0.20,
    skip_1min_stall=true, stall_1m_usd=0.08,
-   protect_from_high=true, peak_giveback_usd=50,
+   protect_from_high=true, peak_giveback_usd=50, peak_giveback_min_sec=90,
    cooldown_after_fail_sec=480
    engine_exit_mode == ladder_to_market (not trail).
    After a real starter: consumed_send_ts nonempty and still nonempty after flatten.
@@ -235,8 +249,10 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    skip_quality_n increments on CHOPPY / weak / chase / unknown / open_fade / near_cutover.
    skip_misfire_n increments on 1DTE-not-trend / cooldown / missing OCC.
    last_stc_ladder == "market" on envelope hit.
-   0DTE −$0.15 still flatten_protective. 1DTE −$0.21 must HOLD. 1DTE 90s FAIL must HOLD.
-   A 16-lot 0.79 marked 1.67 HOLDs. Marked 1.63 after that high is flatten_peak_giveback.
+   0DTE −$0.15 still flatten_protective. 0DTE fail_90 only if SPY reversed $0.30.
+   1DTE −$0.21 must HOLD. 1DTE 90s FAIL must HOLD. Unstamped fill is fresh_fill.
+   A 16-lot 0.79 marked 1.67 HOLDs. Marked 1.63 after 90s is flatten_peak_giveback.
+   A 13-lot 1.17→1.10 at 62s with peak $78 HOLDs. Same at 90s is peak_giveback.
    chop_size == false. protect_fills_n increments on $0.15 down or peak_giveback.
    A 1-cent bid scratch in <90s must NOT increment protect_fills_n.
 
@@ -245,6 +261,9 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    Overlay skip_reason and before_bto share sub_action_skip_reason.
    If overlay SMS, Tradier BTO that send (bounce/halt/inflight stay exec-only).
    aligned_copy=false is SMS body, not a non-trade.
+   clock_identity_lock: SMS publication, overlay label, strike copy, and
+   Tradier consume one unix send_ts. Do not use legacy_ledger_hhmm live.
+   SMS only at seal (decide_sub_send send=True).
    Rec scenario is the production book. Do not keep a parallel knob set.
 """
 

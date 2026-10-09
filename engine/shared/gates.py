@@ -9,12 +9,14 @@ Admin ledger is the full candidate set. Sub is the action subset.
 
 from __future__ import annotations
 
+import math
 import re
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 Direction = Literal["BULL", "BEAR"]
 HaltReason = Literal[
@@ -44,6 +46,16 @@ PROTECTIVE_STOP_USD = 0.15
 # into the 15:50 close. 0DTE keeps $0.15 (9/29 16-lot). 1DTE uses $0.30.
 PROTECTIVE_STOP_1DTE_USD = 0.30
 QUOTE_GRACE_SEC = 8.0
+# 10/8 13:20 1DTE filled and recover_lost flattened in 9s because the
+# fill stamp never landed. Unstamped broker qty is a new ticket, not a
+# 90-minute orphan. Stamp and HOLD. Envelope after 15s still clips a
+# real 10/2-style leftover (1DTE $0.30).
+HOLD_UNSTAMPED_FILL = True
+FRESH_FILL_SEC = 15.0
+# 10/8 10:23 / 11:11 0DTE fail_90 fired with no SPY reversal. Immediate
+# STC is only for a major move against the send (bounce $0.30) or the
+# option/protective/cata envelope above. 1DTE still has no fail_90.
+FAIL_90_REQUIRES_REVERSAL = True
 CATASTROPHIC_OPTION_USD = 0.40
 CATASTROPHIC_SPY = 0.50
 FAIL_SEC = 90.0
@@ -53,12 +65,19 @@ FAIL_SEC_1DTE = None
 BOUNCE_AGAINST_SPY = 0.30
 OPEN_REVERSAL_WINDOW = ("10:00", "10:02")
 # 9/30 10:14 BEAR 10-lot 1.84→1.65 −$190. First 20 minutes of the midday
-# 0DTE book is fade tape. 1DTE TREND still posts (9/25). 10:21–12:29 0DTE
-# still posts. Morning 09:36–09:40 rip is a different window.
+# 0DTE book is fade tape, not a dark gap: overlay scores 1DTE TREND here
+# (9/25 runner). 10:21–12:29 0DTE still posts. RTH publish is 09:30–15:50.
 OPEN_FADE_WINDOW = ("10:00", "10:20")
+RTH_START_ET = "09:30"
+RTH_END_ET = "15:50"
 # 9/30 12:44 BULL 16-lot 1.19→1.03 −$256, STC at 12:45 cutover. Do not
 # open a fresh 0DTE in the last 15 minutes of the 0DTE book.
 NEAR_CUTOVER_0DTE_ET = "12:30"
+# 10/8: 12:30–12:44 skipped 0DTE but overlay still scored 0DTE, so the
+# 12:37–12:38 BEAR dump had no product. From 12:30 overlay MUST select
+# 1DTE OCC (TREND still required until 12:45). 0DTE stays the book
+# 10:21–12:29. Do not freeze 0DTE TREND before 12:30.
+DTE_BOOK_ET = NEAR_CUTOVER_0DTE_ET
 EXTRA_BTO_MFE_USD = 0.20
 # 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408). Fill $0.15 stop was 0.64
 # (~$1,650 giveback). Once the ticket prints a high of at least $50,
@@ -66,6 +85,31 @@ EXTRA_BTO_MFE_USD = 0.20
 # on the bid. Fill $0.15 / 1DTE $0.30 still protect tickets that never
 # made a high. Do not STC on fill (9/30 10:39).
 PEAK_GIVEBACK_USD = 50.0
+# 10/9 10:45 BULL 13-lot: fill 1.17, print 1.23 ($78), STC 62s at 1.10.
+# Peak lock on a one-minute flicker dumps the rip. Same $50/$75 giveback
+# still fires after 90s (10/5 773C was minutes, not 62s). First 90s only
+# flatten on fill $0.15 / cata / ticket_risk — not peak, not fail_90
+# without a $0.30 SPY reversal. Do not move the $0.15 stop to the print
+# high. Do not fire a starter $37.50 giveback before 90s.
+PEAK_GIVEBACK_MIN_SEC = FAIL_SEC
+# First 90s of a live fill: only flatten a real dump (fill $0.15 / 1DTE
+# $0.30 / cata / ticket_risk). 10/9 C 5s, D 7s, E 12s, A 62s never got
+# to the move. Same 90s as fail_90 / peak min — not a one-day patch.
+# 10/5 773C still locks after 90s. 10/2 leftover still clips $0.30.
+MIN_HOLD_SEC = FAIL_SEC
+IMMEDIATE_FLATTEN_REASONS = frozenset(
+    {"protective", "ticket_risk", "cata_opt", "cata_spy"}
+)
+# One send identity: unix send_ts in America/New_York is SMS time, overlay
+# label, strike copy, and Tradier consume. Do not use legacy_ledger_hhmm
+# for live SMS (10:32 vs 10:45 same send). Do not SMS at arm/receipt then
+# consume a later opposite seal (11:04 BULL 777/778 vs 11:07 BEAR put).
+ET = ZoneInfo("America/New_York")
+LIVE_SEND_TS_MIN = 1_000_000_000.0
+CLOCK = "America/New_York unix send instant"
+CLOCK_FALLBACK = "historical_audits_only"
+CLOCK_IDENTITY_LOCK = True
+SMS_AT_SEAL = True
 SESSION_LOSS_HALT_USD = 750.0  # 3 envelope misses (~$240) before the day stops
 CONSECUTIVE_FAIL_HALT = 4
 # 9/28: 1DTE wiggles printed 4 FAILs and halted before the 0DTE 767-put.
@@ -73,8 +117,9 @@ CONSECUTIVE_FAIL_HALT = 4
 FAIL_STREAK_0DTE_ONLY = True
 COOLDOWN_AFTER_FAIL_SEC = 480.0
 # 9/28–9/29 misfire: next-day paper in CHOPPY/RANGE/unknown BEFORE cutover.
-# 0DTE may still starter until 12:45. After 12:45 the book is 1DTE — trade it,
-# do not look for 0DTE. Morning 1DTE still needs TREND (9/25 runner).
+# 0DTE may still starter until 12:29. From 12:30 overlay scores 1DTE
+# (TREND required until 12:45). After 12:45 leftover 0DTE is refused.
+# Morning 1DTE still needs TREND (9/25 runner).
 TREND_REGIMES = frozenset({"TREND", "TRENDING"})
 DTE_CUTOVER_ET = "12:45"
 # Cover-us exits are STC ladder → market. Do not hold a loser on trail.
@@ -90,10 +135,17 @@ STC_REQUIRES_ENVELOPE = True
 STC_ON_BTO_FILL = False
 WORKING_STC_ON_FILL = False
 # Rec scenario (9/15–9/29 replay): envelope + 0DTE halt + extra BTO to 16
-# + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:45 (trade it).
+# + 1DTE skip unless TREND before 12:45 + 1DTE book from 12:30 (TREND
+# until 12:45, then trade it). Overlay MUST call starter_dte_for_clock.
+# RTH is 09:30–15:50 with a product at every clock. Open-fade 0DTE stays
+# skip; overlay scores 1DTE TREND in 10:00–10:20. Do not scratch a fill
+# that has no stamp. fail_90 only on a $0.30 SPY reversal. Peak giveback
+# waits 90s so a 62s option tick cannot flatten a live rip. SMS / overlay
+# / Tradier share one unix send instant (clock identity lock). First
+# 90s of a fill only flatten a real dump (min_hold_sec).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-06-1min-stall"
+REC_BOOK_SHIP = "2026-10-09-min-hold"
 
 
 def rec_book() -> dict:
@@ -112,6 +164,9 @@ def rec_book() -> dict:
         "extra_bto_mfe_usd": EXTRA_BTO_MFE_USD,
         "skip_1dte_not_trend": True,
         "dte_cutover_et": DTE_CUTOVER_ET,
+        "dte_book_et": DTE_BOOK_ET,
+        "trade_1dte_from_book_et": True,
+        "open_fade_1dte_book": True,
         "skip_0dte_after_cutover": True,
         "trade_1dte_after_cutover": True,
         "skip_0dte_open_fade": True,
@@ -139,17 +194,83 @@ def rec_book() -> dict:
         "skip_already_flat": True,
         "recover_lost_owned": True,
         "orphan_adopt_flattens": True,
+        "hold_unstamped_fill": HOLD_UNSTAMPED_FILL,
+        "fresh_fill_sec": FRESH_FILL_SEC,
+        "fail_90_requires_reversal": FAIL_90_REQUIRES_REVERSAL,
         "protect_from_high": True,
         "peak_giveback_usd": PEAK_GIVEBACK_USD,
+        "peak_giveback_min_sec": PEAK_GIVEBACK_MIN_SEC,
         "skip_1min_rip": True,
         "one_min_rip_usd": ONE_MIN_RIP_USD,
+        "one_min_climax_frac": ONE_MIN_CLIMAX_FRAC,
+        "one_min_climax_usd": ONE_MIN_CLIMAX_USD,
         "trend_3m_min_usd": TREND_3M_MIN_USD,
         "skip_1min_stall": True,
         "stall_1m_usd": STALL_1M_USD,
         "flatten_limit_thru_usd": 0.0,
         "quote_grace_sec": QUOTE_GRACE_SEC,
+        "rth_start_et": RTH_START_ET,
+        "rth_end_et": RTH_END_ET,
         "fail_sec": FAIL_SEC,
         "hold_exit": HOLD_EXIT,
+        "clock": CLOCK,
+        "clock_fallback": CLOCK_FALLBACK,
+        "clock_identity_lock": CLOCK_IDENTITY_LOCK,
+        "sms_at_seal": SMS_AT_SEAL,
+        "min_hold_sec": MIN_HOLD_SEC,
+    }
+
+
+def et_hhmm_from_ts(send_ts: float) -> str:
+    return datetime.fromtimestamp(float(send_ts), tz=ET).strftime("%H:%M")
+
+
+def et_hms_from_ts(send_ts: float) -> str:
+    return datetime.fromtimestamp(float(send_ts), tz=ET).strftime("%H:%M:%S")
+
+
+def locked_et_hhmm(send_ts: float, et_hhmm: str | None = None) -> str:
+    """Live sends use unix instant. Replay/tiny ts keep the passed label."""
+    if float(send_ts) >= LIVE_SEND_TS_MIN:
+        return et_hhmm_from_ts(send_ts)
+    return et_hhmm or ""
+
+
+def strike_copy(direction: Direction, spy: float) -> dict:
+    """ITM/OTM from the sealed send. BULL=calls, BEAR=puts.
+
+    10/9 11:04 SMS 777 ITM / 778 OTM at 777.41 is BULL. 11:07 BEAR 776.92
+    is 777 ITM put / 776 OTM put. Do not attach the BULL copy to the BEAR
+    consume.
+    """
+    lo = int(math.floor(float(spy)))
+    if direction == "BULL":
+        return {"itm": lo, "otm": lo + 1, "kind": "call"}
+    return {"itm": lo + 1, "otm": lo, "kind": "put"}
+
+
+def seal_identity(
+    send_ts: float,
+    direction: Direction,
+    spy: float,
+    et_hhmm: str | None = None,
+) -> dict:
+    live = float(send_ts) >= LIVE_SEND_TS_MIN
+    hhmm = locked_et_hhmm(send_ts, et_hhmm)
+    strikes = strike_copy(direction, spy)
+    return {
+        "send_ts": float(send_ts),
+        "et_hhmm": hhmm,
+        "et_hms": et_hms_from_ts(send_ts) if live else None,
+        "direction": direction,
+        "spy": float(spy),
+        "strike_itm": strikes["itm"],
+        "strike_otm": strikes["otm"],
+        "strike_kind": strikes["kind"],
+        "clock": CLOCK,
+        "clock_identity_lock": CLOCK_IDENTITY_LOCK,
+        "sms_at_seal": SMS_AT_SEAL,
+        "publication_et": et_hms_from_ts(send_ts) if live else hhmm,
     }
 
 # 2026-09-29 learn (exec still traded these): weak pre-move 1/9 −$160,
@@ -166,6 +287,13 @@ SAME_DIR_LOCK_SEC = 1080.0
 # is admin-only. Overlay must pass signed SPY deltas (up is +).
 ONE_MIN_RIP_USD = 0.20
 TREND_3M_MIN_USD = 0.20
+# 10/8 12:17 BULL +$1.55 / +$1.61 (96% of the 3-minute in one bar) was a
+# climax, not a trend. Skip when the last minute is ≥ 80% of the 3-minute
+# AND at least $0.50. Floor stays $0.50 so 9/28 10:42 BEAR −$0.24 / −$0.26
+# (93% but a grind, not a spike) still sends. 10/2 10:54 −$0.28 / −$0.87
+# and 10/5 12:22 +$0.175 / +$0.235 still send.
+ONE_MIN_CLIMAX_FRAC = 0.80
+ONE_MIN_CLIMAX_USD = 0.50
 # 10/5 large losers were 3-minute rips that had already stalled: last
 # minute +$0.02–$0.03 while 3-minute was still ≥ $0.20 (10:58 BULL −$182,
 # 11:42 BULL −$320, 10:40 BULL −$64). Require the last minute still print
@@ -246,6 +374,12 @@ def one_bar_rip_skip_reason(
         return "skip_1min_rip"
     if abs(r1) > abs(t3):
         return "skip_1min_rip"
+    # 10/8 12:17 +$1.55 / +$1.61: one bar did 96% of the 3-minute.
+    if (
+        abs(r1) >= ONE_MIN_CLIMAX_USD - 1e-9
+        and abs(r1) >= abs(t3) * ONE_MIN_CLIMAX_FRAC - 1e-9
+    ):
+        return "skip_1min_rip"
     if r1 * want < STALL_1M_USD - 1e-9:
         return "skip_1min_stall"
     return None
@@ -284,10 +418,32 @@ def option_dte(option_symbol: str | None, session_date: str) -> int | None:
 
 
 def past_dte_cutover(et_hhmm: str, cutover: str = DTE_CUTOVER_ET) -> bool:
-    """True from 12:45 ET onward. Afternoon book is 1DTE."""
+    """True from 12:45 ET onward. Leftover 0DTE is refused."""
     if not et_hhmm:
         return False
     return et_hhmm >= cutover
+
+
+def past_dte_book(et_hhmm: str, book_et: str = DTE_BOOK_ET) -> bool:
+    """True from 12:30 ET. Overlay must score 1DTE; 0DTE is admin-only."""
+    if not et_hhmm:
+        return False
+    return et_hhmm >= book_et
+
+
+def starter_dte_for_clock(et_hhmm: str) -> int:
+    """OCC tenor overlay must select for a new starter.
+
+    0DTE: 09:30–09:59 and 10:21–12:29 (quality bar still applies).
+    1DTE TREND: 10:00–10:20 (0DTE is skip_0dte_open_fade, not a dark gap)
+    and from 12:30 (TREND until 12:45, then 1DTE book).
+    Do not freeze 0DTE TREND before 12:30 except the 10:00–10:20 fade tape.
+    """
+    if past_dte_book(et_hhmm):
+        return 1
+    if et_hhmm and hhmm_in_window(et_hhmm, *OPEN_FADE_WINDOW):
+        return 1
+    return 0
 
 
 def counts_toward_fail_streak(dte: int | None, et_hhmm: str | None = None) -> bool:
@@ -339,8 +495,9 @@ def misfire_skip_reason(
 ) -> str | None:
     """DTE clock + FAIL cooldown.
 
-    Before 12:45: 0DTE is the book. 1DTE in CHOP/RANGE is skip_1dte_not_trend
-    (9/28 misfire). TREND 1DTE still posts (9/25 runner).
+    0DTE is the midday book through 12:29. From 12:30 overlay scores 1DTE
+    (TREND required until 12:45). 1DTE in CHOP/RANGE is skip_1dte_not_trend
+    (9/28 misfire). TREND 1DTE still posts (9/25 runner, 10/8 12:37 dump).
     From 12:45: all orders are 1DTE. Trade them. Refuse leftover 0DTE
     (skip_0dte_after_cutover). Do not require TREND after cutover — 9/30
     14:06 BEAR was a real sub send that Rec ate as misfire.
@@ -565,6 +722,16 @@ def fail_sec_for(dte: int | None = None) -> float | None:
     return FAIL_SEC
 
 
+def flatten_allowed(seconds_since_fill: float, reason: EnvelopeReason | str | None) -> bool:
+    """Timer / peak / orphan waits 90s. A real option dump may flatten after quote grace."""
+    if not reason:
+        return False
+    age = float(seconds_since_fill)
+    if reason in IMMEDIATE_FLATTEN_REASONS:
+        return age >= QUOTE_GRACE_SEC - 1e-9
+    return age >= MIN_HOLD_SEC - 1e-9
+
+
 def envelope_hit(
     *,
     fill_px: float,
@@ -584,7 +751,11 @@ def envelope_hit(
     down = round(fill_px - mark_bid, 4)
     u = round(unrealized_dollars(mark_bid, fill_px, qty), 2)
     peak = max(float(peak_unrealized or 0.0), u)
-    if peak >= PEAK_GIVEBACK_USD - 1e-9 and peak - u >= PEAK_GIVEBACK_USD - 1e-9:
+    if (
+        seconds_since_fill >= PEAK_GIVEBACK_MIN_SEC - 1e-9
+        and peak >= PEAK_GIVEBACK_USD - 1e-9
+        and peak - u >= PEAK_GIVEBACK_USD - 1e-9
+    ):
         return "peak_giveback"
     stop = protective_stop_usd(dte)
     if down >= stop:
@@ -597,6 +768,11 @@ def envelope_hit(
         return "cata_spy"
     fail_s = fail_sec_for(dte)
     if fail_s is not None and seconds_since_fill >= fail_s and ticket_phase == "FAIL":
+        # 10/8: 91s STC with no reversal. Timer scratch only if SPY has
+        # already moved $0.30 against the send. Protective $0.15 / cata
+        # still flatten a real option dump without waiting for SPY.
+        if FAIL_90_REQUIRES_REVERSAL and spy_adverse < BOUNCE_AGAINST_SPY - 1e-9:
+            return None
         return "fail_90"
     return None
 
@@ -780,16 +956,27 @@ class SessionState:
         lost-scan used to return adopt_stc_only even when on_bto_fill had
         stamped the ticket, so a managed 1DTE HOLD looked like an orphan.
         Owned tickets stay on the manage loop (1DTE $0.30 / no fail_90).
-        True orphans are broker qty > 0 with no fill stamp — flatten
-        through before_stc (orphan_adopt), do not HOLD for envelope.
+        Unstamped qty is a live fill when HOLD_UNSTAMPED_FILL: stamp and
+        HOLD. True orphans (HOLD_UNSTAMPED_FILL off) flatten through
+        before_stc (orphan_adopt).
         """
         self.refresh_halt()
         self.orphan_adopt = False
         if broker_qty > 0:
             self.broker_qty = int(broker_qty)
+            t = float(now if now is not None else time.time())
+            if self.ticket_fill_ts is None and HOLD_UNSTAMPED_FILL:
+                # 10/8 13:20: qty up, no stamp, STC in 9s. Missing stamp
+                # is a live fill, not a 90-minute orphan. Stamp and HOLD.
+                # Next scans are owned; envelope still clips a marked-down
+                # leftover (10/2 1DTE $0.30) after FRESH_FILL_SEC.
+                self.ticket_fill_ts = t
+                self.orphan_adopt = False
+                self.last_action = "recover_lost_fresh_fill"
+                return "fresh_fill"
             if self.ticket_fill_ts is not None:
                 age = self.ticket_age_sec(1e9, now=now)
-                if age < max(QUOTE_GRACE_SEC, 15.0):
+                if age < max(QUOTE_GRACE_SEC, FRESH_FILL_SEC):
                     self.last_action = "recover_lost_fresh_fill"
                     return "fresh_fill"
                 self.last_action = "recover_lost_owned"
@@ -869,6 +1056,8 @@ def decide_starter(
     if not ledger_ok_placeholder():
         pass
     state.refresh_halt()
+    et_hhmm = locked_et_hhmm(send_ts, et_hhmm)
+    ident = seal_identity(send_ts, direction, send_spy, et_hhmm)
     src = source_skip_reason(
         plot=plot, is_opposite=is_opposite, overlay_queued=overlay_queued
     )
@@ -925,6 +1114,7 @@ def decide_starter(
         "client_order_id": state.last_bto_client_key,
         "dte": dte_val,
         "option_symbol": option_symbol,
+        **ident,
     }
 
 
@@ -979,9 +1169,6 @@ def decide_manage(
         state.broker_qty = int(qty)
         u = round(unrealized_dollars(mark_bid, fill_px, qty), 2)
         state.ticket_peak_unrealized = max(state.ticket_peak_unrealized, max(0.0, u))
-    if state.orphan_adopt and qty > 0:
-        # 10/2 12:52 1DTE: recover_lost then before_stc HOLD left the 7-lot.
-        return flatten_now(state, "orphan_adopt", bid)
     age = state.ticket_age_sec(seconds_since_fill, now=now)
     dte_val = (
         dte
@@ -998,6 +1185,14 @@ def decide_manage(
         dte=dte_val,
         peak_unrealized=state.ticket_peak_unrealized,
     )
+    if reason is not None and flatten_allowed(age, reason):
+        return flatten_now(state, reason, bid)
+    if state.orphan_adopt and qty > 0:
+        # True 90m leftover (HOLD_UNSTAMPED off) still flattens after min hold.
+        # A 5s live fill must not be sold as orphan_adopt (10/9 C/D/E).
+        if flatten_allowed(age, "orphan_adopt"):
+            return flatten_now(state, "orphan_adopt", bid)
+        reason = None
     if reason is None:
         mfe = round(mark_bid - fill_px, 4)
         extra_ok = False
@@ -1021,7 +1216,26 @@ def decide_manage(
                 "extra_bto_qty": extra if extra_ok else 0,
             },
         )
-    return flatten_now(state, reason, bid)
+    if flatten_allowed(age, reason):
+        return flatten_now(state, reason, bid)
+    extra_ok = False
+    extra = 0
+    return apply_manage_result(
+        state,
+        {
+            "action": "hold",
+            "flatten": False,
+            "post_stc": False,
+            "working_stc": False,
+            "override_trail": False,
+            "ignore_trail": False,
+            "engine_exit_mode": ENGINE_EXIT_MODE,
+            "ticket_phase": state.ticket_phase,
+            "extra_bto": extra_ok,
+            "extra_bto_qty": extra,
+            "reason": "min_hold",
+        },
+    )
 
 
 def decide_stc(state: SessionState, **kwargs) -> dict:
@@ -1030,9 +1244,10 @@ def decide_stc(state: SessionState, **kwargs) -> dict:
     9/30 10:39 posted STC on BTO fill. Rec hold ticks must not sell.
     9/30 11:04 / 12:02 sprayed the ladder after the bid STC already filled
     (reject 0/14). Never STC when broker qty is 0.
-    10/2 12:52 1DTE: recover_lost adopt_stc_only must flatten here even
-    when envelope has not printed (orphan_adopt). Owned 1DTE HOLDs still
-    wait for $0.30 / ticket_risk / 15:50.
+    10/2 12:52 1DTE: recover_lost adopt_stc_only (HOLD_UNSTAMPED_FILL
+    off) must flatten here even when envelope has not printed
+    (orphan_adopt). Unstamped live fills are fresh_fill. Owned 1DTE
+    HOLDs still wait for $0.30 / ticket_risk / 15:50.
     """
     if "qty" in kwargs and kwargs["qty"] is not None:
         qty = int(kwargs["qty"])
@@ -1052,6 +1267,25 @@ def decide_stc(state: SessionState, **kwargs) -> dict:
             "engine_exit_mode": ENGINE_EXIT_MODE,
         }
     m = decide_manage(state, **kwargs)
+    age = state.ticket_age_sec(
+        float(kwargs.get("seconds_since_fill") or 0.0), now=kwargs.get("now")
+    )
+    if m.get("flatten") and not flatten_allowed(age, m.get("reason")):
+        state.last_action = "hold_min_hold"
+        m = apply_manage_result(
+            state,
+            {
+                "action": "hold",
+                "flatten": False,
+                "post_stc": False,
+                "working_stc": False,
+                "reason": "min_hold",
+                "override_trail": False,
+                "ignore_trail": False,
+                "engine_exit_mode": ENGINE_EXIT_MODE,
+                "ticket_phase": state.ticket_phase,
+            },
+        )
     if not m.get("flatten"):
         state.last_action = "hold_no_stc"
         m["post"] = False

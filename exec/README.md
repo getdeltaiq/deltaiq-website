@@ -28,6 +28,10 @@ Railway is not the source of this logic. **`engine/` is.** This directory is a c
 | CHOPPY / weak / chase still bought | `quality_skip_reason` in `before_bto`; fail closed if fields missing; `chop_size=False` |
 | 1DTE misfire in RANGE/CHOP before 12:45 | `skip_1dte_not_trend` unless `regime=TREND` |
 | After 12:45 still looking for 0DTE / skipping 1DTE | `dte_cutover_et=12:45`; trade 1DTE; `skip_0dte_after_cutover` |
+| 10/8 12:30–12:44 dump had no product | Overlay `starter_dte_for_clock` is 1 from **12:30** and in **10:00–10:20**; leftover 0DTE stays `skip_0dte_near_cutover`; 1DTE TREND posts |
+| 10/8 12:17 +$1.55 / +$1.61 climax then dump | `skip_1min_rip` when last minute ≥ 80% of 3-minute **and** ≥ $0.50 |
+| 10/8 enter then STC in seconds | `fail_90` only if SPY reversed $0.30; unstamped qty is `fresh_fill` not an orphan |
+| 09:41–09:59 overlay dark | Continuous RTH publish **09:30–15:50** |
 | 9/30 10:14 −$190 and 12:44 −$256 sub sends | `skip_0dte_open_fade` 10:00–10:20; `skip_0dte_near_cutover` 12:30–12:44; 1DTE still posts |
 | 10/1 10:01 SUB SMS with no Tradier BTO | Overlay + Tradier share `sub_action_skip_reason`; SMS iff `decide_sub_send`; 10:01 0DTE is admin-only |
 | 10/1 $0.15 clipped 1DTE path winners | 0DTE keep $0.15 + fail_90; 1DTE protective $0.30 and no fail_90; ticket_risk −$240 stays |

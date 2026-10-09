@@ -8,6 +8,7 @@ from engine.overlay.publish import (
     Candidate,
     PublishLedgers,
     decide_sub_send,
+    in_publish_window,
     with_spy_deltas,
 )
 
@@ -56,6 +57,14 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertEqual(h["pre_move_strong"], 0.50)
         self.assertTrue(h["channels_aligned"])
         self.assertTrue(h["sms_iff_sub_send"])
+        self.assertTrue(h["open_fade_1dte_book"])
+        self.assertEqual(h["rth_start_et"], "09:30")
+        self.assertEqual(h["rth_end_et"], "15:50")
+        self.assertTrue(h["hold_unstamped_fill"])
+        self.assertTrue(h["fail_90_requires_reversal"])
+        self.assertTrue(h["clock_identity_lock"])
+        self.assertTrue(h["sms_at_seal"])
+        self.assertEqual(h["clock_fallback"], "historical_audits_only")
 
     def test_unarmed_is_admin_only(self):
         d = decide_sub_send(_c(armed=False))
@@ -166,8 +175,47 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertFalse(d["send"])
         self.assertEqual(d["reason"], "skip_0dte_near_cutover")
 
+    def test_1237_0dte_is_admin_only_1dte_trend_sends(self):
+        d0 = decide_sub_send(
+            _c(
+                et_hhmm="12:37",
+                dte=0,
+                direction="BEAR",
+                rip_1m_spy=-0.08,
+                trend_3m_spy=-0.35,
+            )
+        )
+        self.assertFalse(d0["send"])
+        self.assertEqual(d0["reason"], "skip_0dte_near_cutover")
+        d1 = decide_sub_send(
+            _c(
+                et_hhmm="12:37",
+                dte=1,
+                regime="TREND",
+                direction="BEAR",
+                rip_1m_spy=-0.22,
+                trend_3m_spy=-0.67,
+            )
+        )
+        self.assertTrue(d1["send"])
+
+    def test_oct8_1217_spike_is_admin_only(self):
+        d = decide_sub_send(
+            _c(direction="BULL", et_hhmm="12:17", rip_1m_spy=1.55, trend_3m_spy=1.61)
+        )
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_1min_rip")
+
     def test_morning_rip_still_sends(self):
         d = decide_sub_send(_c(et_hhmm="09:38"))
+        self.assertTrue(d["send"])
+
+    def test_0950_rth_still_sends(self):
+        d = decide_sub_send(_c(et_hhmm="09:50"))
+        self.assertTrue(d["send"])
+
+    def test_0930_rth_open_can_send(self):
+        d = decide_sub_send(_c(et_hhmm="09:30"))
         self.assertTrue(d["send"])
 
     def test_open_fade_1dte_trend_still_sends(self):
@@ -185,6 +233,12 @@ class LedgerHierarchyTests(unittest.TestCase):
     def test_outside_window_admin_only(self):
         d = decide_sub_send(_c(et_hhmm="09:20"))
         self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_outside_window")
+        self.assertFalse(in_publish_window("09:29"))
+        self.assertTrue(in_publish_window("09:30"))
+        self.assertTrue(in_publish_window("09:50"))
+        self.assertTrue(in_publish_window("15:50"))
+        self.assertFalse(in_publish_window("15:51"))
 
     def test_1001_0dte_is_admin_only(self):
         d = decide_sub_send(_c(et_hhmm="10:01", dte=0))
@@ -299,14 +353,34 @@ class ChannelAlignTests(unittest.TestCase):
             _c(et_hhmm="11:48", dte=0, ts=4.0),
             _c(et_hhmm="12:43", dte=0, ts=5.0),
             _c(et_hhmm="15:16", dte=1, ts=6.0),
+            _c(
+                et_hhmm="12:17",
+                dte=0,
+                direction="BULL",
+                rip_1m_spy=1.55,
+                trend_3m_spy=1.61,
+                ts=11.0,
+            ),
+            _c(
+                et_hhmm="12:37",
+                dte=1,
+                regime="TREND",
+                direction="BEAR",
+                rip_1m_spy=-0.22,
+                trend_3m_spy=-0.67,
+                ts=12.0,
+            ),
             _c(choppy=True, ts=7.0),
             _c(chase_spy=0.55, ts=8.0),
             _c(et_hhmm="11:02", dte=1, regime="RANGE", ts=9.0),
             _c(et_hhmm="09:38", dte=0, ts=10.0),
+            _c(et_hhmm="09:50", dte=0, ts=13.0),
+            _c(et_hhmm="10:14", dte=1, regime="TREND", ts=14.0),
         ]
         for c in cases:
             sms = decide_sub_send(c)
             _, bto = self._starter(c)
+            self.assertEqual(sms["sms"], sms["send"])
             self.assertEqual(
                 sms["send"],
                 bto["post"],
@@ -318,6 +392,129 @@ class ChannelAlignTests(unittest.TestCase):
                 "skip_copy",
             ):
                 self.assertEqual(bto["action"], sms["reason"])
+
+    def test_1310_sub_alert_implies_tradier_bto(self):
+        """10/9 13:10 Pushover: if SUB fires, Tradier posts. Same skip if not.
+
+        1DTE BEAR after 12:45 SENDS on SMS and BTO (TREND not required after
+        cutover). Leftover 0DTE is skip_0dte_after_cutover on both.
+        """
+        ts = 1791565838.0  # 13:10:38 ET
+        bear = _c(
+            ts=ts,
+            et_hhmm="13:10",
+            direction="BEAR",
+            spy=777.92,
+            dte=1,
+            regime="RANGE",
+        )
+        sms = decide_sub_send(bear)
+        _, bto = self._starter(bear)
+        self.assertTrue(sms["send"])
+        self.assertTrue(sms["sms"])
+        self.assertTrue(bto["post"])
+        self.assertEqual(sms["reason"], "sub_alert_send")
+        self.assertEqual(bto["action"], "bto")
+        self.assertEqual(sms["strike_kind"], "put")
+        self.assertEqual(sms["strike_itm"], 778)
+        self.assertEqual(sms["strike_otm"], 777)
+        self.assertEqual(sms["et_hhmm"], "13:10")
+        self.assertEqual(bto["send_ts"], sms["send_ts"])
+        self.assertEqual(bto["direction"], sms["direction"])
+
+        leftover = _c(
+            ts=ts,
+            et_hhmm="13:10",
+            direction="BEAR",
+            spy=777.92,
+            dte=0,
+        )
+        sms0 = decide_sub_send(leftover)
+        _, bto0 = self._starter(leftover)
+        self.assertFalse(sms0["send"])
+        self.assertFalse(sms0["sms"])
+        self.assertFalse(bto0["post"])
+        self.assertEqual(sms0["reason"], "skip_0dte_after_cutover")
+        self.assertEqual(bto0["action"], sms0["reason"])
+
+
+class ClockIdentityTests(unittest.TestCase):
+    """SMS time, strike copy, overlay label, and Tradier consume one unix ts."""
+
+    SEAL_1045 = 1791557156.23214  # 10:45:56 ET BULL
+    SEAL_1107 = 1791558455.695518  # 11:07:35 ET BEAR
+    SMS_1104 = 1791558285.0  # 11:04:45 ET publication body
+
+    def test_1045_unix_is_not_device_1032(self):
+        from engine.shared.gates import et_hhmm_from_ts, et_hms_from_ts
+
+        self.assertEqual(et_hhmm_from_ts(self.SEAL_1045), "10:45")
+        self.assertEqual(et_hms_from_ts(self.SEAL_1045), "10:45:56")
+        self.assertNotEqual(et_hhmm_from_ts(self.SEAL_1045), "10:32")
+
+    def test_1104_sms_is_not_1107_seal(self):
+        from engine.shared.gates import et_hms_from_ts, strike_copy
+
+        self.assertEqual(et_hms_from_ts(self.SMS_1104), "11:04:45")
+        self.assertEqual(et_hms_from_ts(self.SEAL_1107), "11:07:35")
+        bull = strike_copy("BULL", 777.41)
+        bear = strike_copy("BEAR", 776.92)
+        self.assertEqual(bull, {"itm": 777, "otm": 778, "kind": "call"})
+        self.assertEqual(bear, {"itm": 777, "otm": 776, "kind": "put"})
+        self.assertNotEqual(bull["kind"], bear["kind"])
+
+    def test_sms_and_bto_use_seal_not_arm_copy(self):
+        c = _c(
+            ts=self.SEAL_1107,
+            et_hhmm="11:04",
+            direction="BEAR",
+            spy=776.92,
+            dte=0,
+        )
+        sms = decide_sub_send(c)
+        self.assertTrue(sms["send"])
+        self.assertTrue(sms["sms"])
+        self.assertEqual(sms["et_hhmm"], "11:07")
+        self.assertEqual(sms["et_hms"], "11:07:35")
+        self.assertEqual(sms["publication_et"], "11:07:35")
+        self.assertEqual(sms["direction"], "BEAR")
+        self.assertEqual(sms["strike_kind"], "put")
+        self.assertEqual(sms["strike_itm"], 777)
+        self.assertEqual(sms["strike_otm"], 776)
+        from engine.shared.gates import decide_starter, new_session
+
+        st = new_session("2026-10-09")
+        bto = decide_starter(
+            st,
+            send_ts=c.ts,
+            direction=c.direction,
+            send_spy=c.spy,
+            spy=c.spy,
+            bar_high=c.spy + 0.05,
+            bar_low=c.spy - 0.05,
+            et_hhmm="11:04",
+            ask=0.94,
+            choppy=False,
+            on_arm_bar=False,
+            pre_move_spy=c.pre_move_spy,
+            chase_spy=c.chase_spy,
+            plot="sub_alert_send",
+            overlay_queued=True,
+            option_symbol="SPY261009P00777000",
+            dte=0,
+            rip_1m_spy=c.rip_1m_spy,
+            trend_3m_spy=c.trend_3m_spy,
+        )
+        self.assertTrue(bto["post"])
+        self.assertEqual(bto["et_hhmm"], sms["et_hhmm"])
+        self.assertEqual(bto["direction"], sms["direction"])
+        self.assertEqual(bto["strike_kind"], sms["strike_kind"])
+        self.assertEqual(bto["send_ts"], sms["send_ts"])
+
+    def test_replay_tiny_ts_keeps_passed_hhmm(self):
+        d = decide_sub_send(_c(ts=1102.0, et_hhmm="11:02"))
+        self.assertEqual(d["et_hhmm"], "11:02")
+        self.assertIsNone(d["et_hms"])
 
 
 class HookHaltTests(unittest.TestCase):
@@ -350,15 +547,29 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["bto_source"], "sub_alert_send")
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
-        self.assertEqual(h["rec_book_ship"], "2026-10-06-1min-stall")
+        self.assertEqual(h["rec_book_ship"], "2026-10-09-min-hold")
+        self.assertEqual(h["min_hold_sec"], 90.0)
+        self.assertTrue(h["clock_identity_lock"])
+        self.assertTrue(h["sms_at_seal"])
+        self.assertEqual(h["clock"], "America/New_York unix send instant")
+        self.assertEqual(h["clock_fallback"], "historical_audits_only")
         self.assertTrue(h["protect_from_high"])
         self.assertEqual(h["peak_giveback_usd"], 50.0)
+        self.assertEqual(h["peak_giveback_min_sec"], 90.0)
         self.assertTrue(h["skip_1min_rip"])
         self.assertEqual(h["one_min_rip_usd"], 0.20)
+        self.assertEqual(h["one_min_climax_frac"], 0.80)
+        self.assertEqual(h["one_min_climax_usd"], 0.50)
         self.assertTrue(h["skip_1min_stall"])
         self.assertEqual(h["stall_1m_usd"], 0.08)
         self.assertTrue(h["recover_lost_owned"])
         self.assertTrue(h["orphan_adopt_flattens"])
+        self.assertTrue(h["hold_unstamped_fill"])
+        self.assertEqual(h["fresh_fill_sec"], 15.0)
+        self.assertTrue(h["fail_90_requires_reversal"])
+        self.assertTrue(h["open_fade_1dte_book"])
+        self.assertEqual(h["rth_start_et"], "09:30")
+        self.assertEqual(h["rth_end_et"], "15:50")
         self.assertEqual(h["protective_stop_usd"], 0.15)
         self.assertEqual(h["protective_stop_1dte_usd"], 0.30)
         self.assertIsNone(h["fail_sec_1dte"])
@@ -370,6 +581,8 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["extra_bto_fill_to"], 16)
         self.assertTrue(h["skip_1dte_not_trend"])
         self.assertEqual(h["dte_cutover_et"], "12:45")
+        self.assertEqual(h["dte_book_et"], "12:30")
+        self.assertTrue(h["trade_1dte_from_book_et"])
         self.assertTrue(h["skip_0dte_after_cutover"])
         self.assertTrue(h["trade_1dte_after_cutover"])
         self.assertTrue(h["skip_0dte_open_fade"])
