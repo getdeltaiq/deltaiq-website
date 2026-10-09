@@ -975,7 +975,8 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-09-rip-hold-clock")
+        self.assertEqual(h["rec_book_ship"], "2026-10-09-min-hold")
+        self.assertEqual(h["min_hold_sec"], 90.0)
         self.assertTrue(h["clock_identity_lock"])
         self.assertTrue(h["sms_at_seal"])
         self.assertEqual(h["clock"], "America/New_York unix send instant")
@@ -1708,6 +1709,92 @@ class PeakGivebackTests(unittest.TestCase):
                 peak_unrealized=78.0,
             ),
             "protective",
+        )
+
+    def test_109_5s_to_12s_fills_hold_even_if_mislabeled_orphan(self):
+        """10/9 C 5s, D 7s, E 12s: live sold before SPY could move.
+
+        Same 90s min hold as fail_90 / peak. Not a one-day patch.
+        A real dump still clips (fill $0.15 / 1DTE $0.30).
+        """
+        from unittest.mock import patch
+
+        from engine.tradier_exec.hooks import before_stc
+        from exec.gates import flatten_allowed
+
+        self.assertFalse(flatten_allowed(5, "orphan_adopt"))
+        self.assertFalse(flatten_allowed(12, "fail_90"))
+        self.assertFalse(flatten_allowed(62, "peak_giveback"))
+        self.assertTrue(flatten_allowed(12, "protective"))
+        self.assertTrue(flatten_allowed(90, "orphan_adopt"))
+
+        cases = [
+            ("C", 24, 1.235, 1.21, 5, 0),
+            ("D", 14, 1.02, 0.99, 7, 0),
+            ("E", 7, 2.00, 2.02, 12, 1),
+        ]
+        for name, qty, fill, bid, age, dte in cases:
+            s = new_session("2026-10-09")
+            s.on_bto_fill(qty, fill, now=1_000.0)
+            d = decide_stc(
+                s,
+                fill_px=fill,
+                mark_bid=bid,
+                qty=qty,
+                spy_adverse=0.05,
+                seconds_since_fill=age,
+                ticket_phase="FAIL",
+                bid=bid,
+                now=1_000.0 + age,
+                dte=dte,
+            )
+            self.assertFalse(d["post"], msg=name)
+            self.assertFalse(d["flatten"], msg=name)
+
+        s = new_session("2026-10-09")
+        with patch("engine.shared.gates.HOLD_UNSTAMPED_FILL", False):
+            self.assertEqual(s.recover_lost(24, now=1_000.0), "adopt_stc_only")
+            d = before_stc(
+                s,
+                fill_px=1.235,
+                mark_bid=1.21,
+                qty=24,
+                spy_adverse=0.05,
+                seconds_since_fill=5,
+                ticket_phase="FAIL",
+                bid=1.21,
+                now=1_005.0,
+                dte=0,
+            )
+            self.assertFalse(d["post"])
+            self.assertFalse(d["flatten"])
+
+    def test_109_bear_185s_holds_without_spy_reversal(self):
+        s = new_session("2026-10-09")
+        s.on_bto_fill(15, 0.94, now=1_000.0)
+        d = decide_stc(
+            s,
+            fill_px=0.94,
+            mark_bid=0.90,
+            qty=15,
+            spy_adverse=0.10,
+            seconds_since_fill=185,
+            ticket_phase="FAIL",
+            bid=0.90,
+            now=1_185.0,
+            dte=0,
+        )
+        self.assertFalse(d["post"])
+        self.assertIsNone(
+            envelope_hit(
+                fill_px=0.94,
+                mark_bid=0.90,
+                qty=15,
+                spy_adverse=0.10,
+                seconds_since_fill=185,
+                ticket_phase="FAIL",
+                dte=0,
+            )
         )
 
     def test_grace_does_not_sell_the_open(self):

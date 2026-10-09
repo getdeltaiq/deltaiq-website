@@ -60,6 +60,8 @@ from engine.shared.gates import (  # noqa: F401
     seal_identity,
     strike_copy,
     envelope_hit,
+    flatten_allowed,
+    MIN_HOLD_SEC,
     fail_sec_for,
     hhmm_in_window,
     ledger_invariant,

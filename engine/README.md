@@ -36,6 +36,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **RTH hold (10/8 scratches):** Do not enter and immediately STC unless SPY reversed **$0.30** against the send. 0DTE `fail_90` holds unless `spy_adverse >= $0.30` (`FAIL_90_REQUIRES_REVERSAL`). Protective $0.15 / cata still flatten a real option dump. Unstamped broker qty is a new ticket (`HOLD_UNSTAMPED_FILL`): stamp and HOLD (10/8 13:20 9s scratch). After 15s the ticket is `owned`; 10/2 leftover still clips at 1DTE $0.30. Overlay stays armed **09:30–15:50** with a product at every clock.
   - **Rip hold (10/9 62s scratch):** Peak giveback does not fire in the first **90s** (`PEAK_GIVEBACK_MIN_SEC`). 10/9 10:45 BULL 13-lot 1.17→1.23 ($78) then STC at 1.10 in 62s dumped the continuation. First 90s only flatten on fill **$0.15** / cata / ticket_risk. Do not move the $0.15 stop to the print high. Do not fire a starter $37.50 giveback before 90s. Skip stack (stall $0.08, 3m $0.20, chase $0.50, climax $0.50/80%) is unchanged, so prior SEND winners stay SEND.
   - **Clock identity (10/9 11:04 SMS vs 11:07 put):** One unix `send_ts` in America/New_York is SMS publication time, overlay label, strike copy, and Tradier consume. Do not use `legacy_ledger_hhmm` for live SMS (10:32 vs 10:45 same send). Do not SMS at arm/receipt then consume a later opposite seal (11:04 BULL 777/778 at 777.41 vs 11:07 BEAR 777 put). `sms_at_seal=true`. `clock_fallback=historical_audits_only`.
+  - **Min hold (10/9 C/D/E 5–12s scratches):** `MIN_HOLD_SEC=90` on **every** flatten except fill `$0.15` / 1DTE `$0.30` / cata / ticket_risk. Live sold C in 5s, D in 7s, E (a winner) in 12s via `orphan_adopt` / `recover_lost_flat` before SPY could move. Same 90s as fail_90 / peak min — not a one-day patch. 10/5 773C still locks after 90s. 10/2 leftover still clips `$0.30`. 9/28 10:42 / 10/2 10:54 / 10/5 12:22 still SEND. Do not STC on BTO fill. Do not fire starter `$37.50` giveback before 90s.
   - **Peak lock (10/5):** A runner’s bid high is the high-water mark. Once unrealized ≥ **$50** **and the ticket is ≥ 90s old**, flatten if the ticket gives back **$50** from that high (`peak_giveback`). 10/5 16-lot 773C 0.79→1.67 (~+$1,408) must NOT sit to the fill $0.15 stop at 0.64. Fill $0.15 / 1DTE $0.30 still protect tickets that never made a high. Quote grace 8s and no STC on fill stay. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
@@ -47,7 +48,7 @@ This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` 
 
 ```
 SHIP TO PRODUCTION NOW. RTH is OPEN. rec_book_ship MUST become
-2026-10-09-rip-hold-clock on /health. ADD six levers on top of the live
+2026-10-09-min-hold on /health. ADD seven levers on top of the live
 climax-1dte-book already on Railway. Do NOT overwrite peak_giveback_usd,
 session_loss_halt_usd, or starter_notional_usd (live independently uses
 $75 / $1125 / $3000). Do NOT fire peak_starter_giveback /
@@ -58,16 +59,13 @@ that is already off. Do not freeze 0DTE TREND before 12:30 except
 chase $0.50, or queue_opposite=false. Fewer SUB alerts is correct if
 they are winners.
 
-Copy these three files from getdeltaiq/deltaiq-website SHA 5b1e3ff
+Copy these three files from getdeltaiq/deltaiq-website SHA (this PR HEAD)
 onto getdeltaiq/deltaiq-signal-engine production (merge knobs; do not
 wholesale-replace live peak / halt / starter size):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/overlay/publish.py
-Public raw (website is public; curl these, do not rewrite knobs):
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/5b1e3ff96f8137177537fa241df58b305a0f947b/engine/shared/gates.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/5b1e3ff96f8137177537fa241df58b305a0f947b/engine/tradier_exec/hooks.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/5b1e3ff96f8137177537fa241df58b305a0f947b/engine/overlay/publish.py
+Public raw URLs are pinned after this commit lands.
 
 1) Continuous RTH: in_publish_window is 09:30–15:50 inclusive.
    Delete the 09:36–09:40 + 10:00–15:50 split. 09:41–09:59 is no longer
@@ -106,12 +104,21 @@ Public raw (website is public; curl these, do not rewrite knobs):
    clock_fallback=historical_audits_only (frozen sessions only).
    overlay_obs.contract.clock stays "America/New_York unix send instant".
 
+7) MIN_HOLD_SEC=90: before_stc / on_manage / recover_lost may flatten
+   in the first 90s ONLY for protective (fill_px − bid), cata, or
+   ticket_risk. orphan_adopt / fail_90 / peak_giveback / recover_lost_flat
+   / starter $37.50 print-high giveback wait 90s. 10/9 C 5s, D 7s, E 12s
+   (even $2.00→$2.02) must HOLD. A 62s $78 flicker HOLDs. A 185s put
+   with spy_adverse $0.10 HOLDs. A 16s 1DTE 2.71→2.16 still
+   flatten_protective. 10/5 773C at 180s still peak_giveback.
+   This is the same 90s clock as fail_90 — not a 10/9-only patch.
+
 Wire overlay ingest to stamp every Candidate with with_spy_deltas /
 signed_spy_deltas on the last four 1m SPY closes before decide_sub_send.
 OCC tenor MUST be starter_dte_for_clock(et_hhmm): 0 at 09:30–09:59 and
 10:21–12:29; 1 in 10:00–10:20 and from 12:30. Leftover 0DTE after 12:30
 is skip_0dte_near_cutover (admin only). rec_book_ship MUST become
-2026-10-09-rip-hold-clock on /health.
+2026-10-09-min-hold on /health.
 
 HIGH-WATER $50 — 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408).
 The fill $0.15 stop (0.64) would give back ~$1,650. That is not the exit.
@@ -240,7 +247,8 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
    if kind == "adopt_stc_only": before_stc MUST post (orphan_adopt). Walk ladder.
    NEVER BTO from recover_lost.
 
-Proof: rec_book_ship=2026-10-09-rip-hold-clock, protect_from_high=true,
+Proof: rec_book_ship=2026-10-09-min-hold, min_hold_sec=90,
+protect_from_high=true,
 clock_identity_lock=true, sms_at_seal=true,
 clock=America/New_York unix send instant,
 clock_fallback=historical_audits_only,
@@ -281,6 +289,10 @@ A 16-lot 0.79 fill marked 1.67 must HOLD. Marked 1.63 after 90s
 must flatten_peak_giveback. Do not sit to fill-0.15 (0.64).
 A 13-lot 1.17 marked 1.10 at 62s with peak $78 must HOLD. Same mark
 at 90s is peak_giveback. Marked 1.02 at 20s is flatten_protective.
+A 24-lot 1.235 marked 1.21 at 5s (10/9 C) must HOLD even if
+orphan_adopt. A 14-lot 1.02 marked 0.99 at 7s (10/9 D) must HOLD.
+A 7-lot 2.00 marked 2.02 at 12s (10/9 E) must HOLD. A 15-lot 0.94
+marked 0.90 at 185s with spy_adverse $0.10 (10/9 B) must HOLD.
 SMS publication time for send_ts 1791557156.23214 is 10:45:56, not 10:32.
 SMS publication time for send_ts 1791558455.695518 is 11:07:35 BEAR puts
 777/776, not 11:04:45 BULL calls 777/778.

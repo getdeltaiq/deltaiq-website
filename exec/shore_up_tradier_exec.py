@@ -218,10 +218,10 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-10-09-rip-hold-clock, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-10-09-min-hold, session_loss_halt_usd=750
    open_fade_1dte_book=true, rth_start_et=09:30, rth_end_et=15:50
    hold_unstamped_fill=true, fail_90_requires_reversal=true
-   peak_giveback_min_sec=90
+   peak_giveback_min_sec=90, min_hold_sec=90
    clock_identity_lock=true, sms_at_seal=true
    clock=America/New_York unix send instant
    clock_fallback=historical_audits_only

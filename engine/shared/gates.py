@@ -92,6 +92,14 @@ PEAK_GIVEBACK_USD = 50.0
 # without a $0.30 SPY reversal. Do not move the $0.15 stop to the print
 # high. Do not fire a starter $37.50 giveback before 90s.
 PEAK_GIVEBACK_MIN_SEC = FAIL_SEC
+# First 90s of a live fill: only flatten a real dump (fill $0.15 / 1DTE
+# $0.30 / cata / ticket_risk). 10/9 C 5s, D 7s, E 12s, A 62s never got
+# to the move. Same 90s as fail_90 / peak min — not a one-day patch.
+# 10/5 773C still locks after 90s. 10/2 leftover still clips $0.30.
+MIN_HOLD_SEC = FAIL_SEC
+IMMEDIATE_FLATTEN_REASONS = frozenset(
+    {"protective", "ticket_risk", "cata_opt", "cata_spy"}
+)
 # One send identity: unix send_ts in America/New_York is SMS time, overlay
 # label, strike copy, and Tradier consume. Do not use legacy_ledger_hhmm
 # for live SMS (10:32 vs 10:45 same send). Do not SMS at arm/receipt then
@@ -133,10 +141,11 @@ WORKING_STC_ON_FILL = False
 # skip; overlay scores 1DTE TREND in 10:00–10:20. Do not scratch a fill
 # that has no stamp. fail_90 only on a $0.30 SPY reversal. Peak giveback
 # waits 90s so a 62s option tick cannot flatten a live rip. SMS / overlay
-# / Tradier share one unix send instant (clock identity lock).
+# / Tradier share one unix send instant (clock identity lock). First
+# 90s of a fill only flatten a real dump (min_hold_sec).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-09-rip-hold-clock"
+REC_BOOK_SHIP = "2026-10-09-min-hold"
 
 
 def rec_book() -> dict:
@@ -208,6 +217,7 @@ def rec_book() -> dict:
         "clock_fallback": CLOCK_FALLBACK,
         "clock_identity_lock": CLOCK_IDENTITY_LOCK,
         "sms_at_seal": SMS_AT_SEAL,
+        "min_hold_sec": MIN_HOLD_SEC,
     }
 
 
@@ -712,6 +722,16 @@ def fail_sec_for(dte: int | None = None) -> float | None:
     return FAIL_SEC
 
 
+def flatten_allowed(seconds_since_fill: float, reason: EnvelopeReason | str | None) -> bool:
+    """Timer / peak / orphan waits 90s. A real option dump may flatten after quote grace."""
+    if not reason:
+        return False
+    age = float(seconds_since_fill)
+    if reason in IMMEDIATE_FLATTEN_REASONS:
+        return age >= QUOTE_GRACE_SEC - 1e-9
+    return age >= MIN_HOLD_SEC - 1e-9
+
+
 def envelope_hit(
     *,
     fill_px: float,
@@ -1149,9 +1169,6 @@ def decide_manage(
         state.broker_qty = int(qty)
         u = round(unrealized_dollars(mark_bid, fill_px, qty), 2)
         state.ticket_peak_unrealized = max(state.ticket_peak_unrealized, max(0.0, u))
-    if state.orphan_adopt and qty > 0:
-        # 10/2 12:52 1DTE: recover_lost then before_stc HOLD left the 7-lot.
-        return flatten_now(state, "orphan_adopt", bid)
     age = state.ticket_age_sec(seconds_since_fill, now=now)
     dte_val = (
         dte
@@ -1168,6 +1185,14 @@ def decide_manage(
         dte=dte_val,
         peak_unrealized=state.ticket_peak_unrealized,
     )
+    if reason is not None and flatten_allowed(age, reason):
+        return flatten_now(state, reason, bid)
+    if state.orphan_adopt and qty > 0:
+        # True 90m leftover (HOLD_UNSTAMPED off) still flattens after min hold.
+        # A 5s live fill must not be sold as orphan_adopt (10/9 C/D/E).
+        if flatten_allowed(age, "orphan_adopt"):
+            return flatten_now(state, "orphan_adopt", bid)
+        reason = None
     if reason is None:
         mfe = round(mark_bid - fill_px, 4)
         extra_ok = False
@@ -1191,7 +1216,26 @@ def decide_manage(
                 "extra_bto_qty": extra if extra_ok else 0,
             },
         )
-    return flatten_now(state, reason, bid)
+    if flatten_allowed(age, reason):
+        return flatten_now(state, reason, bid)
+    extra_ok = False
+    extra = 0
+    return apply_manage_result(
+        state,
+        {
+            "action": "hold",
+            "flatten": False,
+            "post_stc": False,
+            "working_stc": False,
+            "override_trail": False,
+            "ignore_trail": False,
+            "engine_exit_mode": ENGINE_EXIT_MODE,
+            "ticket_phase": state.ticket_phase,
+            "extra_bto": extra_ok,
+            "extra_bto_qty": extra,
+            "reason": "min_hold",
+        },
+    )
 
 
 def decide_stc(state: SessionState, **kwargs) -> dict:
@@ -1223,6 +1267,25 @@ def decide_stc(state: SessionState, **kwargs) -> dict:
             "engine_exit_mode": ENGINE_EXIT_MODE,
         }
     m = decide_manage(state, **kwargs)
+    age = state.ticket_age_sec(
+        float(kwargs.get("seconds_since_fill") or 0.0), now=kwargs.get("now")
+    )
+    if m.get("flatten") and not flatten_allowed(age, m.get("reason")):
+        state.last_action = "hold_min_hold"
+        m = apply_manage_result(
+            state,
+            {
+                "action": "hold",
+                "flatten": False,
+                "post_stc": False,
+                "working_stc": False,
+                "reason": "min_hold",
+                "override_trail": False,
+                "ignore_trail": False,
+                "engine_exit_mode": ENGINE_EXIT_MODE,
+                "ticket_phase": state.ticket_phase,
+            },
+        )
     if not m.get("flatten"):
         state.last_action = "hold_no_stc"
         m["post"] = False
