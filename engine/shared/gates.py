@@ -83,6 +83,13 @@ EXTRA_BTO_MFE_USD = 0.20
 # on the bid. Fill $0.15 / 1DTE $0.30 still protect tickets that never
 # made a high. Do not STC on fill (9/30 10:39).
 PEAK_GIVEBACK_USD = 50.0
+# 10/9 10:45 BULL 13-lot: fill 1.17, print 1.23 ($78), STC 62s at 1.10.
+# Peak lock on a one-minute flicker dumps the rip. Same $50/$75 giveback
+# still fires after 90s (10/5 773C was minutes, not 62s). First 90s only
+# flatten on fill $0.15 / cata / ticket_risk — not peak, not fail_90
+# without a $0.30 SPY reversal. Do not move the $0.15 stop to the print
+# high. Do not fire a starter $37.50 giveback before 90s.
+PEAK_GIVEBACK_MIN_SEC = FAIL_SEC
 SESSION_LOSS_HALT_USD = 750.0  # 3 envelope misses (~$240) before the day stops
 CONSECUTIVE_FAIL_HALT = 4
 # 9/28: 1DTE wiggles printed 4 FAILs and halted before the 0DTE 767-put.
@@ -112,10 +119,11 @@ WORKING_STC_ON_FILL = False
 # until 12:45, then trade it). Overlay MUST call starter_dte_for_clock.
 # RTH is 09:30–15:50 with a product at every clock. Open-fade 0DTE stays
 # skip; overlay scores 1DTE TREND in 10:00–10:20. Do not scratch a fill
-# that has no stamp. fail_90 only on a $0.30 SPY reversal.
+# that has no stamp. fail_90 only on a $0.30 SPY reversal. Peak giveback
+# waits 90s so a 62s option tick cannot flatten a live rip.
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-08-rth-hold"
+REC_BOOK_SHIP = "2026-10-09-rip-hold"
 
 
 def rec_book() -> dict:
@@ -169,6 +177,7 @@ def rec_book() -> dict:
         "fail_90_requires_reversal": FAIL_90_REQUIRES_REVERSAL,
         "protect_from_high": True,
         "peak_giveback_usd": PEAK_GIVEBACK_USD,
+        "peak_giveback_min_sec": PEAK_GIVEBACK_MIN_SEC,
         "skip_1min_rip": True,
         "one_min_rip_usd": ONE_MIN_RIP_USD,
         "one_min_climax_frac": ONE_MIN_CLIMAX_FRAC,
@@ -652,7 +661,11 @@ def envelope_hit(
     down = round(fill_px - mark_bid, 4)
     u = round(unrealized_dollars(mark_bid, fill_px, qty), 2)
     peak = max(float(peak_unrealized or 0.0), u)
-    if peak >= PEAK_GIVEBACK_USD - 1e-9 and peak - u >= PEAK_GIVEBACK_USD - 1e-9:
+    if (
+        seconds_since_fill >= PEAK_GIVEBACK_MIN_SEC - 1e-9
+        and peak >= PEAK_GIVEBACK_USD - 1e-9
+        and peak - u >= PEAK_GIVEBACK_USD - 1e-9
+    ):
         return "peak_giveback"
     stop = protective_stop_usd(dte)
     if down >= stop:

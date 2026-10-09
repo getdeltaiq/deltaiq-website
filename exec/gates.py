@@ -11,6 +11,7 @@ from engine.shared.gates import (  # noqa: F401
     CONSECUTIVE_FAIL_HALT,
     ENGINE_EXIT_MODE,
     EXTRA_BTO_MFE_USD,
+    PEAK_GIVEBACK_MIN_SEC,
     PEAK_GIVEBACK_USD,
     STALL_1M_USD,
     FAIL_SEC,

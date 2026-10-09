@@ -953,9 +953,10 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-08-rth-hold")
+        self.assertEqual(h["rec_book_ship"], "2026-10-09-rip-hold")
         self.assertTrue(h["protect_from_high"])
         self.assertEqual(h["peak_giveback_usd"], 50.0)
+        self.assertEqual(h["peak_giveback_min_sec"], 90.0)
         self.assertTrue(h["skip_1min_rip"])
         self.assertEqual(h["one_min_rip_usd"], 0.20)
         self.assertEqual(h["one_min_climax_frac"], 0.80)
@@ -1633,6 +1634,52 @@ class PeakGivebackTests(unittest.TestCase):
                 seconds_since_fill=12,
                 ticket_phase="FAIL",
                 peak_unrealized=0.0,
+            ),
+            "protective",
+        )
+
+    def test_109_62s_flicker_holds_peak_until_90s(self):
+        """10/9 10:45 BULL 13-lot 1.17→1.23 ($78) then STC 62s at 1.10.
+
+        First 90s: HOLD. Fill stop is 1.02, not the print high. After 90s
+        the same giveback is peak_giveback. Skip stack is unchanged.
+        """
+        self.assertIsNone(
+            envelope_hit(
+                fill_px=1.17,
+                mark_bid=1.10,
+                qty=13,
+                spy_adverse=0.05,
+                seconds_since_fill=62,
+                ticket_phase="FAIL",
+                dte=0,
+                peak_unrealized=78.0,
+            )
+        )
+        self.assertEqual(
+            envelope_hit(
+                fill_px=1.17,
+                mark_bid=1.10,
+                qty=13,
+                spy_adverse=0.05,
+                seconds_since_fill=90,
+                ticket_phase="FAIL",
+                dte=0,
+                peak_unrealized=78.0,
+            ),
+            "peak_giveback",
+        )
+        # Fill $0.15 still clips a real dump in the first 90s.
+        self.assertEqual(
+            envelope_hit(
+                fill_px=1.17,
+                mark_bid=1.02,
+                qty=13,
+                spy_adverse=0.05,
+                seconds_since_fill=20,
+                ticket_phase="FAIL",
+                dte=0,
+                peak_unrealized=78.0,
             ),
             "protective",
         )
