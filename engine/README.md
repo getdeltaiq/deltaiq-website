@@ -59,13 +59,16 @@ that is already off. Do not freeze 0DTE TREND before 12:30 except
 chase $0.50, or queue_opposite=false. Fewer SUB alerts is correct if
 they are winners.
 
-Copy these three files from getdeltaiq/deltaiq-website SHA (this PR HEAD)
+Copy these three files from getdeltaiq/deltaiq-website SHA e6d5b19
 onto getdeltaiq/deltaiq-signal-engine production (merge knobs; do not
 wholesale-replace live peak / halt / starter size):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/overlay/publish.py
-Public raw URLs are pinned after this commit lands.
+Public raw (website is public; curl these, do not rewrite knobs):
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/e6d5b19f7734500e3cf47aeec45d30a75f9870cd/engine/shared/gates.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/e6d5b19f7734500e3cf47aeec45d30a75f9870cd/engine/tradier_exec/hooks.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/e6d5b19f7734500e3cf47aeec45d30a75f9870cd/engine/overlay/publish.py
 
 1) Continuous RTH: in_publish_window is 09:30–15:50 inclusive.
    Delete the 09:36–09:40 + 10:00–15:50 split. 09:41–09:59 is no longer
