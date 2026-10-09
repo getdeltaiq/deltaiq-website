@@ -62,6 +62,9 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertEqual(h["rth_end_et"], "15:50")
         self.assertTrue(h["hold_unstamped_fill"])
         self.assertTrue(h["fail_90_requires_reversal"])
+        self.assertTrue(h["clock_identity_lock"])
+        self.assertTrue(h["sms_at_seal"])
+        self.assertEqual(h["clock_fallback"], "historical_audits_only")
 
     def test_unarmed_is_admin_only(self):
         d = decide_sub_send(_c(armed=False))
@@ -390,6 +393,85 @@ class ChannelAlignTests(unittest.TestCase):
                 self.assertEqual(bto["action"], sms["reason"])
 
 
+class ClockIdentityTests(unittest.TestCase):
+    """SMS time, strike copy, overlay label, and Tradier consume one unix ts."""
+
+    SEAL_1045 = 1791557156.23214  # 10:45:56 ET BULL
+    SEAL_1107 = 1791558455.695518  # 11:07:35 ET BEAR
+    SMS_1104 = 1791558285.0  # 11:04:45 ET publication body
+
+    def test_1045_unix_is_not_device_1032(self):
+        from engine.shared.gates import et_hhmm_from_ts, et_hms_from_ts
+
+        self.assertEqual(et_hhmm_from_ts(self.SEAL_1045), "10:45")
+        self.assertEqual(et_hms_from_ts(self.SEAL_1045), "10:45:56")
+        self.assertNotEqual(et_hhmm_from_ts(self.SEAL_1045), "10:32")
+
+    def test_1104_sms_is_not_1107_seal(self):
+        from engine.shared.gates import et_hms_from_ts, strike_copy
+
+        self.assertEqual(et_hms_from_ts(self.SMS_1104), "11:04:45")
+        self.assertEqual(et_hms_from_ts(self.SEAL_1107), "11:07:35")
+        bull = strike_copy("BULL", 777.41)
+        bear = strike_copy("BEAR", 776.92)
+        self.assertEqual(bull, {"itm": 777, "otm": 778, "kind": "call"})
+        self.assertEqual(bear, {"itm": 777, "otm": 776, "kind": "put"})
+        self.assertNotEqual(bull["kind"], bear["kind"])
+
+    def test_sms_and_bto_use_seal_not_arm_copy(self):
+        c = _c(
+            ts=self.SEAL_1107,
+            et_hhmm="11:04",
+            direction="BEAR",
+            spy=776.92,
+            dte=0,
+        )
+        sms = decide_sub_send(c)
+        self.assertTrue(sms["send"])
+        self.assertTrue(sms["sms"])
+        self.assertEqual(sms["et_hhmm"], "11:07")
+        self.assertEqual(sms["et_hms"], "11:07:35")
+        self.assertEqual(sms["publication_et"], "11:07:35")
+        self.assertEqual(sms["direction"], "BEAR")
+        self.assertEqual(sms["strike_kind"], "put")
+        self.assertEqual(sms["strike_itm"], 777)
+        self.assertEqual(sms["strike_otm"], 776)
+        from engine.shared.gates import decide_starter, new_session
+
+        st = new_session("2026-10-09")
+        bto = decide_starter(
+            st,
+            send_ts=c.ts,
+            direction=c.direction,
+            send_spy=c.spy,
+            spy=c.spy,
+            bar_high=c.spy + 0.05,
+            bar_low=c.spy - 0.05,
+            et_hhmm="11:04",
+            ask=0.94,
+            choppy=False,
+            on_arm_bar=False,
+            pre_move_spy=c.pre_move_spy,
+            chase_spy=c.chase_spy,
+            plot="sub_alert_send",
+            overlay_queued=True,
+            option_symbol="SPY261009P00777000",
+            dte=0,
+            rip_1m_spy=c.rip_1m_spy,
+            trend_3m_spy=c.trend_3m_spy,
+        )
+        self.assertTrue(bto["post"])
+        self.assertEqual(bto["et_hhmm"], sms["et_hhmm"])
+        self.assertEqual(bto["direction"], sms["direction"])
+        self.assertEqual(bto["strike_kind"], sms["strike_kind"])
+        self.assertEqual(bto["send_ts"], sms["send_ts"])
+
+    def test_replay_tiny_ts_keeps_passed_hhmm(self):
+        d = decide_sub_send(_c(ts=1102.0, et_hhmm="11:02"))
+        self.assertEqual(d["et_hhmm"], "11:02")
+        self.assertIsNone(d["et_hms"])
+
+
 class HookHaltTests(unittest.TestCase):
     def test_health_names_github_module(self):
         from engine.shared.gates import new_session
@@ -420,7 +502,11 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["bto_source"], "sub_alert_send")
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
-        self.assertEqual(h["rec_book_ship"], "2026-10-09-rip-hold")
+        self.assertEqual(h["rec_book_ship"], "2026-10-09-rip-hold-clock")
+        self.assertTrue(h["clock_identity_lock"])
+        self.assertTrue(h["sms_at_seal"])
+        self.assertEqual(h["clock"], "America/New_York unix send instant")
+        self.assertEqual(h["clock_fallback"], "historical_audits_only")
         self.assertTrue(h["protect_from_high"])
         self.assertEqual(h["peak_giveback_usd"], 50.0)
         self.assertEqual(h["peak_giveback_min_sec"], 90.0)

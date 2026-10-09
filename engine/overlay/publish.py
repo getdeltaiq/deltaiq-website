@@ -15,6 +15,9 @@ from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from engine.shared.gates import (
+    CLOCK,
+    CLOCK_FALLBACK,
+    CLOCK_IDENTITY_LOCK,
     DTE_BOOK_ET,
     DTE_CUTOVER_ET,
     FAIL_90_REQUIRES_REVERSAL,
@@ -27,7 +30,10 @@ from engine.shared.gates import (
     OPEN_FADE_WINDOW,
     RTH_END_ET,
     RTH_START_ET,
+    SMS_AT_SEAL,
     STALL_1M_USD,
+    locked_et_hhmm,
+    seal_identity,
     signed_spy_deltas,
     sub_action_skip_reason,
     ledger_invariant as _qty_ledger_ok,
@@ -101,6 +107,11 @@ def with_spy_deltas(c: Candidate, closes: Sequence[float] | None) -> Candidate:
     return replace(c, **signed_spy_deltas(closes))
 
 
+def with_clock_identity(c: Candidate) -> Candidate:
+    """Live unix ts overwrites et_hhmm. Replay/tiny ts keep the passed label."""
+    return replace(c, et_hhmm=locked_et_hhmm(c.ts, c.et_hhmm))
+
+
 def skip_reason(c: Candidate) -> str | None:
     """Why this candidate is admin-only (not a subscriber/Tradier send). None = sub send."""
     if not in_publish_window(c.et_hhmm):
@@ -129,10 +140,18 @@ def skip_reason(c: Candidate) -> str | None:
 
 
 def decide_sub_send(c: Candidate) -> dict:
+    c = with_clock_identity(c)
+    ident = seal_identity(c.ts, c.direction, c.spy, c.et_hhmm)
     reason = skip_reason(c)
     if reason is not None:
-        return {"send": False, "reason": reason, "plot": PLOT}
-    return {"send": True, "reason": "sub_alert_send", "plot": PLOT}
+        return {"send": False, "reason": reason, "plot": PLOT, "sms": False, **ident}
+    return {
+        "send": True,
+        "reason": "sub_alert_send",
+        "plot": PLOT,
+        "sms": True,
+        **ident,
+    }
 
 
 @dataclass
@@ -153,6 +172,7 @@ class PublishLedgers:
         return len(self.sub)
 
     def ingest(self, c: Candidate) -> dict:
+        c = with_clock_identity(c)
         self.admin.append(c)
         d = decide_sub_send(c)
         if d["send"]:
@@ -218,4 +238,8 @@ class PublishLedgers:
             "trend_3m_min_usd": 0.20,
             "skip_1min_stall": True,
             "stall_1m_usd": STALL_1M_USD,
+            "clock": CLOCK,
+            "clock_fallback": CLOCK_FALLBACK,
+            "clock_identity_lock": CLOCK_IDENTITY_LOCK,
+            "sms_at_seal": SMS_AT_SEAL,
         }

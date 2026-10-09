@@ -8,6 +8,11 @@ from exec.gates import (
     SessionState,
     bounce_against,
     clock_quality_skip_reason,
+    et_hhmm_from_ts,
+    et_hms_from_ts,
+    locked_et_hhmm,
+    seal_identity,
+    strike_copy,
     starter_dte_for_clock,
     decide_manage,
     decide_starter,
@@ -69,7 +74,7 @@ class ConsumeTests(unittest.TestCase):
         s = new_session("2026-09-29")
         a = decide_starter(
             s,
-            send_ts=1790690414.23,
+            send_ts=1790694120.0,
             direction="BEAR",
             send_spy=764.78,
             spy=764.78,
@@ -85,10 +90,10 @@ class ConsumeTests(unittest.TestCase):
         s.inflight = False
         # flatten without un-consume
         s.on_flatten(-434.0, "FAIL")
-        self.assertIn(1790690414.23, s.consumed)
+        self.assertIn(1790694120.0, s.consumed)
         b = decide_starter(
             s,
-            send_ts=1790690414.23,
+            send_ts=1790694120.0,
             direction="BEAR",
             send_spy=764.78,
             spy=764.90,
@@ -948,12 +953,33 @@ class AlertQualityTests(unittest.TestCase):
         self.assertIsNone(clock_quality_skip_reason(dte=1, et_hhmm="12:37"))
 
 
+class ClockIdentityTests(unittest.TestCase):
+    def test_live_unix_overrides_legacy_hhmm(self):
+        seal = 1791557156.23214
+        self.assertEqual(et_hhmm_from_ts(seal), "10:45")
+        self.assertEqual(et_hms_from_ts(seal), "10:45:56")
+        self.assertEqual(locked_et_hhmm(seal, "10:32"), "10:45")
+        self.assertEqual(locked_et_hhmm(1102.0, "11:02"), "11:02")
+
+    def test_bear_seal_is_not_bull_sms_copy(self):
+        ident = seal_identity(1791558455.695518, "BEAR", 776.92, "11:04")
+        self.assertEqual(ident["et_hhmm"], "11:07")
+        self.assertEqual(ident["et_hms"], "11:07:35")
+        self.assertEqual(ident["publication_et"], "11:07:35")
+        self.assertEqual(ident["strike_kind"], "put")
+        self.assertEqual(strike_copy("BULL", 777.41)["kind"], "call")
+
+
 class ChannelAlignTests(unittest.TestCase):
     """SUB SMS skip stack is the Tradier BTO skip stack (minus live-tape)."""
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-09-rip-hold")
+        self.assertEqual(h["rec_book_ship"], "2026-10-09-rip-hold-clock")
+        self.assertTrue(h["clock_identity_lock"])
+        self.assertTrue(h["sms_at_seal"])
+        self.assertEqual(h["clock"], "America/New_York unix send instant")
+        self.assertEqual(h["clock_fallback"], "historical_audits_only")
         self.assertTrue(h["protect_from_high"])
         self.assertEqual(h["peak_giveback_usd"], 50.0)
         self.assertEqual(h["peak_giveback_min_sec"], 90.0)

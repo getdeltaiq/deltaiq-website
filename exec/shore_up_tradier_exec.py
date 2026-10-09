@@ -218,10 +218,13 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-10-09-rip-hold, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-10-09-rip-hold-clock, session_loss_halt_usd=750
    open_fade_1dte_book=true, rth_start_et=09:30, rth_end_et=15:50
    hold_unstamped_fill=true, fail_90_requires_reversal=true
    peak_giveback_min_sec=90
+   clock_identity_lock=true, sms_at_seal=true
+   clock=America/New_York unix send instant
+   clock_fallback=historical_audits_only
    channels_aligned=true, sms_iff_sub_send=true, sms_from=sub_alert_send
    protective_stop_usd=0.15, protective_stop_1dte_usd=0.30, fail_sec_1dte=null
    queue_opposite=false (overwrite Railway true)
@@ -258,6 +261,9 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    Overlay skip_reason and before_bto share sub_action_skip_reason.
    If overlay SMS, Tradier BTO that send (bounce/halt/inflight stay exec-only).
    aligned_copy=false is SMS body, not a non-trade.
+   clock_identity_lock: SMS publication, overlay label, strike copy, and
+   Tradier consume one unix send_ts. Do not use legacy_ledger_hhmm live.
+   SMS only at seal (decide_sub_send send=True).
    Rec scenario is the production book. Do not keep a parallel knob set.
 """
 

@@ -9,12 +9,14 @@ Admin ledger is the full candidate set. Sub is the action subset.
 
 from __future__ import annotations
 
+import math
 import re
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 Direction = Literal["BULL", "BEAR"]
 HaltReason = Literal[
@@ -90,6 +92,16 @@ PEAK_GIVEBACK_USD = 50.0
 # without a $0.30 SPY reversal. Do not move the $0.15 stop to the print
 # high. Do not fire a starter $37.50 giveback before 90s.
 PEAK_GIVEBACK_MIN_SEC = FAIL_SEC
+# One send identity: unix send_ts in America/New_York is SMS time, overlay
+# label, strike copy, and Tradier consume. Do not use legacy_ledger_hhmm
+# for live SMS (10:32 vs 10:45 same send). Do not SMS at arm/receipt then
+# consume a later opposite seal (11:04 BULL 777/778 vs 11:07 BEAR put).
+ET = ZoneInfo("America/New_York")
+LIVE_SEND_TS_MIN = 1_000_000_000.0
+CLOCK = "America/New_York unix send instant"
+CLOCK_FALLBACK = "historical_audits_only"
+CLOCK_IDENTITY_LOCK = True
+SMS_AT_SEAL = True
 SESSION_LOSS_HALT_USD = 750.0  # 3 envelope misses (~$240) before the day stops
 CONSECUTIVE_FAIL_HALT = 4
 # 9/28: 1DTE wiggles printed 4 FAILs and halted before the 0DTE 767-put.
@@ -120,10 +132,11 @@ WORKING_STC_ON_FILL = False
 # RTH is 09:30–15:50 with a product at every clock. Open-fade 0DTE stays
 # skip; overlay scores 1DTE TREND in 10:00–10:20. Do not scratch a fill
 # that has no stamp. fail_90 only on a $0.30 SPY reversal. Peak giveback
-# waits 90s so a 62s option tick cannot flatten a live rip.
+# waits 90s so a 62s option tick cannot flatten a live rip. SMS / overlay
+# / Tradier share one unix send instant (clock identity lock).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-09-rip-hold"
+REC_BOOK_SHIP = "2026-10-09-rip-hold-clock"
 
 
 def rec_book() -> dict:
@@ -191,6 +204,63 @@ def rec_book() -> dict:
         "rth_end_et": RTH_END_ET,
         "fail_sec": FAIL_SEC,
         "hold_exit": HOLD_EXIT,
+        "clock": CLOCK,
+        "clock_fallback": CLOCK_FALLBACK,
+        "clock_identity_lock": CLOCK_IDENTITY_LOCK,
+        "sms_at_seal": SMS_AT_SEAL,
+    }
+
+
+def et_hhmm_from_ts(send_ts: float) -> str:
+    return datetime.fromtimestamp(float(send_ts), tz=ET).strftime("%H:%M")
+
+
+def et_hms_from_ts(send_ts: float) -> str:
+    return datetime.fromtimestamp(float(send_ts), tz=ET).strftime("%H:%M:%S")
+
+
+def locked_et_hhmm(send_ts: float, et_hhmm: str | None = None) -> str:
+    """Live sends use unix instant. Replay/tiny ts keep the passed label."""
+    if float(send_ts) >= LIVE_SEND_TS_MIN:
+        return et_hhmm_from_ts(send_ts)
+    return et_hhmm or ""
+
+
+def strike_copy(direction: Direction, spy: float) -> dict:
+    """ITM/OTM from the sealed send. BULL=calls, BEAR=puts.
+
+    10/9 11:04 SMS 777 ITM / 778 OTM at 777.41 is BULL. 11:07 BEAR 776.92
+    is 777 ITM put / 776 OTM put. Do not attach the BULL copy to the BEAR
+    consume.
+    """
+    lo = int(math.floor(float(spy)))
+    if direction == "BULL":
+        return {"itm": lo, "otm": lo + 1, "kind": "call"}
+    return {"itm": lo + 1, "otm": lo, "kind": "put"}
+
+
+def seal_identity(
+    send_ts: float,
+    direction: Direction,
+    spy: float,
+    et_hhmm: str | None = None,
+) -> dict:
+    live = float(send_ts) >= LIVE_SEND_TS_MIN
+    hhmm = locked_et_hhmm(send_ts, et_hhmm)
+    strikes = strike_copy(direction, spy)
+    return {
+        "send_ts": float(send_ts),
+        "et_hhmm": hhmm,
+        "et_hms": et_hms_from_ts(send_ts) if live else None,
+        "direction": direction,
+        "spy": float(spy),
+        "strike_itm": strikes["itm"],
+        "strike_otm": strikes["otm"],
+        "strike_kind": strikes["kind"],
+        "clock": CLOCK,
+        "clock_identity_lock": CLOCK_IDENTITY_LOCK,
+        "sms_at_seal": SMS_AT_SEAL,
+        "publication_et": et_hms_from_ts(send_ts) if live else hhmm,
     }
 
 # 2026-09-29 learn (exec still traded these): weak pre-move 1/9 −$160,
@@ -966,6 +1036,8 @@ def decide_starter(
     if not ledger_ok_placeholder():
         pass
     state.refresh_halt()
+    et_hhmm = locked_et_hhmm(send_ts, et_hhmm)
+    ident = seal_identity(send_ts, direction, send_spy, et_hhmm)
     src = source_skip_reason(
         plot=plot, is_opposite=is_opposite, overlay_queued=overlay_queued
     )
@@ -1022,6 +1094,7 @@ def decide_starter(
         "client_order_id": state.last_bto_client_key,
         "dte": dte_val,
         "option_symbol": option_symbol,
+        **ident,
     }
 
 
