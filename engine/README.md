@@ -58,11 +58,16 @@ that is already off. Do not freeze 0DTE TREND before 12:30 except
 chase $0.50, or queue_opposite=false. Fewer SUB alerts is correct if
 they are winners.
 
-Surgical ADD from getdeltaiq/deltaiq-website branch
-cursor/climax-1dte-book-6434 (engine/shared/gates.py,
-engine/overlay/publish.py, engine/tradier_exec/hooks.py). Merge knobs;
-do not wholesale-replace live peak / halt / starter size. Public raw
-URLs are pinned on the next SHA after this lands.
+Copy these three files from getdeltaiq/deltaiq-website SHA 5b1e3ff
+onto getdeltaiq/deltaiq-signal-engine production (merge knobs; do not
+wholesale-replace live peak / halt / starter size):
+  engine/shared/gates.py
+  engine/tradier_exec/hooks.py
+  engine/overlay/publish.py
+Public raw (website is public; curl these, do not rewrite knobs):
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/5b1e3ff96f8137177537fa241df58b305a0f947b/engine/shared/gates.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/5b1e3ff96f8137177537fa241df58b305a0f947b/engine/tradier_exec/hooks.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/5b1e3ff96f8137177537fa241df58b305a0f947b/engine/overlay/publish.py
 
 1) Continuous RTH: in_publish_window is 09:30–15:50 inclusive.
    Delete the 09:36–09:40 + 10:00–15:50 split. 09:41–09:59 is no longer
