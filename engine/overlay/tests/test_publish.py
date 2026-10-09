@@ -380,6 +380,7 @@ class ChannelAlignTests(unittest.TestCase):
         for c in cases:
             sms = decide_sub_send(c)
             _, bto = self._starter(c)
+            self.assertEqual(sms["sms"], sms["send"])
             self.assertEqual(
                 sms["send"],
                 bto["post"],
@@ -391,6 +392,50 @@ class ChannelAlignTests(unittest.TestCase):
                 "skip_copy",
             ):
                 self.assertEqual(bto["action"], sms["reason"])
+
+    def test_1310_sub_alert_implies_tradier_bto(self):
+        """10/9 13:10 Pushover: if SUB fires, Tradier posts. Same skip if not.
+
+        1DTE BEAR after 12:45 SENDS on SMS and BTO (TREND not required after
+        cutover). Leftover 0DTE is skip_0dte_after_cutover on both.
+        """
+        ts = 1791565838.0  # 13:10:38 ET
+        bear = _c(
+            ts=ts,
+            et_hhmm="13:10",
+            direction="BEAR",
+            spy=777.92,
+            dte=1,
+            regime="RANGE",
+        )
+        sms = decide_sub_send(bear)
+        _, bto = self._starter(bear)
+        self.assertTrue(sms["send"])
+        self.assertTrue(sms["sms"])
+        self.assertTrue(bto["post"])
+        self.assertEqual(sms["reason"], "sub_alert_send")
+        self.assertEqual(bto["action"], "bto")
+        self.assertEqual(sms["strike_kind"], "put")
+        self.assertEqual(sms["strike_itm"], 778)
+        self.assertEqual(sms["strike_otm"], 777)
+        self.assertEqual(sms["et_hhmm"], "13:10")
+        self.assertEqual(bto["send_ts"], sms["send_ts"])
+        self.assertEqual(bto["direction"], sms["direction"])
+
+        leftover = _c(
+            ts=ts,
+            et_hhmm="13:10",
+            direction="BEAR",
+            spy=777.92,
+            dte=0,
+        )
+        sms0 = decide_sub_send(leftover)
+        _, bto0 = self._starter(leftover)
+        self.assertFalse(sms0["send"])
+        self.assertFalse(sms0["sms"])
+        self.assertFalse(bto0["post"])
+        self.assertEqual(sms0["reason"], "skip_0dte_after_cutover")
+        self.assertEqual(bto0["action"], sms0["reason"])
 
 
 class ClockIdentityTests(unittest.TestCase):
