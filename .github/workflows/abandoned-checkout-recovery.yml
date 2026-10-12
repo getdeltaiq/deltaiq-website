@@ -6,12 +6,20 @@ name: Abandoned checkout recovery
 #   RESEND_API_KEY
 # Optional:
 #   RESEND_FROM  (e.g. "DeltaIQ <support@getdeltaiq.com>")
+#
+# Manual sample: Actions → Abandoned checkout recovery → Run workflow
+#   and set "test_email" to your address.
 
 on:
   schedule:
     # Every 6 hours
     - cron: "15 */6 * * *"
   workflow_dispatch:
+    inputs:
+      test_email:
+        description: "Send a sample recovery email to this address (skips Stripe scan)"
+        required: false
+        type: string
 
 jobs:
   recover:
@@ -19,13 +27,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve test recipient
+        id: test
+        env:
+          INPUT_TEST: ${{ github.event.inputs.test_email }}
+        run: |
+          if [ -n "$INPUT_TEST" ]; then
+            echo "to=$INPUT_TEST" >> "$GITHUB_OUTPUT"
+          else
+            echo "to=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check secrets
         id: secrets
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          TEST_TO: ${{ steps.test.outputs.to }}
         run: |
-          if [ -z "$STRIPE_SECRET_KEY" ] || [ -z "$RESEND_API_KEY" ]; then
+          if [ -n "$TEST_TO" ]; then
+            if [ -z "$RESEND_API_KEY" ]; then
+              echo "missing=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::Skipping test email — add RESEND_API_KEY repo secret."
+            else
+              echo "missing=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ -z "$STRIPE_SECRET_KEY" ] || [ -z "$RESEND_API_KEY" ]; then
             echo "missing=true" >> "$GITHUB_OUTPUT"
             echo "::notice::Skipping recovery emails — add STRIPE_SECRET_KEY and RESEND_API_KEY repo secrets."
           else
@@ -38,4 +65,5 @@ jobs:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           RESEND_FROM: ${{ secrets.RESEND_FROM }}
+          RECOVERY_TEST_TO: ${{ steps.test.outputs.to }}
         run: python3 .github/scripts/abandoned_checkout_recovery.py
