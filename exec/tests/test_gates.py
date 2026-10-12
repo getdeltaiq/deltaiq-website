@@ -975,10 +975,12 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-09-min-hold")
+        self.assertEqual(h["rec_book_ship"], "2026-10-12-overlay-sms")
         self.assertEqual(h["min_hold_sec"], 90.0)
         self.assertTrue(h["clock_identity_lock"])
         self.assertTrue(h["sms_at_seal"])
+        self.assertFalse(h["follow_delivered_sub"])
+        self.assertTrue(h["overlay_iff_sms"])
         self.assertEqual(h["clock"], "America/New_York unix send instant")
         self.assertEqual(h["clock_fallback"], "historical_audits_only")
         self.assertTrue(h["protect_from_high"])

@@ -9,6 +9,9 @@ from engine.overlay.publish import (
     PublishLedgers,
     decide_sub_send,
     in_publish_window,
+    overlay_matches_pushover,
+    overlay_send_row,
+    pushover_from_send,
     with_spy_deltas,
 )
 
@@ -64,6 +67,9 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertTrue(h["fail_90_requires_reversal"])
         self.assertTrue(h["clock_identity_lock"])
         self.assertTrue(h["sms_at_seal"])
+        self.assertFalse(h["follow_delivered_sub"])
+        self.assertTrue(h["overlay_iff_sms"])
+        self.assertEqual(h["pushover_from"], "sub_alert_send")
         self.assertEqual(h["clock_fallback"], "historical_audits_only")
 
     def test_unarmed_is_admin_only(self):
@@ -381,6 +387,8 @@ class ChannelAlignTests(unittest.TestCase):
             sms = decide_sub_send(c)
             _, bto = self._starter(c)
             self.assertEqual(sms["sms"], sms["send"])
+            self.assertEqual(overlay_send_row(c) is not None, sms["send"])
+            self.assertEqual(pushover_from_send(sms) is not None, sms["send"])
             self.assertEqual(
                 sms["send"],
                 bto["post"],
@@ -517,6 +525,128 @@ class ClockIdentityTests(unittest.TestCase):
         self.assertIsNone(d["et_hms"])
 
 
+class OverlayPushoverSyncTests(unittest.TestCase):
+    """Overlay SUB markers ARE the Pushover publications. 10/12 mismatch is a fail."""
+
+    def _ts(self, h: int, m: int, s: int) -> float:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        return datetime(
+            2026, 10, 12, h, m, s, tzinfo=ZoneInfo("America/New_York")
+        ).timestamp()
+
+    def test_phone_clocks_are_overlay_markers(self):
+        """10/12 phone: 10:35:53, 11:49:03, 12:22:52. Overlay must plot all three."""
+        clocks = [
+            (10, 35, 53, "BEAR", 775.10),
+            (11, 49, 3, "BULL", 777.40),
+            (12, 22, 52, "BEAR", 776.80),
+        ]
+        p = PublishLedgers("2026-10-12")
+        for h, mi, s, direction, spy in clocks:
+            out = p.ingest(
+                _c(
+                    ts=self._ts(h, mi, s),
+                    et_hhmm="00:00",
+                    direction=direction,
+                    spy=spy,
+                    dte=0,
+                )
+            )
+            self.assertTrue(out["sent"])
+            self.assertTrue(out["sms"])
+            self.assertEqual(out["overlay"]["et_hms"], out["pushover"]["et_hms"])
+            self.assertEqual(
+                out["pushover"]["publication"],
+                f"publication available at {out['pushover']['et_hms']} ET",
+            )
+        overlay = p.overlay_sends()
+        pushover = p.pushover_sends()
+        self.assertEqual(p.sub_n, 3)
+        self.assertEqual(len(overlay), 3)
+        self.assertEqual(len(pushover), 3)
+        self.assertTrue(overlay_matches_pushover(overlay, pushover))
+        self.assertEqual(
+            [row["et_hms"] for row in overlay],
+            ["10:35:53", "11:49:03", "12:22:52"],
+        )
+        self.assertEqual(
+            [row["et_hms"] for row in pushover],
+            ["10:35:53", "11:49:03", "12:22:52"],
+        )
+
+    def test_1012_overlay_only_1113_does_not_match_phone(self):
+        """Today's bug: overlay 11:13 vs phone 10:35/11:49/12:22 must fail."""
+        overlay_only = [
+            {
+                "send_ts": self._ts(11, 13, 0),
+                "et_hms": "11:13:00",
+                "publication_et": "11:13:00",
+                "direction": "BEAR",
+                "spy": 778.12,
+            }
+        ]
+        phone = [
+            {
+                "send_ts": self._ts(10, 35, 53),
+                "et_hms": "10:35:53",
+                "direction": "BEAR",
+                "spy": 775.10,
+            },
+            {
+                "send_ts": self._ts(11, 49, 3),
+                "et_hms": "11:49:03",
+                "direction": "BULL",
+                "spy": 777.40,
+            },
+            {
+                "send_ts": self._ts(12, 22, 52),
+                "et_hms": "12:22:52",
+                "direction": "BEAR",
+                "spy": 776.80,
+            },
+        ]
+        self.assertFalse(overlay_matches_pushover(overlay_only, phone))
+
+    def test_receipt_without_seal_is_neither_overlay_nor_sms(self):
+        """follow_delivered_sub=false: open-fade 10:01 is not plotted and not texted."""
+        c = _c(ts=self._ts(10, 1, 0), et_hhmm="10:01", dte=0)
+        d = decide_sub_send(c)
+        self.assertFalse(d["send"])
+        self.assertFalse(d["sms"])
+        self.assertIsNone(overlay_send_row(c))
+        self.assertIsNone(pushover_from_send(d))
+        p = PublishLedgers("2026-10-12")
+        out = p.ingest(c)
+        self.assertFalse(out["sent"])
+        self.assertIsNone(out["overlay"])
+        self.assertIsNone(out["pushover"])
+        self.assertEqual(p.overlay_sends(), [])
+        self.assertEqual(p.pushover_sends(), [])
+
+    def test_ingest_skip_then_send_stays_matched(self):
+        p = PublishLedgers("2026-10-12")
+        p.ingest(_c(ts=self._ts(10, 1, 0), et_hhmm="10:01", dte=0))
+        p.ingest(
+            _c(
+                ts=self._ts(10, 35, 53),
+                et_hhmm="10:32",
+                direction="BEAR",
+                spy=775.10,
+                dte=0,
+            )
+        )
+        self.assertEqual(p.admin_n, 2)
+        self.assertEqual(p.sub_n, 1)
+        overlay = p.overlay_sends()
+        pushover = p.pushover_sends()
+        self.assertTrue(overlay_matches_pushover(overlay, pushover))
+        self.assertEqual(overlay[0]["et_hms"], "10:35:53")
+        self.assertEqual(pushover[0]["et_hms"], "10:35:53")
+        self.assertNotEqual(overlay[0]["et_hhmm"], "10:32")
+
+
 class HookHaltTests(unittest.TestCase):
     def test_health_names_github_module(self):
         from engine.shared.gates import new_session
@@ -547,10 +677,12 @@ class HookHaltTests(unittest.TestCase):
         self.assertEqual(h["bto_source"], "sub_alert_send")
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
-        self.assertEqual(h["rec_book_ship"], "2026-10-09-min-hold")
+        self.assertEqual(h["rec_book_ship"], "2026-10-12-overlay-sms")
         self.assertEqual(h["min_hold_sec"], 90.0)
         self.assertTrue(h["clock_identity_lock"])
         self.assertTrue(h["sms_at_seal"])
+        self.assertFalse(h["follow_delivered_sub"])
+        self.assertTrue(h["overlay_iff_sms"])
         self.assertEqual(h["clock"], "America/New_York unix send instant")
         self.assertEqual(h["clock_fallback"], "historical_audits_only")
         self.assertTrue(h["protect_from_high"])
