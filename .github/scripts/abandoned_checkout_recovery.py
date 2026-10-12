@@ -120,6 +120,8 @@ def send_email(to_email: str, recover_url: str, checkout_url: str) -> None:
         headers={
             "Authorization": f"Bearer {RESEND_KEY}",
             "Content-Type": "application/json",
+            "User-Agent": "deltaiq-abandoned-checkout-recovery/1.0",
+            "Accept": "application/json",
         },
         method="POST",
     )
@@ -154,10 +156,16 @@ def list_sessions(status: str, created_gte: int) -> list[dict]:
 
 def send_test_sample(to_email: str) -> None:
     """Send one sample recovery email (uses a recover-page CTA, not a live Stripe session)."""
+    global RESEND_FROM
     if not RESEND_KEY:
         die("RESEND_API_KEY missing — add it under repo Secrets to send a test recovery email")
     if "@" not in to_email:
         die(f"RECOVERY_TEST_TO looks invalid: {to_email}")
+    # When RESEND_FROM isn't set, use Resend's sandbox sender so the sample can land
+    # without a verified custom domain (still limited to the Resend account owner).
+    if not _clean_secret(os.environ.get("RESEND_FROM", "")):
+        RESEND_FROM = "DeltaIQ <onboarding@resend.dev>"
+        print("using Resend sandbox from=DeltaIQ <onboarding@resend.dev> (set RESEND_FROM secret for production)")
     recover_url = f"{SITE_RECOVER}?email={urllib.parse.quote(to_email)}&start-trial=1"
     # Sample CTA points at the recover page (same destination as the secondary link).
     checkout_url = recover_url

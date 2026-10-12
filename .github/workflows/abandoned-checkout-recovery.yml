@@ -20,10 +20,6 @@ on:
         description: "Send a sample recovery email to this address (skips Stripe scan)"
         required: false
         type: string
-  # One-shot sample delivery when this branch is pushed (uses Resend secret).
-  push:
-    branches:
-      - cursor/recovery-test-send-efab
 
 jobs:
   recover:
@@ -38,8 +34,6 @@ jobs:
         run: |
           if [ -n "$INPUT_TEST" ]; then
             echo "to=$INPUT_TEST" >> "$GITHUB_OUTPUT"
-          elif [ "${GITHUB_REF_NAME}" = "cursor/recovery-test-send-efab" ]; then
-            echo "to=tong20121@gmail.com" >> "$GITHUB_OUTPUT"
           else
             echo "to=" >> "$GITHUB_OUTPUT"
           fi
