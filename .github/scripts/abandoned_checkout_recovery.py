@@ -9,6 +9,7 @@ Optional:
   RECOVERY_LOOKBACK_HOURS (default: 36)
   RECOVERY_COOLDOWN_HOURS (default: 72)
   CHECKOUT_API (default: Railway create-checkout-session URL)
+  RECOVERY_TEST_TO (send one sample recovery email to this address and exit)
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ CHECKOUT_API = os.environ.get(
     "https://deltaiq-signal-engine-production.up.railway.app/api/stripe/create-checkout-session",
 ).strip()
 SITE_RECOVER = "https://getdeltaiq.com/subscribe/recover.html"
+TEST_TO = _clean_secret(os.environ.get("RECOVERY_TEST_TO", "")).lower()
 
 
 def die(msg: str, code: int = 1) -> None:
@@ -146,7 +148,24 @@ def list_sessions(status: str, created_gte: int) -> list[dict]:
     return out
 
 
+def send_test_sample(to_email: str) -> None:
+    """Send one sample recovery email (uses a recover-page CTA, not a live Stripe session)."""
+    if not RESEND_KEY:
+        die("RESEND_API_KEY missing — add it under repo Secrets to send a test recovery email")
+    if "@" not in to_email:
+        die(f"RECOVERY_TEST_TO looks invalid: {to_email}")
+    recover_url = f"{SITE_RECOVER}?email={urllib.parse.quote(to_email)}&start-trial=1"
+    # Sample CTA points at the recover page (same destination as the secondary link).
+    checkout_url = recover_url
+    send_email(to_email, recover_url, checkout_url)
+    print(f"test_sample_sent to={to_email}")
+
+
 def main() -> None:
+    if TEST_TO:
+        send_test_sample(TEST_TO)
+        return
+
     if not STRIPE_KEY:
         die("STRIPE_SECRET_KEY missing — add it under repo Secrets to enable recovery emails", 0)
     if not RESEND_KEY:
