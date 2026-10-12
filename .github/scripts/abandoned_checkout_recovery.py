@@ -123,9 +123,13 @@ def send_email(to_email: str, recover_url: str, checkout_url: str) -> None:
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.load(resp)
-        print(f"sent email id={data.get('id')} to={to_email}")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.load(resp)
+            print(f"sent email id={data.get('id')} to={to_email} from={RESEND_FROM}")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")[:500]
+        die(f"Resend {e.code} sending to {to_email} from={RESEND_FROM}: {body}")
 
 
 def list_sessions(status: str, created_gte: int) -> list[dict]:
