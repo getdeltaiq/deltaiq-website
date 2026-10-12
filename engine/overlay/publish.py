@@ -2,10 +2,12 @@
 
 Admin ledger = 100% of scored candidates.
 Sub send = actionable subset only (armed_rip after quality gates).
-SMS and Tradier consume sub_alert_send only. Never BTO from admin rows.
+SMS/Pushover and Tradier consume sub_alert_send only. Never BTO from admin rows.
 skip_reason calls sub_action_skip_reason so SMS and BTO share one skip stack.
 aligned_copy=false is SMS wording, not a non-trade.
-Invariant: admin_n >= sub_n >= 0.
+Overlay SUB markers ARE the Pushover publications (same send_ts / et_hms).
+Receipts do not SMS. Overlay does not plot a clock that was not texted.
+Invariant: admin_n >= sub_n >= 0. overlay_sends == pushover_sends.
 """
 
 from __future__ import annotations
@@ -18,6 +20,8 @@ from engine.shared.gates import (
     CLOCK,
     CLOCK_FALLBACK,
     CLOCK_IDENTITY_LOCK,
+    FOLLOW_DELIVERED_SUB,
+    OVERLAY_IFF_SMS,
     DTE_BOOK_ET,
     DTE_CUTOVER_ET,
     FAIL_90_REQUIRES_REVERSAL,
@@ -49,6 +53,7 @@ COPY = "armed_rip"
 ALIGNED_COPY = False
 CHANNELS_ALIGNED = True
 SMS_IFF_SUB_SEND = True
+PUSHOVER_FROM = SMS_FROM
 SCORED_FANOUT = "candidate_only"
 
 PUBLISH_ARM_SPY = 0.20
@@ -155,6 +160,78 @@ def decide_sub_send(c: Candidate) -> dict:
     }
 
 
+def _publication_clock(d: dict) -> str:
+    return d.get("et_hms") or d.get("publication_et") or d.get("et_hhmm") or ""
+
+
+def overlay_send_row(c: Candidate) -> dict | None:
+    """Chart/table marker for one SUB send. None if this candidate is admin-only."""
+    d = decide_sub_send(c)
+    if not d["send"]:
+        return None
+    clock = _publication_clock(d)
+    return {
+        "send_ts": d["send_ts"],
+        "et_hhmm": d["et_hhmm"],
+        "et_hms": clock,
+        "publication_et": clock,
+        "direction": d["direction"],
+        "spy": d["spy"],
+        "strike_itm": d["strike_itm"],
+        "strike_otm": d["strike_otm"],
+        "strike_kind": d["strike_kind"],
+        "plot": PLOT,
+        "channel": "sub",
+    }
+
+
+def pushover_from_send(d: dict) -> dict | None:
+    """Twilio/Pushover payload. None unless decide_sub_send send=True."""
+    if not d.get("send") or not d.get("sms"):
+        return None
+    if FOLLOW_DELIVERED_SUB:
+        raise AssertionError("follow_delivered_sub must stay false")
+    clock = _publication_clock(d)
+    return {
+        "send_ts": d["send_ts"],
+        "et_hhmm": d["et_hhmm"],
+        "et_hms": clock,
+        "publication_et": clock,
+        "publication": f"publication available at {clock} ET",
+        "direction": d["direction"],
+        "spy": d["spy"],
+        "strike_itm": d["strike_itm"],
+        "strike_otm": d["strike_otm"],
+        "strike_kind": d["strike_kind"],
+        "channel": "sub",
+        "sms": True,
+        "plot": PLOT,
+    }
+
+
+def _channel_key(row: dict) -> tuple:
+    clock = row.get("et_hms") or row.get("publication_et") or row.get("et_hhmm")
+    return (
+        round(float(row["send_ts"]), 3),
+        clock,
+        row["direction"],
+        round(float(row["spy"]), 2),
+    )
+
+
+def overlay_matches_pushover(
+    overlay_rows: Sequence[dict], pushover_rows: Sequence[dict]
+) -> bool:
+    """True iff overlay SUB markers are the Pushover publications, same order."""
+    if not OVERLAY_IFF_SMS:
+        return False
+    if len(overlay_rows) != len(pushover_rows):
+        return False
+    return [_channel_key(r) for r in overlay_rows] == [
+        _channel_key(r) for r in pushover_rows
+    ]
+
+
 @dataclass
 class PublishLedgers:
     """Admin is the full set. Sub is the subset Tradier/SMS may act on."""
@@ -172,29 +249,63 @@ class PublishLedgers:
     def sub_n(self) -> int:
         return len(self.sub)
 
+    def overlay_sends(self) -> list[dict]:
+        """SUB markers for alert_overlay.html (every view, including observational)."""
+        return [row for c in self.sub if (row := overlay_send_row(c)) is not None]
+
+    def pushover_sends(self) -> list[dict]:
+        """Pushover/Twilio publications. Same list as overlay_sends()."""
+        rows: list[dict] = []
+        for c in self.sub:
+            payload = pushover_from_send(decide_sub_send(c))
+            if payload is not None:
+                rows.append(payload)
+        return rows
+
     def ingest(self, c: Candidate) -> dict:
         c = with_clock_identity(c)
         self.admin.append(c)
         d = decide_sub_send(c)
+        overlay = overlay_send_row(c)
+        pushover = pushover_from_send(d)
         if d["send"]:
+            if overlay is None or pushover is None:
+                raise AssertionError("sub send missing overlay or pushover payload")
+            if not overlay_matches_pushover([overlay], [pushover]):
+                raise AssertionError(
+                    f"overlay/pushover clock split overlay={overlay} pushover={pushover}"
+                )
             self.sub.append(c)
             self.last_skip = None
         else:
+            if overlay is not None or pushover is not None:
+                raise AssertionError("skip must not plot or SMS")
             self.last_skip = d["reason"]
         if not ledger_invariant(self.admin_n, self.sub_n):
             raise AssertionError(
                 f"ledger inverted: admin_n={self.admin_n} sub_n={self.sub_n}"
             )
+        if not overlay_matches_pushover(self.overlay_sends(), self.pushover_sends()):
+            raise AssertionError("overlay_sends != pushover_sends")
         return {
             "admin_rows": ADMIN_ROWS,
             "plot": PLOT,
             "sms_from": SMS_FROM,
+            "pushover_from": PUSHOVER_FROM,
             "aligned_copy": ALIGNED_COPY,
             "admin_n": self.admin_n,
             "sub_n": self.sub_n,
             "sent": d["send"],
+            "sms": d["sms"],
             "reason": d["reason"],
+            "overlay": overlay,
+            "pushover": pushover,
+            "send_ts": d["send_ts"],
+            "et_hhmm": d["et_hhmm"],
+            "et_hms": d.get("et_hms"),
+            "publication_et": d.get("publication_et"),
             "invariant_ok": True,
+            "overlay_iff_sms": True,
         }
 
     def health(self) -> dict:
@@ -244,4 +355,7 @@ class PublishLedgers:
             "clock_fallback": CLOCK_FALLBACK,
             "clock_identity_lock": CLOCK_IDENTITY_LOCK,
             "sms_at_seal": SMS_AT_SEAL,
+            "follow_delivered_sub": FOLLOW_DELIVERED_SUB,
+            "overlay_iff_sms": OVERLAY_IFF_SMS,
+            "pushover_from": PUSHOVER_FROM,
         }

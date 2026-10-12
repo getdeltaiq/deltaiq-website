@@ -110,6 +110,13 @@ CLOCK = "America/New_York unix send instant"
 CLOCK_FALLBACK = "historical_audits_only"
 CLOCK_IDENTITY_LOCK = True
 SMS_AT_SEAL = True
+# Overlay chart/table markers are the Pushover/Twilio SUB publications.
+# 10/12: overlay showed 1 (11:13) while the phone got 3 (10:35:53,
+# 11:49:03, 12:22:52) because receipts SMS'd independently of the overlay
+# seal. One ingest: decide_sub_send send=True is both an overlay row and
+# a Pushover. Receipts do not SMS. Overlay does not plot a different clock.
+FOLLOW_DELIVERED_SUB = False
+OVERLAY_IFF_SMS = True
 SESSION_LOSS_HALT_USD = 750.0  # 3 envelope misses (~$240) before the day stops
 CONSECUTIVE_FAIL_HALT = 4
 # 9/28: 1DTE wiggles printed 4 FAILs and halted before the 0DTE 767-put.
@@ -142,10 +149,12 @@ WORKING_STC_ON_FILL = False
 # that has no stamp. fail_90 only on a $0.30 SPY reversal. Peak giveback
 # waits 90s so a 62s option tick cannot flatten a live rip. SMS / overlay
 # / Tradier share one unix send instant (clock identity lock). First
-# 90s of a fill only flatten a real dump (min_hold_sec).
+# 90s of a fill only flatten a real dump (min_hold_sec). Overlay SUB
+# markers are the Pushover publications (overlay_iff_sms). Receipts
+# never SMS on their own (follow_delivered_sub=false).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-09-min-hold"
+REC_BOOK_SHIP = "2026-10-12-overlay-sms"
 
 
 def rec_book() -> dict:
@@ -217,6 +226,8 @@ def rec_book() -> dict:
         "clock_fallback": CLOCK_FALLBACK,
         "clock_identity_lock": CLOCK_IDENTITY_LOCK,
         "sms_at_seal": SMS_AT_SEAL,
+        "follow_delivered_sub": FOLLOW_DELIVERED_SUB,
+        "overlay_iff_sms": OVERLAY_IFF_SMS,
         "min_hold_sec": MIN_HOLD_SEC,
     }
 
