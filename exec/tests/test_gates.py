@@ -975,8 +975,13 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-12-overlay-sms")
+        self.assertEqual(h["rec_book_ship"], "2026-10-13-scratch-lock")
         self.assertEqual(h["min_hold_sec"], 90.0)
+        self.assertTrue(h["stc_requires_before_stc"])
+        self.assertTrue(h["stc_recomputes_envelope"])
+        self.assertFalse(h["native_close_push"])
+        self.assertFalse(h["peak_starter_giveback"])
+        self.assertFalse(h["morning_rip_flatten"])
         self.assertTrue(h["clock_identity_lock"])
         self.assertTrue(h["sms_at_seal"])
         self.assertFalse(h["follow_delivered_sub"])
@@ -1771,6 +1776,89 @@ class PeakGivebackTests(unittest.TestCase):
             self.assertFalse(d["post"])
             self.assertFalse(d["flatten"])
 
+    def test_1013_4s_and_122s_scratches_hold(self):
+        """10/13: 4s 1.07→1.05 and 122s 1.19→1.15 (−$48) must HOLD.
+
+        Live advertised min_hold_sec=90 then sold via recover_lost_flat /
+        broker_flat / peak_starter_giveback $37.50 from print high.
+        Unknown scratch names never flatten. $0.04 down is not $0.15.
+        A real fill $0.15 dump still clips.
+        """
+        from engine.shared.gates import flatten_allowed, may_post_stc
+        from engine.tradier_exec.hooks import before_stc
+
+        for reason in (
+            "peak_starter_giveback",
+            "broker_flat",
+            "recover_lost_flat",
+            "spike_fail",
+            "print_high",
+        ):
+            self.assertFalse(flatten_allowed(4, reason), msg=reason)
+            self.assertFalse(flatten_allowed(122, reason), msg=reason)
+            self.assertFalse(may_post_stc(122, reason, qty=12), msg=reason)
+
+        s = new_session("2026-10-13")
+        s.on_bto_fill(14, 1.07, now=1_000.0)
+        four = before_stc(
+            s,
+            fill_px=1.07,
+            mark_bid=1.05,
+            qty=14,
+            spy_adverse=0.02,
+            seconds_since_fill=4,
+            ticket_phase="FAIL",
+            bid=1.05,
+            now=1_004.0,
+            dte=0,
+        )
+        self.assertFalse(four["post"])
+        self.assertFalse(four["flatten"])
+
+        s = new_session("2026-10-13")
+        s.on_bto_fill(12, 1.19, now=1_000.0)
+        dip = before_stc(
+            s,
+            fill_px=1.19,
+            mark_bid=1.15,
+            qty=12,
+            spy_adverse=0.05,
+            seconds_since_fill=122,
+            ticket_phase="FAIL",
+            bid=1.15,
+            now=1_122.0,
+            dte=0,
+        )
+        self.assertFalse(dip["post"])
+        self.assertFalse(dip["flatten"])
+        self.assertFalse(
+            may_post_stc(
+                122,
+                "protective",
+                fill_px=1.19,
+                mark_bid=1.15,
+                dte=0,
+                qty=12,
+            )
+        )
+
+        s = new_session("2026-10-13")
+        s.on_bto_fill(12, 1.19, now=1_000.0)
+        dump = before_stc(
+            s,
+            fill_px=1.19,
+            mark_bid=1.04,
+            qty=12,
+            spy_adverse=0.05,
+            seconds_since_fill=20,
+            ticket_phase="FAIL",
+            bid=1.04,
+            now=1_020.0,
+            dte=0,
+        )
+        self.assertTrue(dump["post"])
+        self.assertEqual(dump["reason"], "protective")
+
     def test_109_bear_185s_holds_without_spy_reversal(self):
         s = new_session("2026-10-09")
         s.on_bto_fill(15, 0.94, now=1_000.0)
@@ -1816,6 +1904,255 @@ class PeakGivebackTests(unittest.TestCase):
         )
         self.assertFalse(m["flatten"])
         self.assertAlmostEqual(s.ticket_peak_unrealized, 1408.0, places=0)
+
+
+class ScratchLockTests(unittest.TestCase):
+    """Every historical scratch, plus live leftover names, plus lying envelope names.
+
+    may_post_stc recomputes envelope_hit. A $0.04 dip cannot sell by calling
+    itself protective / peak_giveback / fail_90 / ticket_risk / cata.
+    on_manage and before_stc share that gate. 15:50 leftover still flattens.
+    """
+
+    SCRATCH_NAMES = (
+        "peak_starter_giveback",
+        "peak_starter",
+        "print_high",
+        "hold_high",
+        "broker_flat",
+        "recover_lost_flat",
+        "recover_lost_fresh_fill",
+        "spike_fail",
+        "max_in",
+        "never_green",
+        "native_close",
+        "close_push",
+        "morning_rip",
+        "morning_rip_flatten",
+        "rip_flatten",
+        "time_stop",
+        "starter_giveback",
+        "thru_05",
+        "working_stc",
+        "stc_on_fill",
+        "bid_exit",
+        "trail",
+        "unknown_live_knob",
+    )
+
+    def test_scratch_names_never_flatten_at_any_age(self):
+        from engine.shared.gates import flatten_allowed, may_post_stc
+
+        for reason in self.SCRATCH_NAMES:
+            for age in (0, 4, 8, 12, 20, 62, 90, 122, 185, 5400):
+                self.assertFalse(flatten_allowed(age, reason), msg=f"{reason}@{age}")
+                self.assertFalse(
+                    may_post_stc(age, reason, qty=12), msg=f"{reason}@{age}"
+                )
+                self.assertFalse(
+                    may_post_stc(
+                        age,
+                        reason,
+                        fill_px=1.19,
+                        mark_bid=1.15,
+                        dte=0,
+                        qty=12,
+                        spy_adverse=0.05,
+                        ticket_phase="FAIL",
+                        peak_unrealized=48.0,
+                    ),
+                    msg=f"{reason} marks {age}",
+                )
+
+    def test_lying_envelope_names_cannot_sell_a_004_dip(self):
+        from engine.shared.gates import may_post_stc
+
+        for claimed in (
+            "protective",
+            "peak_giveback",
+            "fail_90",
+            "ticket_risk",
+            "cata_opt",
+            "cata_spy",
+            "orphan_adopt",
+        ):
+            self.assertFalse(
+                may_post_stc(
+                    122,
+                    claimed,
+                    fill_px=1.19,
+                    mark_bid=1.15,
+                    dte=0,
+                    qty=12,
+                    spy_adverse=0.05,
+                    ticket_phase="FAIL",
+                    peak_unrealized=48.0,
+                    orphan_adopt=False,
+                ),
+                msg=claimed,
+            )
+
+    def test_historical_scratches_hold_on_manage_and_before_stc(self):
+        from engine.tradier_exec.hooks import before_stc, on_manage
+
+        # (name, qty, fill, bid, age, dte, spy, peak)
+        cases = [
+            ("930_3s_fill", 10, 1.84, 1.83, 3, 0, 0.02, 0.0),
+            ("101_1dte_021", 8, 1.40, 1.19, 60, 1, 0.20, 0.0),
+            ("108_9s_unstamped", 2, 1.40, 1.38, 9, 1, 0.05, 0.0),
+            ("109_C_5s", 24, 1.235, 1.21, 5, 0, 0.05, 0.0),
+            ("109_D_7s", 14, 1.02, 0.99, 7, 0, 0.05, 0.0),
+            ("109_E_12s_winner", 7, 2.00, 2.02, 12, 1, 0.02, 14.0),
+            ("109_A_62s_flicker", 13, 1.17, 1.10, 62, 0, 0.05, 78.0),
+            ("109_B_185s_no_rev", 15, 0.94, 0.90, 185, 0, 0.10, 0.0),
+            ("1012_14lot_002", 14, 1.06, 1.04, 45, 0, 0.05, 0.0),
+            ("1012_18lot_scratch", 18, 0.83, 0.83, 40, 0, 0.02, 0.0),
+            ("1013_4s", 14, 1.07, 1.05, 4, 0, 0.02, 0.0),
+            ("1013_122s_3750", 12, 1.19, 1.15, 122, 0, 0.05, 48.0),
+            ("1013_morning_rip", 12, 1.19, 1.15, 122, 0, 0.05, 48.0),
+        ]
+        for name, qty, fill, bid, age, dte, spy, peak in cases:
+            kwargs = dict(
+                fill_px=fill,
+                mark_bid=bid,
+                qty=qty,
+                spy_adverse=spy,
+                seconds_since_fill=age,
+                ticket_phase="FAIL",
+                bid=bid,
+                now=1_000.0 + age,
+                dte=dte,
+            )
+            if name == "1013_morning_rip":
+                kwargs["et_hhmm"] = "09:45"
+            for hook, fn in (("stc", before_stc), ("manage", on_manage)):
+                s2 = new_session("2026-10-13")
+                s2.on_bto_fill(qty, fill, now=1_000.0)
+                s2.ticket_peak_unrealized = peak
+                d = fn(s2, **kwargs)
+                self.assertFalse(d.get("post") or d.get("flatten"), msg=f"{name}/{hook}")
+                self.assertFalse(d.get("post_stc"), msg=f"{name}/{hook} post_stc")
+
+    def test_real_dumps_and_locks_still_flatten(self):
+        from engine.tradier_exec.hooks import before_stc, on_manage
+
+        dumps = [
+            ("1013_015", 12, 1.19, 1.04, 20, 0, 0.05, 0.0, "protective"),
+            ("102_1dte_055", 7, 2.71, 2.16, 16, 1, 0.50, 0.0, "protective"),
+            ("105_50_off_high", 16, 0.79, 1.63, 180, 0, 0.0, 1408.0, "peak_giveback"),
+            ("109_015_20s", 13, 1.17, 1.02, 20, 0, 0.05, 78.0, "protective"),
+            ("fail90_rev", 10, 1.00, 0.92, 91, 0, 0.30, 0.0, "fail_90"),
+        ]
+        for name, qty, fill, bid, age, dte, spy, peak, want in dumps:
+            for hook, fn in (("stc", before_stc), ("manage", on_manage)):
+                s = new_session("2026-10-13")
+                s.on_bto_fill(qty, fill, now=1_000.0)
+                s.ticket_peak_unrealized = peak
+                d = fn(
+                    s,
+                    fill_px=fill,
+                    mark_bid=bid,
+                    qty=qty,
+                    spy_adverse=spy,
+                    seconds_since_fill=age,
+                    ticket_phase="FAIL",
+                    bid=bid,
+                    now=1_000.0 + age,
+                    dte=dte,
+                )
+                self.assertTrue(d["flatten"], msg=f"{name}/{hook}")
+                self.assertEqual(d["reason"], want, msg=f"{name}/{hook}")
+        from engine.shared.gates import may_post_stc
+
+        self.assertTrue(
+            may_post_stc(
+                20,
+                "broker_flat",
+                fill_px=1.19,
+                mark_bid=1.04,
+                dte=0,
+                qty=12,
+                spy_adverse=0.05,
+                ticket_phase="FAIL",
+            )
+        )
+
+    def test_qty_zero_never_sprays_stc(self):
+        from engine.tradier_exec.hooks import before_stc, on_manage
+
+        s = new_session("2026-10-13")
+        d = before_stc(
+            s,
+            fill_px=1.07,
+            mark_bid=1.05,
+            qty=0,
+            spy_adverse=0.02,
+            seconds_since_fill=4,
+            ticket_phase="FAIL",
+            bid=1.05,
+            dte=0,
+        )
+        self.assertFalse(d["post"])
+        self.assertEqual(d["reason"], "skip_already_flat")
+        m = on_manage(
+            s,
+            fill_px=1.07,
+            mark_bid=1.05,
+            qty=0,
+            spy_adverse=0.02,
+            seconds_since_fill=4,
+            ticket_phase="FAIL",
+            bid=1.05,
+            dte=0,
+        )
+        self.assertFalse(m["flatten"])
+        self.assertFalse(m["post_stc"])
+
+    def test_rth_end_flattens_leftover_morning_rip_does_not(self):
+        from engine.tradier_exec.hooks import before_stc
+
+        s = new_session("2026-10-13")
+        s.on_bto_fill(12, 1.19, now=1_000.0)
+        morning = before_stc(
+            s,
+            fill_px=1.19,
+            mark_bid=1.18,
+            qty=12,
+            spy_adverse=0.02,
+            seconds_since_fill=122,
+            ticket_phase="FAIL",
+            bid=1.18,
+            now=1_122.0,
+            dte=0,
+            et_hhmm="09:45",
+        )
+        self.assertFalse(morning["post"])
+        self.assertFalse(morning["flatten"])
+
+        s = new_session("2026-10-13")
+        s.on_bto_fill(12, 1.19, now=1_000.0)
+        close = before_stc(
+            s,
+            fill_px=1.19,
+            mark_bid=1.18,
+            qty=12,
+            spy_adverse=0.02,
+            seconds_since_fill=122,
+            ticket_phase="FAIL",
+            bid=1.18,
+            now=1_122.0,
+            dte=0,
+            et_hhmm="15:50",
+        )
+        self.assertTrue(close["post"])
+        self.assertEqual(close["reason"], "rth_end")
+
+    def test_missing_marks_fail_closed_even_for_protective(self):
+        from engine.shared.gates import may_post_stc
+
+        self.assertFalse(may_post_stc(20, "protective", qty=12))
+        self.assertFalse(may_post_stc(90, "peak_giveback", qty=16))
+        self.assertFalse(may_post_stc(91, "fail_90", qty=10))
 
 
 class ExtraBtoTests(unittest.TestCase):
