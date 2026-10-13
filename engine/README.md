@@ -38,7 +38,8 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **Clock identity (10/9 11:04 SMS vs 11:07 put):** One unix `send_ts` in America/New_York is SMS publication time, overlay label, strike copy, and Tradier consume. Do not use `legacy_ledger_hhmm` for live SMS (10:32 vs 10:45 same send). Do not SMS at arm/receipt then consume a later opposite seal (11:04 BULL 777/778 at 777.41 vs 11:07 BEAR 777 put). `sms_at_seal=true`. `clock_fallback=historical_audits_only`.
   - **Overlay = Pushover (10/12):** Overlay SUB markers ARE the Pushover/Twilio publications (`overlay_iff_sms`). Same `send_ts`, `et_hms`, direction, SPY. 10/12 overlay showed 1 (11:13 BEAR 778.12) while the phone got 3 (10:35:53, 11:49:03, 12:22:52) because `follow_delivered_sub` SMS'd receipts that were never overlay-ingested. `follow_delivered_sub=false`. `alert_overlay.html` (including `view=observational`) plots `PublishLedgers.overlay_sends()` only. Twilio body is `pushover_from_send(decide_sub_send)`. Do not plot `confirmed_overrides_ledger`. Do not SMS a receipt then overlay a different seal.
   - **Min hold (10/9 C/D/E 5–12s scratches):** `MIN_HOLD_SEC=90` on **every** flatten except fill `$0.15` / 1DTE `$0.30` / cata / ticket_risk. Live sold C in 5s, D in 7s, E (a winner) in 12s via `orphan_adopt` / `recover_lost_flat` before SPY could move. Same 90s as fail_90 / peak min — not a one-day patch. 10/5 773C still locks after 90s. 10/2 leftover still clips `$0.30`. 9/28 10:42 / 10/2 10:54 / 10/5 12:22 still SEND. Do not STC on BTO fill. Do not fire starter `$37.50` giveback before 90s.
-  - **Scratch hold (10/13):** `/health` advertised `min_hold_sec=90` then sold a 14-lot 1.07→1.05 in **4s** (`recover_lost_flat` / `broker_flat` ladder) and a 12-lot 1.19→1.15 in **122s** (−$48, live `$37.50` peak_starter from print high). `flatten_allowed` is fail-closed: only envelope reasons post (`protective` / `ticket_risk` / cata / `fail_90` / `peak_giveback` / `orphan_adopt`). Live scratch names never flatten. Protective down is `fill_px − bid`, never hold_high. `may_post_stc` is the only STC gate — wrap **every** sell_to_close. `peak_starter_giveback=false`. `native_close_push=false`. A 4s $0.02 dip HOLDs. A 122s $0.04 dip HOLDs. A 20s fill $0.15 dump still clips. 10/5 773C at 180s still peak_giveback $50.
+  - **Scratch hold (10/13):** `/health` advertised `min_hold_sec=90` then sold a 14-lot 1.07→1.05 in **4s** (`recover_lost_flat` / `broker_flat` ladder) and a 12-lot 1.19→1.15 in **122s** (−$48, live `$37.50` peak_starter from print high). `flatten_allowed` is fail-closed: only envelope reasons post (`protective` / `ticket_risk` / cata / `fail_90` / `peak_giveback` / `orphan_adopt` / `rth_end`). Live scratch names never flatten.
+  - **Scratch lock (10/13, holds):** Listing leftover names is not enough — live can relabel a $0.04 dip as `protective` / `peak_giveback` / `fail_90` and sell. `may_post_stc` **recomputes** `envelope_hit` from fill/bid/qty and **ignores the claimed reason**. `on_manage` and `before_stc` share that gate. Missing marks fail closed. `morning_rip_flatten=false` (live 09:45). 15:50 leftover still `rth_end`. A 4s $0.02 dip HOLDs. A 122s $0.04 dip HOLDs even if named `peak_giveback`. A 20s fill $0.15 dump still clips. 10/5 773C at 180s still peak_giveback $50.
   - **Peak lock (10/5):** A runner’s bid high is the high-water mark. Once unrealized ≥ **$50** **and the ticket is ≥ 90s old**, flatten if the ticket gives back **$50** from that high (`peak_giveback`). 10/5 16-lot 773C 0.79→1.67 (~+$1,408) must NOT sit to the fill $0.15 stop at 0.64. Fill $0.15 / 1DTE $0.30 still protect tickets that never made a high. Quote grace 8s and no STC on fill stay. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
@@ -50,7 +51,7 @@ This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` 
 
 ```
 SHIP TO PRODUCTION NOW. RTH is OPEN. rec_book_ship MUST become
-2026-10-13-scratch-hold on /health. ADD nine levers on top of the live
+2026-10-13-scratch-lock on /health. ADD nine levers on top of the live
 climax-1dte-book already on Railway. Do NOT overwrite peak_giveback_usd,
 session_loss_halt_usd, or starter_notional_usd (live independently uses
 $75 / $1125 / $3000). Do NOT fire peak_starter_giveback /
@@ -61,16 +62,16 @@ that is already off. Do not freeze 0DTE TREND before 12:30 except
 chase $0.50, or queue_opposite=false. Fewer SUB alerts is correct if
 they are winners.
 
-Copy these three files from getdeltaiq/deltaiq-website SHA 9299370
+Copy these three files from getdeltaiq/deltaiq-website SHA PLACEHOLDER
 onto getdeltaiq/deltaiq-signal-engine production (merge knobs; do not
 wholesale-replace live peak / halt / starter size):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/overlay/publish.py
 Public raw (website is public; curl these, do not rewrite knobs):
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/9299370/engine/shared/gates.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/9299370/engine/tradier_exec/hooks.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/9299370/engine/overlay/publish.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/PLACEHOLDER/engine/shared/gates.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/PLACEHOLDER/engine/tradier_exec/hooks.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/PLACEHOLDER/engine/overlay/publish.py
 
 1) Continuous RTH: in_publish_window is 09:30–15:50 inclusive.
    Delete the 09:36–09:40 + 10:00–15:50 split. 09:41–09:59 is no longer
@@ -132,30 +133,38 @@ Public raw (website is public; curl these, do not rewrite knobs):
    decide_sub_send did not send. Do not overlay-label a send that
    Pushover did not get.
 
-9) SCRATCH HOLD: may_post_stc is the ONLY gate in front of any
-   Tradier sell_to_close. Wrap recover_lost, native close_push,
-   working STC, and the bid/bid-0.05/bid-0.10/market ladder.
-   If may_post_stc / before_stc post=false: do NOT send, do NOT
-   walk the ladder. flatten_allowed is fail-closed — only
-   protective / ticket_risk / cata / fail_90 / peak_giveback /
-   orphan_adopt. peak_starter_giveback, broker_flat,
-   recover_lost_flat, spike_fail, print_high NEVER flatten
-   (not at 4s, not at 122s). peak_starter_giveback=false and
+9) SCRATCH LOCK: may_post_stc is the ONLY gate in front of any
+   Tradier sell_to_close. Wrap on_manage, recover_lost, native
+   close_push, working STC, and the bid/bid-0.05/bid-0.10/market
+   ladder. If may_post_stc / before_stc / on_manage flatten is
+   false: do NOT send, do NOT walk the ladder.
+   may_post_stc RECOMPUTES envelope_hit from fill_px / mark_bid /
+   qty. The claimed reason is ignored. Relabeling a $0.04 dip as
+   protective / peak_giveback / fail_90 / ticket_risk / cata
+   MUST HOLD. Missing marks fail closed. flatten_allowed is
+   fail-closed — only protective / ticket_risk / cata / fail_90 /
+   peak_giveback / orphan_adopt / rth_end. peak_starter_giveback,
+   broker_flat, recover_lost_flat, spike_fail, print_high,
+   morning_rip_flatten, close_push NEVER flatten (not at 4s,
+   not at 122s, not at 09:45). peak_starter_giveback=false and
    peak_starter_giveback_usd=0 (kill live $37.50 from print
-   high). native_close_push=false. Protective down is fill_px
-   − bid, never hold_high − bid. 10/13 14-lot 1.07→1.05 at 4s
-   HOLDs. 10/13 12-lot 1.19→1.15 at 122s (−$48) HOLDs.
+   high). morning_rip_flatten=false (kill live 09:45).
+   native_close_push=false. Protective down is fill_px − bid,
+   never hold_high − bid. 15:50 leftover is rth_end (still
+   flatten). 10/13 14-lot 1.07→1.05 at 4s HOLDs. 10/13 12-lot
+   1.19→1.15 at 122s (−$48) HOLDs even as peak_giveback.
    10/13 12-lot 1.19→1.04 at 20s still flatten_protective.
    10/9 C/D/E 5–12s still HOLD. 10/5 773C at 180s still
    peak_giveback $50. recover_lost_flat means broker qty is
    already 0 — skip_already_flat, do not spray STC.
+   stc_recomputes_envelope=true.
 
 Wire overlay ingest to stamp every Candidate with with_spy_deltas /
 signed_spy_deltas on the last four 1m SPY closes before decide_sub_send.
 OCC tenor MUST be starter_dte_for_clock(et_hhmm): 0 at 09:30–09:59 and
 10:21–12:29; 1 in 10:00–10:20 and from 12:30. Leftover 0DTE after 12:30
 is skip_0dte_near_cutover (admin only). rec_book_ship MUST become
-2026-10-13-scratch-hold on /health.
+2026-10-13-scratch-lock on /health.
 
 HIGH-WATER $50 — 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408).
 The fill $0.15 stop (0.64) would give back ~$1,650. That is not the exit.
@@ -284,8 +293,9 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
    if kind == "adopt_stc_only": before_stc MUST post (orphan_adopt). Walk ladder.
    NEVER BTO from recover_lost.
 
-Proof: rec_book_ship=2026-10-13-scratch-hold, min_hold_sec=90,
-stc_requires_before_stc=true, native_close_push=false,
+Proof: rec_book_ship=2026-10-13-scratch-lock, min_hold_sec=90,
+stc_requires_before_stc=true, stc_recomputes_envelope=true,
+native_close_push=false, morning_rip_flatten=false,
 peak_starter_giveback=false, peak_starter_giveback_usd=0,
 protect_from_high=true,
 clock_identity_lock=true, sms_at_seal=true,
@@ -341,11 +351,14 @@ SMS publication time for send_ts 1791558455.695518 is 11:07:35 BEAR puts
 Do not SMS follow_delivered_sub receipts. Do not plot a seal that was
 not texted.
 A 14-lot 1.07 marked 1.05 at 4s (10/13 10:29) must HOLD even if
-recover_lost_flat / broker_flat. A 12-lot 1.19 marked 1.15 at 122s
-(10/13 09:46, −$48) must HOLD — that is not $0.15 and not $50 peak.
+recover_lost_flat / broker_flat / on_manage. A 12-lot 1.19 marked
+1.15 at 122s (10/13 09:46, −$48) must HOLD even if the claimed
+reason is peak_giveback / protective / fail_90 — that is not
+$0.15 and not $50 peak. morning_rip_flatten at 09:45 must HOLD.
 peak_starter_giveback must not flatten. A 12-lot 1.19 marked 1.04
-at 20s is flatten_protective. Do not walk the STC ladder unless
-may_post_stc / before_stc post=true.
+at 20s is flatten_protective. 15:50 leftover is rth_end.
+Do not walk the STC ladder unless may_post_stc / before_stc /
+on_manage flatten is true.
 
 ```
 

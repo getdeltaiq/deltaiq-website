@@ -34,6 +34,7 @@ EnvelopeReason = Literal[
     "fail_90",
     "orphan_adopt",
     "peak_giveback",
+    "rth_end",
 ]
 
 
@@ -98,15 +99,18 @@ PEAK_GIVEBACK_MIN_SEC = FAIL_SEC
 # 10/5 773C still locks after 90s. 10/2 leftover still clips $0.30.
 MIN_HOLD_SEC = FAIL_SEC
 IMMEDIATE_FLATTEN_REASONS = frozenset(
-    {"protective", "ticket_risk", "cata_opt", "cata_spy"}
+    {"protective", "ticket_risk", "cata_opt", "cata_spy", "rth_end"}
 )
 # Only these reasons may ever post STC. Live leftover names
 # (peak_starter_giveback $37.50 from print high, broker_flat,
-# recover_lost_flat, spike_fail) are scratches, not envelope.
-# 10/13 09:46 12-lot 1.19→1.15 at 122s (−$48) was peak_starter.
-# 10/13 10:29 14-lot 1.07→1.05 at 4s (−$28) was recover_lost_flat
-# / broker_flat walking the ladder. flatten_allowed used to treat
-# unknown reasons as HOLD until 90s then flatten — that is the hole.
+# recover_lost_flat, spike_fail, morning_rip_flatten 09:45) are
+# scratches, not envelope. 10/13 09:46 12-lot 1.19→1.15 at 122s
+# (−$48) was peak_starter. 10/13 10:29 14-lot 1.07→1.05 at 4s
+# (−$28) was recover_lost_flat / broker_flat walking the ladder.
+# flatten_allowed used to treat unknown reasons as HOLD until 90s
+# then flatten — that is the hole. may_post_stc now RECOMPUTES
+# envelope_hit and ignores the claimed name, so relabeling a $0.04
+# dip as protective / peak_giveback / fail_90 cannot sell.
 ENVELOPE_FLATTEN_REASONS = frozenset(
     {
         "protective",
@@ -116,6 +120,7 @@ ENVELOPE_FLATTEN_REASONS = frozenset(
         "fail_90",
         "peak_giveback",
         "orphan_adopt",
+        "rth_end",
     }
 )
 SCRATCH_HOLD_REASONS = frozenset(
@@ -124,18 +129,44 @@ SCRATCH_HOLD_REASONS = frozenset(
         "peak_starter",
         "print_high",
         "hold_high",
+        "hold_high_stop",
         "broker_flat",
+        "broker_qty_flat",
         "recover_lost_flat",
+        "recover_lost",
+        "recover_lost_fresh_fill",
+        "recover_lost_owned",
         "spike_fail",
         "max_in",
         "never_green",
+        "never_ran",
+        "green_fail",
         "native_close",
         "close_push",
+        "morning_rip",
+        "morning_rip_flatten",
+        "rip_flatten",
+        "time_stop",
+        "starter_giveback",
+        "print_giveback",
+        "thru_05",
+        "thru_10",
+        "flatten_limit",
+        "working_stc",
+        "stc_on_fill",
+        "bid_exit",
+        "take_exit",
+        "trail",
+        "max_hold",
+        "ladder",
+        "session_cut",
     }
 )
 PEAK_STARTER_GIVEBACK = False
 PEAK_STARTER_GIVEBACK_USD = 0.0
+MORNING_RIP_FLATTEN = False
 STC_REQUIRES_BEFORE_STC = True
+STC_RECOMPUTES_ENVELOPE = True
 NATIVE_CLOSE_PUSH = False
 # One send identity: unix send_ts in America/New_York is SMS time, overlay
 # label, strike copy, and Tradier consume. Do not use legacy_ledger_hhmm
@@ -191,7 +222,7 @@ WORKING_STC_ON_FILL = False
 # never SMS on their own (follow_delivered_sub=false).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-13-scratch-hold"
+REC_BOOK_SHIP = "2026-10-13-scratch-lock"
 
 
 def rec_book() -> dict:
@@ -238,9 +269,11 @@ def rec_book() -> dict:
         "working_stc_on_fill": WORKING_STC_ON_FILL,
         "before_stc": True,
         "stc_requires_before_stc": STC_REQUIRES_BEFORE_STC,
+        "stc_recomputes_envelope": STC_RECOMPUTES_ENVELOPE,
         "native_close_push": NATIVE_CLOSE_PUSH,
         "peak_starter_giveback": PEAK_STARTER_GIVEBACK,
         "peak_starter_giveback_usd": PEAK_STARTER_GIVEBACK_USD,
+        "morning_rip_flatten": MORNING_RIP_FLATTEN,
         "skip_already_flat": True,
         "recover_lost_owned": True,
         "orphan_adopt_flattens": True,
@@ -793,32 +826,52 @@ def flatten_allowed(seconds_since_fill: float, reason: EnvelopeReason | str | No
 
 def may_post_stc(
     seconds_since_fill: float,
-    reason: EnvelopeReason | str | None,
+    reason: EnvelopeReason | str | None = None,
     *,
     fill_px: float | None = None,
     mark_bid: float | None = None,
     dte: int | None = None,
     qty: int | None = None,
+    spy_adverse: float | None = None,
+    ticket_phase: str | None = None,
+    peak_unrealized: float = 0.0,
+    orphan_adopt: bool = False,
+    et_hhmm: str | None = None,
 ) -> bool:
     """Single gate in front of every Tradier sell_to_close.
 
-    Live must call this (via before_stc) before posting. If False, do
-    not send, do not walk the ladder, do not native close_push.
-    Protective down is fill_px − bid, never hold_high − bid.
+    Recomputes envelope_hit from fill/bid/qty. The claimed `reason` is
+    ignored when marks exist — live cannot sell a $0.04 dip by naming
+    it protective, peak_giveback, fail_90, or ticket_risk.
+    Missing marks fail closed. qty<=0 is skip_already_flat.
+    True orphan_adopt (HOLD_UNSTAMPED off) still flattens after 90s.
+    RTH 15:50 leftover may flatten (et_hhmm >= 15:50).
     """
     if qty is not None and int(qty) <= 0:
         return False
-    if not flatten_allowed(seconds_since_fill, reason):
+    age = float(seconds_since_fill)
+    claimed = str(reason) if reason else ""
+    if claimed in SCRATCH_HOLD_REASONS:
+        claimed = ""
+    if fill_px is None or mark_bid is None or qty is None:
         return False
-    if (
-        str(reason) == "protective"
-        and fill_px is not None
-        and mark_bid is not None
-    ):
-        down = round(float(fill_px) - float(mark_bid), 4)
-        if down < protective_stop_usd(dte) - 1e-9:
-            return False
-    return True
+    hit = envelope_hit(
+        fill_px=float(fill_px),
+        mark_bid=float(mark_bid),
+        qty=int(qty),
+        spy_adverse=float(spy_adverse or 0.0),
+        seconds_since_fill=age,
+        ticket_phase=ticket_phase,
+        dte=dte,
+        peak_unrealized=peak_unrealized,
+    )
+    if hit is not None:
+        return flatten_allowed(age, hit)
+    if orphan_adopt and flatten_allowed(age, "orphan_adopt"):
+        return True
+    if et_hhmm and et_hhmm >= RTH_END_ET and flatten_allowed(age, "rth_end"):
+        return True
+    return False
 
 
 def envelope_hit(
@@ -1253,6 +1306,7 @@ def decide_manage(
     bid: float,
     now: float | None = None,
     dte: int | None = None,
+    et_hhmm: str | None = None,
 ) -> dict:
     if qty > 0:
         state.broker_qty = int(qty)
@@ -1274,14 +1328,26 @@ def decide_manage(
         dte=dte_val,
         peak_unrealized=state.ticket_peak_unrealized,
     )
-    if reason is not None and flatten_allowed(age, reason):
-        return flatten_now(state, reason, bid)
-    if state.orphan_adopt and qty > 0:
-        # True 90m leftover (HOLD_UNSTAMPED off) still flattens after min hold.
-        # A 5s live fill must not be sold as orphan_adopt (10/9 C/D/E).
-        if flatten_allowed(age, "orphan_adopt"):
-            return flatten_now(state, "orphan_adopt", bid)
-        reason = None
+    if may_post_stc(
+        age,
+        reason,
+        fill_px=fill_px,
+        mark_bid=mark_bid,
+        dte=dte_val,
+        qty=qty,
+        spy_adverse=spy_adverse,
+        ticket_phase=ticket_phase,
+        peak_unrealized=state.ticket_peak_unrealized,
+        orphan_adopt=state.orphan_adopt,
+        et_hhmm=et_hhmm,
+    ):
+        flatten_reason = reason
+        if flatten_reason is None and state.orphan_adopt:
+            flatten_reason = "orphan_adopt"
+        if flatten_reason is None and et_hhmm and et_hhmm >= RTH_END_ET:
+            flatten_reason = "rth_end"
+        if flatten_reason is not None:
+            return flatten_now(state, flatten_reason, bid)
     if reason is None:
         mfe = round(mark_bid - fill_px, 4)
         extra_ok = False
@@ -1305,8 +1371,6 @@ def decide_manage(
                 "extra_bto_qty": extra if extra_ok else 0,
             },
         )
-    if flatten_allowed(age, reason):
-        return flatten_now(state, reason, bid)
     extra_ok = False
     extra = 0
     return apply_manage_result(
@@ -1366,6 +1430,11 @@ def decide_stc(state: SessionState, **kwargs) -> dict:
         mark_bid=kwargs.get("mark_bid", kwargs.get("bid")),
         dte=kwargs.get("dte"),
         qty=qty,
+        spy_adverse=kwargs.get("spy_adverse"),
+        ticket_phase=kwargs.get("ticket_phase"),
+        peak_unrealized=state.ticket_peak_unrealized,
+        orphan_adopt=state.orphan_adopt,
+        et_hhmm=kwargs.get("et_hhmm"),
     ):
         state.last_action = "hold_min_hold"
         m = apply_manage_result(

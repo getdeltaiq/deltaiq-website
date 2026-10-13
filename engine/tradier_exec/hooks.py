@@ -17,6 +17,7 @@ from engine.shared.gates import (
     decide_starter,
     decide_stc,
     extra_bto_qty,
+    may_post_stc,
     new_session,
     rec_book,
     source_skip_reason,
@@ -62,9 +63,49 @@ def on_manage(state: SessionState, **kwargs) -> dict:
 
     If flatten is True, ignore trail and walk STC ladder to market.
     If flatten is False, do not post STC. take_exit is hold.
+    Live must not walk the ladder from this hook unless may_post_stc.
     """
     enforce_keep_halt(state)
-    return apply_manage_result(state, decide_manage(state, **kwargs))
+    m = apply_manage_result(state, decide_manage(state, **kwargs))
+    if not m.get("flatten"):
+        return m
+    qty = (
+        int(kwargs["qty"])
+        if kwargs.get("qty") is not None
+        else int(state.broker_qty or 0)
+    )
+    age = state.ticket_age_sec(
+        float(kwargs.get("seconds_since_fill") or 0.0), now=kwargs.get("now")
+    )
+    if may_post_stc(
+        age,
+        m.get("reason"),
+        fill_px=kwargs.get("fill_px"),
+        mark_bid=kwargs.get("mark_bid", kwargs.get("bid")),
+        dte=kwargs.get("dte"),
+        qty=qty,
+        spy_adverse=kwargs.get("spy_adverse"),
+        ticket_phase=kwargs.get("ticket_phase"),
+        peak_unrealized=state.ticket_peak_unrealized,
+        orphan_adopt=state.orphan_adopt,
+        et_hhmm=kwargs.get("et_hhmm"),
+    ):
+        return m
+    state.last_action = "hold_min_hold"
+    return apply_manage_result(
+        state,
+        {
+            "action": "hold",
+            "flatten": False,
+            "post_stc": False,
+            "working_stc": False,
+            "reason": "min_hold",
+            "override_trail": False,
+            "ignore_trail": False,
+            "engine_exit_mode": ENGINE_EXIT_MODE,
+            "ticket_phase": state.ticket_phase,
+        },
+    )
 
 
 def before_stc(state: SessionState, **kwargs) -> dict:
