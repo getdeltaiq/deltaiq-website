@@ -100,6 +100,43 @@ MIN_HOLD_SEC = FAIL_SEC
 IMMEDIATE_FLATTEN_REASONS = frozenset(
     {"protective", "ticket_risk", "cata_opt", "cata_spy"}
 )
+# Only these reasons may ever post STC. Live leftover names
+# (peak_starter_giveback $37.50 from print high, broker_flat,
+# recover_lost_flat, spike_fail) are scratches, not envelope.
+# 10/13 09:46 12-lot 1.19→1.15 at 122s (−$48) was peak_starter.
+# 10/13 10:29 14-lot 1.07→1.05 at 4s (−$28) was recover_lost_flat
+# / broker_flat walking the ladder. flatten_allowed used to treat
+# unknown reasons as HOLD until 90s then flatten — that is the hole.
+ENVELOPE_FLATTEN_REASONS = frozenset(
+    {
+        "protective",
+        "ticket_risk",
+        "cata_opt",
+        "cata_spy",
+        "fail_90",
+        "peak_giveback",
+        "orphan_adopt",
+    }
+)
+SCRATCH_HOLD_REASONS = frozenset(
+    {
+        "peak_starter_giveback",
+        "peak_starter",
+        "print_high",
+        "hold_high",
+        "broker_flat",
+        "recover_lost_flat",
+        "spike_fail",
+        "max_in",
+        "never_green",
+        "native_close",
+        "close_push",
+    }
+)
+PEAK_STARTER_GIVEBACK = False
+PEAK_STARTER_GIVEBACK_USD = 0.0
+STC_REQUIRES_BEFORE_STC = True
+NATIVE_CLOSE_PUSH = False
 # One send identity: unix send_ts in America/New_York is SMS time, overlay
 # label, strike copy, and Tradier consume. Do not use legacy_ledger_hhmm
 # for live SMS (10:32 vs 10:45 same send). Do not SMS at arm/receipt then
@@ -154,7 +191,7 @@ WORKING_STC_ON_FILL = False
 # never SMS on their own (follow_delivered_sub=false).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-12-overlay-sms"
+REC_BOOK_SHIP = "2026-10-13-scratch-hold"
 
 
 def rec_book() -> dict:
@@ -200,6 +237,10 @@ def rec_book() -> dict:
         "stc_on_bto_fill": STC_ON_BTO_FILL,
         "working_stc_on_fill": WORKING_STC_ON_FILL,
         "before_stc": True,
+        "stc_requires_before_stc": STC_REQUIRES_BEFORE_STC,
+        "native_close_push": NATIVE_CLOSE_PUSH,
+        "peak_starter_giveback": PEAK_STARTER_GIVEBACK,
+        "peak_starter_giveback_usd": PEAK_STARTER_GIVEBACK_USD,
         "skip_already_flat": True,
         "recover_lost_owned": True,
         "orphan_adopt_flattens": True,
@@ -734,13 +775,50 @@ def fail_sec_for(dte: int | None = None) -> float | None:
 
 
 def flatten_allowed(seconds_since_fill: float, reason: EnvelopeReason | str | None) -> bool:
-    """Timer / peak / orphan waits 90s. A real option dump may flatten after quote grace."""
+    """Timer / peak / orphan waits 90s. A real option dump may flatten after quote grace.
+
+    Unknown / live scratch names never flatten. 10/13 122s peak_starter
+    and 4s broker_flat must HOLD. Only ENVELOPE_FLATTEN_REASONS post.
+    """
     if not reason:
         return False
+    r = str(reason)
+    if r in SCRATCH_HOLD_REASONS or r not in ENVELOPE_FLATTEN_REASONS:
+        return False
     age = float(seconds_since_fill)
-    if reason in IMMEDIATE_FLATTEN_REASONS:
+    if r in IMMEDIATE_FLATTEN_REASONS:
         return age >= QUOTE_GRACE_SEC - 1e-9
     return age >= MIN_HOLD_SEC - 1e-9
+
+
+def may_post_stc(
+    seconds_since_fill: float,
+    reason: EnvelopeReason | str | None,
+    *,
+    fill_px: float | None = None,
+    mark_bid: float | None = None,
+    dte: int | None = None,
+    qty: int | None = None,
+) -> bool:
+    """Single gate in front of every Tradier sell_to_close.
+
+    Live must call this (via before_stc) before posting. If False, do
+    not send, do not walk the ladder, do not native close_push.
+    Protective down is fill_px − bid, never hold_high − bid.
+    """
+    if qty is not None and int(qty) <= 0:
+        return False
+    if not flatten_allowed(seconds_since_fill, reason):
+        return False
+    if (
+        str(reason) == "protective"
+        and fill_px is not None
+        and mark_bid is not None
+    ):
+        down = round(float(fill_px) - float(mark_bid), 4)
+        if down < protective_stop_usd(dte) - 1e-9:
+            return False
+    return True
 
 
 def envelope_hit(
@@ -1281,7 +1359,14 @@ def decide_stc(state: SessionState, **kwargs) -> dict:
     age = state.ticket_age_sec(
         float(kwargs.get("seconds_since_fill") or 0.0), now=kwargs.get("now")
     )
-    if m.get("flatten") and not flatten_allowed(age, m.get("reason")):
+    if m.get("flatten") and not may_post_stc(
+        age,
+        m.get("reason"),
+        fill_px=kwargs.get("fill_px"),
+        mark_bid=kwargs.get("mark_bid", kwargs.get("bid")),
+        dte=kwargs.get("dte"),
+        qty=qty,
+    ):
         state.last_action = "hold_min_hold"
         m = apply_manage_result(
             state,

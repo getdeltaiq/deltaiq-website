@@ -975,8 +975,11 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-12-overlay-sms")
+        self.assertEqual(h["rec_book_ship"], "2026-10-13-scratch-hold")
         self.assertEqual(h["min_hold_sec"], 90.0)
+        self.assertTrue(h["stc_requires_before_stc"])
+        self.assertFalse(h["native_close_push"])
+        self.assertFalse(h["peak_starter_giveback"])
         self.assertTrue(h["clock_identity_lock"])
         self.assertTrue(h["sms_at_seal"])
         self.assertFalse(h["follow_delivered_sub"])
@@ -1770,6 +1773,89 @@ class PeakGivebackTests(unittest.TestCase):
             )
             self.assertFalse(d["post"])
             self.assertFalse(d["flatten"])
+
+    def test_1013_4s_and_122s_scratches_hold(self):
+        """10/13: 4s 1.07→1.05 and 122s 1.19→1.15 (−$48) must HOLD.
+
+        Live advertised min_hold_sec=90 then sold via recover_lost_flat /
+        broker_flat / peak_starter_giveback $37.50 from print high.
+        Unknown scratch names never flatten. $0.04 down is not $0.15.
+        A real fill $0.15 dump still clips.
+        """
+        from engine.shared.gates import flatten_allowed, may_post_stc
+        from engine.tradier_exec.hooks import before_stc
+
+        for reason in (
+            "peak_starter_giveback",
+            "broker_flat",
+            "recover_lost_flat",
+            "spike_fail",
+            "print_high",
+        ):
+            self.assertFalse(flatten_allowed(4, reason), msg=reason)
+            self.assertFalse(flatten_allowed(122, reason), msg=reason)
+            self.assertFalse(may_post_stc(122, reason, qty=12), msg=reason)
+
+        s = new_session("2026-10-13")
+        s.on_bto_fill(14, 1.07, now=1_000.0)
+        four = before_stc(
+            s,
+            fill_px=1.07,
+            mark_bid=1.05,
+            qty=14,
+            spy_adverse=0.02,
+            seconds_since_fill=4,
+            ticket_phase="FAIL",
+            bid=1.05,
+            now=1_004.0,
+            dte=0,
+        )
+        self.assertFalse(four["post"])
+        self.assertFalse(four["flatten"])
+
+        s = new_session("2026-10-13")
+        s.on_bto_fill(12, 1.19, now=1_000.0)
+        dip = before_stc(
+            s,
+            fill_px=1.19,
+            mark_bid=1.15,
+            qty=12,
+            spy_adverse=0.05,
+            seconds_since_fill=122,
+            ticket_phase="FAIL",
+            bid=1.15,
+            now=1_122.0,
+            dte=0,
+        )
+        self.assertFalse(dip["post"])
+        self.assertFalse(dip["flatten"])
+        self.assertFalse(
+            may_post_stc(
+                122,
+                "protective",
+                fill_px=1.19,
+                mark_bid=1.15,
+                dte=0,
+                qty=12,
+            )
+        )
+
+        s = new_session("2026-10-13")
+        s.on_bto_fill(12, 1.19, now=1_000.0)
+        dump = before_stc(
+            s,
+            fill_px=1.19,
+            mark_bid=1.04,
+            qty=12,
+            spy_adverse=0.05,
+            seconds_since_fill=20,
+            ticket_phase="FAIL",
+            bid=1.04,
+            now=1_020.0,
+            dte=0,
+        )
+        self.assertTrue(dump["post"])
+        self.assertEqual(dump["reason"], "protective")
 
     def test_109_bear_185s_holds_without_spy_reversal(self):
         s = new_session("2026-10-09")
