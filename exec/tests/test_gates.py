@@ -932,7 +932,7 @@ class AlertQualityTests(unittest.TestCase):
             regime="RANGE",
         )
         self.assertTrue(d["post"])
-        self.assertEqual(d["qty"], 8)
+        self.assertEqual(d["qty"], 6)  # 1DTE cap while flatten_exits gather
 
     def test_clock_helper_matches_the_two_losses(self):
         self.assertEqual(
@@ -975,7 +975,7 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-13-scratch-lock")
+        self.assertEqual(h["rec_book_ship"], "2026-10-15-1dte-exit-log")
         self.assertEqual(h["min_hold_sec"], 90.0)
         self.assertTrue(h["stc_requires_before_stc"])
         self.assertTrue(h["stc_recomputes_envelope"])
@@ -2153,6 +2153,145 @@ class ScratchLockTests(unittest.TestCase):
         self.assertFalse(may_post_stc(20, "protective", qty=12))
         self.assertFalse(may_post_stc(90, "peak_giveback", qty=16))
         self.assertFalse(may_post_stc(91, "fail_90", qty=10))
+
+
+class OneDteExitLogTests(unittest.TestCase):
+    """10/13–10/14: log the path, shorten 1DTE protective, cap 1DTE size."""
+
+    def test_0dte_qty_unchanged(self):
+        self.assertEqual(starter_qty(1.42), 14)
+        self.assertEqual(starter_qty(1.42, dte=0), 14)
+
+    def test_1dte_starter_caps_at_six(self):
+        # 10/14 dump was 10-lot at 2.63; $2000 notional is 7; cap is 6.
+        self.assertEqual(starter_qty(2.63, dte=1), 6)
+        self.assertEqual(starter_qty(1.42, dte=1), 6)
+        self.assertEqual(starter_qty(3.03, dte=1), 6)
+
+    def test_1dte_extra_bto_is_off(self):
+        from engine.shared.gates import extra_bto_qty
+
+        s = new_session("2026-10-14")
+        s.broker_qty = 5
+        s.ticket_phase = "RUN"
+        s.last_option_symbol = "SPY261015P00770000"
+        self.assertEqual(extra_bto_qty(5, dte=1), 0)
+        self.assertFalse(s.extra_bto_ok(1, 0.25, 2.95, 2.89, dte=1))
+        m = decide_manage(
+            s,
+            fill_px=2.89,
+            mark_bid=2.95,
+            qty=5,
+            spy_adverse=0.0,
+            seconds_since_fill=12,
+            ticket_phase="FAIL",
+            bid=2.95,
+            dte=1,
+        )
+        self.assertFalse(m["flatten"])
+        self.assertFalse(m.get("extra_bto"))
+        self.assertEqual(m.get("extra_bto_qty"), 0)
+
+    def test_0dte_ladder_is_still_four_steps(self):
+        steps = stc_ladder_prices(1.25, dte=0, reason="protective")
+        self.assertEqual(len(steps), 4)
+        self.assertEqual(steps[-1], ("market", None))
+
+    def test_1dte_protective_is_bid_then_market(self):
+        from engine.shared.gates import stc_ladder_steps
+
+        steps = stc_ladder_prices(2.018, dte=1, reason="protective")
+        self.assertEqual(steps, [("limit", 2.02), ("market", None)])
+        plan = stc_ladder_steps(2.018, dte=1, reason="protective")
+        self.assertEqual(plan[1]["wait_sec"], 2.0)
+        peak = stc_ladder_prices(3.09, dte=1, reason="peak_giveback")
+        self.assertEqual(len(peak), 4)
+
+    def test_flatten_logs_trigger_bid_and_survives_reload(self):
+        import tempfile
+        from pathlib import Path
+
+        from engine.tradier_exec.persist import ConsumedSends
+
+        s = new_session("2026-10-13")
+        with tempfile.TemporaryDirectory() as td:
+            db = ConsumedSends(Path(td) / "x.db")
+            s.flatten_persist = db
+            s.last_option_symbol = "SPY261014P00777000"
+            m = decide_manage(
+                s,
+                fill_px=2.318333,
+                mark_bid=2.018,
+                qty=6,
+                spy_adverse=0.20,
+                seconds_since_fill=120,
+                ticket_phase="FAIL",
+                bid=2.018,
+                now=1_000.0,
+                dte=1,
+            )
+            self.assertTrue(m["flatten"])
+            self.assertEqual(m["reason"], "protective")
+            self.assertEqual(len(m["ladder"]), 2)
+            row = s.last_flatten_exit
+            self.assertEqual(row["trigger_bid"], 2.018)
+            self.assertEqual(row["qty"], 6)
+            self.assertEqual(row["reason"], "protective")
+            self.assertEqual(row["fill_px"], 2.318333)
+            from engine.shared.gates import note_ladder_step, note_flatten_fill
+
+            note_ladder_step(s, kind="limit", px=2.02, ts=1_001.0)
+            note_ladder_step(s, kind="market", px=None, ts=1_003.0)
+            note_flatten_fill(s, fill_px=1.77, ts=1_004.0)
+            self.assertEqual(row["final_fill_px"], 1.77)
+            self.assertEqual(len(row["steps"]), 2)
+            db.close()
+            db2 = ConsumedSends(Path(td) / "x.db")
+            loaded = db2.load_flattens()
+            self.assertEqual(len(loaded), 1)
+            self.assertEqual(loaded[0]["trigger_bid"], 2.018)
+            self.assertEqual(loaded[0]["final_fill_px"], 1.77)
+            self.assertEqual(loaded[0]["session_date"], "2026-10-13")
+            db2.close()
+
+    def test_1013_short_ladder_replay_vs_logged_cash(self):
+        from engine.shared.gates import replay_1dte_protective_cash
+
+        # Trigger bid is assumed at the $0.30 stop. 10/13 did not log it.
+        r = replay_1dte_protective_cash(
+            qty=6,
+            fill_px=2.318333,
+            trigger_bid=2.018,
+            market_fill=1.77,
+            commission=4.20,
+        )
+        self.assertAlmostEqual(r["actual_cash"], -333.20, places=1)
+        self.assertAlmostEqual(r["if_trigger_bid_fills"], -184.40, places=1)
+        self.assertAlmostEqual(r["ladder_slippage_vs_bid"], -148.80, places=1)
+        self.assertEqual(r["short_ladder_if_still_market"], r["actual_cash"])
+
+    def test_scaled_giveback_replay_is_off_and_0dte_stays_50(self):
+        from unittest.mock import patch
+
+        from engine.shared.gates import peak_giveback_usd_for
+
+        self.assertEqual(peak_giveback_usd_for(0, 16, 1408.0), 50.0)
+        self.assertEqual(peak_giveback_usd_for(1, 5, 90.0), 50.0)
+        with patch("engine.shared.gates.ONE_DTE_SCALED_GIVEBACK", True):
+            # 5-lot floor $0.08 → $40; 25% of $90 = $22.50 → floor binds.
+            self.assertEqual(peak_giveback_usd_for(1, 5, 90.0), 40.0)
+            # Big 1DTE runner: 25% of $400 = $100 (looser than $50).
+            self.assertEqual(peak_giveback_usd_for(1, 5, 400.0), 100.0)
+            self.assertEqual(peak_giveback_usd_for(0, 16, 1408.0), 50.0)
+
+    def test_1014_plus_30_and_plus_90_had_no_logged_high(self):
+        # Cash only: 5× 2.89→2.95 +$25.42 and 5× 2.90→3.09 +$90.42.
+        # Peak giveback $50 never arms below a $50 high. Without flatten_exits
+        # we cannot show leftover MFE. Daily 770P H 4.55 is not this ticket.
+        plus_30_peak_known = 25.42
+        plus_90_peak_known = 90.42
+        self.assertLess(plus_30_peak_known, 50.0)
+        self.assertGreater(plus_90_peak_known, 50.0)
 
 
 class ExtraBtoTests(unittest.TestCase):
