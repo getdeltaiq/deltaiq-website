@@ -165,6 +165,29 @@ SCRATCH_HOLD_REASONS = frozenset(
 PEAK_STARTER_GIVEBACK = False
 PEAK_STARTER_GIVEBACK_USD = 0.0
 MORNING_RIP_FLATTEN = False
+# 10/13 dump clock is gone (get_orders is same-day). Persist every
+# flatten: trigger time, trigger bid, each ladder step, final fill.
+# Survive ET date rollover. hold_watch.events[] is not this log.
+FLATTEN_EXITS_KEEP_DAYS = 30
+FLATTEN_EXITS_DURABLE = True
+# 10/13 6× 777P 1DTE 2.318→1.77 market (−$334): ~$184 is the $0.30 stop,
+# ~$150 is bid/−0.05/−0.10 sitting while the bid fell. 1DTE protective
+# only: rest the trigger bid, then market after 2s. 0DTE $0.15 stop
+# keeps the four-step ladder (slippage is smaller in dollars).
+ONE_DTE_PROTECTIVE_SHORT_LADDER = True
+ONE_DTE_PROTECTIVE_MARKET_AFTER_SEC = 2.0
+# Scaled 1DTE giveback: max(per-contract floor, pct of peak). Replay
+# only until flatten_exits has a 1DTE high-water. 0DTE stays $50.
+# 10/14 +$30 / +$90 5-lots never proved a high without bids.
+ONE_DTE_SCALED_GIVEBACK = False
+ONE_DTE_GIVEBACK_FLOOR_PER_CONTRACT = 0.08
+ONE_DTE_GIVEBACK_PEAK_FRAC = 0.25
+# 10/14 dump was 10-lot (live $3000 leftover). Afternoon winners were
+# 5 / 4. Cap 1DTE at 6 until the short-ladder and giveback replays have
+# a logged path. 0DTE extra BTO to 16 stays. Do not overwrite live
+# starter_notional_usd.
+ONE_DTE_QTY_CAP = 6
+EXTRA_BTO_1DTE = False
 STC_REQUIRES_BEFORE_STC = True
 STC_RECOMPUTES_ENVELOPE = True
 NATIVE_CLOSE_PUSH = False
@@ -222,7 +245,7 @@ WORKING_STC_ON_FILL = False
 # never SMS on their own (follow_delivered_sub=false).
 # Railway must advertise this dict on /health
 # and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-13-scratch-lock"
+REC_BOOK_SHIP = "2026-10-15-1dte-exit-log"
 
 
 def rec_book() -> dict:
@@ -239,6 +262,15 @@ def rec_book() -> dict:
         "extra_bto": True,
         "extra_bto_fill_to": RISK_QTY_CAP,
         "extra_bto_mfe_usd": EXTRA_BTO_MFE_USD,
+        "extra_bto_1dte": EXTRA_BTO_1DTE,
+        "one_dte_qty_cap": ONE_DTE_QTY_CAP,
+        "flatten_exits_durable": FLATTEN_EXITS_DURABLE,
+        "flatten_exits_keep_days": FLATTEN_EXITS_KEEP_DAYS,
+        "one_dte_protective_short_ladder": ONE_DTE_PROTECTIVE_SHORT_LADDER,
+        "one_dte_protective_market_after_sec": ONE_DTE_PROTECTIVE_MARKET_AFTER_SEC,
+        "one_dte_scaled_giveback": ONE_DTE_SCALED_GIVEBACK,
+        "one_dte_giveback_floor_per_contract": ONE_DTE_GIVEBACK_FLOOR_PER_CONTRACT,
+        "one_dte_giveback_peak_frac": ONE_DTE_GIVEBACK_PEAK_FRAC,
         "skip_1dte_not_trend": True,
         "dte_cutover_et": DTE_CUTOVER_ET,
         "dte_book_et": DTE_BOOK_ET,
@@ -402,6 +434,36 @@ CONSUMED_INSERT_SQL = (
 CONSUMED_LOAD_SQL = (
     "SELECT send_ts, dir FROM consumed_sends WHERE session_date = %s"
 )
+FLATTEN_EXITS_CREATE_SQL = """\
+CREATE TABLE IF NOT EXISTS flatten_exits (
+  id bigserial PRIMARY KEY,
+  session_date date NOT NULL,
+  trigger_ts double precision NOT NULL,
+  trigger_et text NOT NULL,
+  occ text,
+  dte integer,
+  qty integer NOT NULL,
+  fill_px double precision,
+  trigger_bid double precision,
+  reason text NOT NULL,
+  ladder_json text NOT NULL,
+  steps_json text NOT NULL DEFAULT '[]',
+  final_fill_px double precision,
+  final_et text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+"""
+FLATTEN_EXITS_INSERT_SQL = (
+    "INSERT INTO flatten_exits (session_date, trigger_ts, trigger_et, occ, dte, "
+    "qty, fill_px, trigger_bid, reason, ladder_json, steps_json, final_fill_px, "
+    "final_et) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+)
+FLATTEN_EXITS_LOAD_SQL = (
+    "SELECT session_date, trigger_ts, trigger_et, occ, dte, qty, fill_px, "
+    "trigger_bid, reason, ladder_json, steps_json, final_fill_px, final_et "
+    "FROM flatten_exits WHERE created_at >= now() - (%s || ' days')::interval "
+    "ORDER BY trigger_ts DESC LIMIT 50"
+)
 
 
 def trend_confirm_kwargs(direction: Direction) -> dict:
@@ -470,16 +532,28 @@ def one_bar_rip_skip_reason(
     return None
 
 
-def starter_qty(ask: float) -> int:
-    """Max debit ~$2000. Option multiplier is 100."""
+def starter_qty(ask: float, *, dte: int | None = None) -> int:
+    """Max debit ~$2000. Option multiplier is 100.
+
+    1DTE is capped at ONE_DTE_QTY_CAP (6) while flatten_exits gathers
+    a logged 1DTE dump path. 0DTE still fills to RISK_QTY_CAP.
+    """
     if ask <= 0:
         return 0
     contracts = int(STARTER_NOTIONAL_USD // (ask * 100.0))
-    return max(1, min(contracts, RISK_QTY_CAP))
+    qty = max(1, min(contracts, RISK_QTY_CAP))
+    if dte == 1:
+        return min(qty, ONE_DTE_QTY_CAP)
+    return qty
 
 
-def extra_bto_qty(broker_qty: int) -> int:
-    """Contracts left to the 16-lot cap. 9/24 winners had 3–5 of headroom."""
+def extra_bto_qty(broker_qty: int, *, dte: int | None = None) -> int:
+    """Contracts left to the 16-lot cap. 9/24 winners had 3–5 of headroom.
+
+    1DTE extra is off until the dump/giveback replay has a logged path.
+    """
+    if dte == 1 and not EXTRA_BTO_1DTE:
+        return 0
     return max(0, RISK_QTY_CAP - int(broker_qty))
 
 
@@ -893,10 +967,11 @@ def envelope_hit(
     down = round(fill_px - mark_bid, 4)
     u = round(unrealized_dollars(mark_bid, fill_px, qty), 2)
     peak = max(float(peak_unrealized or 0.0), u)
+    giveback = peak_giveback_usd_for(dte, qty, peak)
     if (
         seconds_since_fill >= PEAK_GIVEBACK_MIN_SEC - 1e-9
-        and peak >= PEAK_GIVEBACK_USD - 1e-9
-        and peak - u >= PEAK_GIVEBACK_USD - 1e-9
+        and peak >= giveback - 1e-9
+        and peak - u >= giveback - 1e-9
     ):
         return "peak_giveback"
     stop = protective_stop_usd(dte)
@@ -919,14 +994,175 @@ def envelope_hit(
     return None
 
 
-def stc_ladder_prices(bid: float) -> list[tuple[str, float | None]]:
-    """Limit at bid, bid-0.05, bid-0.10, then market."""
+def peak_giveback_usd_for(
+    dte: int | None, qty: int, peak_unrealized: float
+) -> float:
+    """Giveback dollars that flatten a runner.
+
+    0DTE stays PEAK_GIVEBACK_USD ($50 SoT). 1DTE scaled replay is
+    max(floor per contract, pct of peak) and stays OFF until
+    flatten_exits logs a 1DTE high-water.
+    """
+    if dte == 1 and ONE_DTE_SCALED_GIVEBACK:
+        floor = ONE_DTE_GIVEBACK_FLOOR_PER_CONTRACT * 100.0 * max(int(qty), 0)
+        scaled = ONE_DTE_GIVEBACK_PEAK_FRAC * max(float(peak_unrealized), 0.0)
+        return max(floor, scaled)
+    return PEAK_GIVEBACK_USD
+
+
+def stc_ladder_steps(
+    bid: float, *, dte: int | None = None, reason: str | None = None
+) -> list[dict]:
+    """Walk plan live must post. 1DTE protective: bid, then market in 2s."""
+    px = round(float(bid or 0.0), 2)
+    if (
+        dte == 1
+        and reason == "protective"
+        and ONE_DTE_PROTECTIVE_SHORT_LADDER
+    ):
+        return [
+            {"kind": "limit", "px": px, "wait_sec": 0.0},
+            {
+                "kind": "market",
+                "px": None,
+                "wait_sec": ONE_DTE_PROTECTIVE_MARKET_AFTER_SEC,
+            },
+        ]
     return [
-        ("limit", round(bid, 2)),
-        ("limit", round(bid - 0.05, 2)),
-        ("limit", round(bid - 0.10, 2)),
-        ("market", None),
+        {"kind": "limit", "px": px, "wait_sec": 0.0},
+        {"kind": "limit", "px": round(px - 0.05, 2), "wait_sec": 0.0},
+        {"kind": "limit", "px": round(px - 0.10, 2), "wait_sec": 0.0},
+        {"kind": "market", "px": None, "wait_sec": 0.0},
     ]
+
+
+def stc_ladder_prices(
+    bid: float, *, dte: int | None = None, reason: str | None = None
+) -> list[tuple[str, float | None]]:
+    """Limit at bid, bid-0.05, bid-0.10, then market.
+
+    1DTE protective short ladder is bid then market. 0DTE unchanged.
+    """
+    return [(s["kind"], s["px"]) for s in stc_ladder_steps(bid, dte=dte, reason=reason)]
+
+
+def new_flatten_exit(
+    *,
+    session_date: str,
+    trigger_ts: float,
+    occ: str | None,
+    dte: int | None,
+    qty: int,
+    fill_px: float | None,
+    trigger_bid: float,
+    reason: str,
+) -> dict:
+    """Durable flatten header. Live appends steps and the final fill."""
+    live = float(trigger_ts) >= LIVE_SEND_TS_MIN
+    trigger_et = et_hms_from_ts(trigger_ts) if live else ""
+    steps = stc_ladder_steps(float(trigger_bid or 0.0), dte=dte, reason=reason)
+    return {
+        "session_date": session_date,
+        "trigger_ts": float(trigger_ts),
+        "trigger_et": trigger_et,
+        "occ": occ,
+        "dte": dte,
+        "qty": int(qty),
+        "fill_px": None if fill_px is None else float(fill_px),
+        "trigger_bid": round(float(trigger_bid or 0.0), 4),
+        "reason": str(reason),
+        "ladder": [(s["kind"], s["px"]) for s in steps],
+        "ladder_steps": steps,
+        "steps": [],
+        "final_fill_px": None,
+        "final_et": None,
+        "market_after_sec": (
+            ONE_DTE_PROTECTIVE_MARKET_AFTER_SEC
+            if dte == 1 and reason == "protective" and ONE_DTE_PROTECTIVE_SHORT_LADDER
+            else None
+        ),
+    }
+
+
+def record_ladder_step(
+    exit_row: dict,
+    *,
+    kind: str,
+    px: float | None,
+    ts: float,
+    fill_px: float | None = None,
+) -> dict:
+    live = float(ts) >= LIVE_SEND_TS_MIN
+    step = {
+        "kind": str(kind),
+        "px": None if px is None else float(px),
+        "ts": float(ts),
+        "et": et_hms_from_ts(ts) if live else "",
+        "fill_px": None if fill_px is None else float(fill_px),
+    }
+    exit_row.setdefault("steps", []).append(step)
+    return step
+
+
+def record_flatten_fill(exit_row: dict, *, fill_px: float, ts: float) -> dict:
+    live = float(ts) >= LIVE_SEND_TS_MIN
+    exit_row["final_fill_px"] = float(fill_px)
+    exit_row["final_et"] = et_hms_from_ts(ts) if live else ""
+    return exit_row
+
+
+def note_ladder_step(state: SessionState, **kwargs) -> dict | None:
+    """Live STC walker: one posted ladder step. Survives midnight."""
+    row = state.last_flatten_exit
+    if row is None:
+        return None
+    step = record_ladder_step(row, **kwargs)
+    persist = state.flatten_persist
+    update = getattr(persist, "update_flatten", None) if persist is not None else None
+    if callable(update):
+        update(row)
+    return step
+
+
+def note_flatten_fill(state: SessionState, *, fill_px: float, ts: float) -> dict | None:
+    """Live STC walker: broker fill on the flatten. Survives midnight."""
+    row = state.last_flatten_exit
+    if row is None:
+        return None
+    record_flatten_fill(row, fill_px=fill_px, ts=ts)
+    persist = state.flatten_persist
+    update = getattr(persist, "update_flatten", None) if persist is not None else None
+    if callable(update):
+        update(row)
+    return row
+
+
+def replay_1dte_protective_cash(
+    *,
+    qty: int,
+    fill_px: float,
+    trigger_bid: float,
+    market_fill: float,
+    commission: float = 0.0,
+) -> dict:
+    """10/13-class counterfactual. Does not invent a missing trigger bid."""
+    q = int(qty)
+    actual = round((market_fill - fill_px) * 100.0 * q - commission, 2)
+    if_bid_fills = round((trigger_bid - fill_px) * 100.0 * q - commission, 2)
+    stop_dollars = round((trigger_bid - fill_px) * 100.0 * q - commission, 2)
+    slippage = round(actual - if_bid_fills, 2)
+    return {
+        "qty": q,
+        "fill_px": fill_px,
+        "trigger_bid": trigger_bid,
+        "market_fill": market_fill,
+        "actual_cash": actual,
+        "if_trigger_bid_fills": if_bid_fills,
+        "stop_cash": stop_dollars,
+        "ladder_slippage_vs_bid": slippage,
+        "short_ladder_if_bid_fills": if_bid_fills,
+        "short_ladder_if_still_market": actual,
+    }
 
 
 def ledger_invariant(admin_n: int, sub_n: int) -> bool:
@@ -949,6 +1185,9 @@ class SessionState:
     last_bto_client_key: str | None = None
     last_action: str | None = None
     last_stc_ladder: str | None = None
+    last_flatten_exit: dict | None = None
+    flatten_exits: list[dict] = field(default_factory=list)
+    flatten_persist: object | None = None
     engine_exit_mode: str = ENGINE_EXIT_MODE
     protect_fills_n: int = 0
     ticket_risk_hits_n: int = 0
@@ -1154,8 +1393,18 @@ class SessionState:
         local = max(0.0, t - self.ticket_fill_ts)
         return min(passed, local)
 
-    def extra_bto_ok(self, add_qty: int, mfe_usd: float, mark_bid: float, avg_fill: float) -> bool:
+    def extra_bto_ok(
+        self,
+        add_qty: int,
+        mfe_usd: float,
+        mark_bid: float,
+        avg_fill: float,
+        *,
+        dte: int | None = None,
+    ) -> bool:
         if self.operator_halt or self.session_halt or self.session_lost_blocks_send:
+            return False
+        if dte == 1 and not EXTRA_BTO_1DTE:
             return False
         if self.ticket_phase != "RUN" or self.broker_qty <= 0:
             return False
@@ -1163,6 +1412,8 @@ class SessionState:
             return False
         combined = self.broker_qty + add_qty
         if combined > RISK_QTY_CAP:
+            return False
+        if dte == 1 and combined > ONE_DTE_QTY_CAP:
             return False
         projected = unrealized_dollars(mark_bid, avg_fill, combined)
         return projected > -TICKET_RISK_USD
@@ -1247,7 +1498,7 @@ def decide_starter(
         return {"action": "skip_dup_send_ts", "qty": 0, "post": False}
     if not state.try_consume(send_ts, direction, persist=persist):
         return {"action": "skip_dup_send_ts", "qty": 0, "post": False}
-    qty = starter_qty(ask)
+    qty = starter_qty(ask, dte=dte_val)
     state.last_option_symbol = option_symbol
     return {
         "action": "bto",
@@ -1264,8 +1515,26 @@ def ledger_ok_placeholder() -> bool:
     return True
 
 
+def persist_flatten_exit(state: SessionState, row: dict) -> None:
+    """Append in-memory and durable persist. Never DELETE on flatten."""
+    state.last_flatten_exit = row
+    state.flatten_exits.append(row)
+    persist = state.flatten_persist
+    insert = getattr(persist, "insert_flatten", None) if persist is not None else None
+    if callable(insert):
+        insert(row)
+
+
 def flatten_now(
-    state: SessionState, reason: EnvelopeReason, bid: float
+    state: SessionState,
+    reason: EnvelopeReason,
+    bid: float,
+    *,
+    fill_px: float | None = None,
+    qty: int | None = None,
+    dte: int | None = None,
+    now: float | None = None,
+    option_symbol: str | None = None,
 ) -> dict:
     """Single flatten path. Orphans use this so before_stc cannot HOLD."""
     if reason == "protective" or reason == "peak_giveback":
@@ -1275,8 +1544,21 @@ def flatten_now(
     elif reason in ("cata_opt", "cata_spy"):
         state.cata_fills_n += 1
     state.last_action = f"flatten_{reason}"
-    ladder = stc_ladder_prices(float(bid or 0.0))
+    ladder = stc_ladder_prices(float(bid or 0.0), dte=dte, reason=reason)
+    steps = stc_ladder_steps(float(bid or 0.0), dte=dte, reason=reason)
     state.last_stc_ladder = "market"
+    trigger_ts = float(now if now is not None else time.time())
+    exit_row = new_flatten_exit(
+        session_date=state.session_date,
+        trigger_ts=trigger_ts,
+        occ=option_symbol or state.last_option_symbol,
+        dte=dte,
+        qty=int(qty if qty is not None else state.broker_qty or 0),
+        fill_px=fill_px if fill_px is not None else state.avg_fill_px,
+        trigger_bid=float(bid or 0.0),
+        reason=reason,
+    )
+    persist_flatten_exit(state, exit_row)
     return apply_manage_result(
         state,
         {
@@ -1286,6 +1568,8 @@ def flatten_now(
             "working_stc": False,
             "reason": reason,
             "ladder": ladder,
+            "ladder_steps": steps,
+            "flatten_exit": exit_row,
             "last_stc_ladder": "market",
             "override_trail": True,
             "engine_exit_mode": ENGINE_EXIT_MODE,
@@ -1347,15 +1631,26 @@ def decide_manage(
         if flatten_reason is None and et_hhmm and et_hhmm >= RTH_END_ET:
             flatten_reason = "rth_end"
         if flatten_reason is not None:
-            return flatten_now(state, flatten_reason, bid)
+            return flatten_now(
+                state,
+                flatten_reason,
+                bid,
+                fill_px=fill_px,
+                qty=qty,
+                dte=dte_val,
+                now=now,
+                option_symbol=state.last_option_symbol,
+            )
     if reason is None:
         mfe = round(mark_bid - fill_px, 4)
         extra_ok = False
         extra = 0
         if mfe >= EXTRA_BTO_MFE_USD:
             state.ticket_phase = "RUN"
-            extra = extra_bto_qty(state.broker_qty)
-            extra_ok = extra > 0 and state.extra_bto_ok(extra, mfe, mark_bid, fill_px)
+            extra = extra_bto_qty(state.broker_qty, dte=dte_val)
+            extra_ok = extra > 0 and state.extra_bto_ok(
+                extra, mfe, mark_bid, fill_px, dte=dte_val
+            )
         return apply_manage_result(
             state,
             {

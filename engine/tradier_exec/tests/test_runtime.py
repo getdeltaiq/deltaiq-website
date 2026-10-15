@@ -23,6 +23,35 @@ class PersistTests(unittest.TestCase):
             db2 = ConsumedSends(p)
             self.assertEqual(db2.load("2026-09-29"), [(10.0, "BEAR")])
 
+    def test_flatten_exit_survives_new_connection(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "consumed.db"
+            db = ConsumedSends(p)
+            db.insert_flatten(
+                {
+                    "session_date": "2026-10-13",
+                    "trigger_ts": 1000.0,
+                    "trigger_et": "13:02:00",
+                    "occ": "SPY261014P00777000",
+                    "dte": 1,
+                    "qty": 6,
+                    "fill_px": 2.318,
+                    "trigger_bid": 2.018,
+                    "reason": "protective",
+                    "ladder_steps": [
+                        {"kind": "limit", "px": 2.02, "wait_sec": 0.0},
+                        {"kind": "market", "px": None, "wait_sec": 2.0},
+                    ],
+                    "steps": [],
+                    "final_fill_px": 1.77,
+                    "final_et": "13:02:04",
+                }
+            )
+            db.close()
+            loaded = ConsumedSends(p).load_flattens()
+            self.assertEqual(loaded[0]["final_fill_px"], 1.77)
+            self.assertEqual(loaded[0]["reason"], "protective")
+
 
 class RuntimeTapeTests(unittest.TestCase):
     def test_keep_halt_today_posts_nothing(self):

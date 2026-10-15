@@ -8,7 +8,8 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 |---|---|
 | `engine/overlay/publish.py` | Admin ledger (100% of candidates) vs sub send (actionable subset). SMS + Tradier read **sub only**. |
 | `engine/shared/gates.py` | Tradier size, consume-once, bounce skip, envelope, halt, STC ladder → market |
-| `engine/tradier_exec/hooks.py` | `before_bto` / `on_manage` / `/health` proof keys (`gates_module=engine.shared.gates`) |
+| `engine/tradier_exec/hooks.py` | `before_bto` / `on_manage` / `on_ladder_step` / `on_flatten_fill` / `/health` proof keys (`gates_module=engine.shared.gates`) |
+| `engine/tradier_exec/persist.py` | Durable `consumed_sends` **and** `flatten_exits` (survive ET midnight) |
 
 `exec/` remains a compatibility shim + shore-up installer for the live Railway process until it imports `engine.*` directly.
 
@@ -40,6 +41,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **Min hold (10/9 C/D/E 5–12s scratches):** `MIN_HOLD_SEC=90` on **every** flatten except fill `$0.15` / 1DTE `$0.30` / cata / ticket_risk. Live sold C in 5s, D in 7s, E (a winner) in 12s via `orphan_adopt` / `recover_lost_flat` before SPY could move. Same 90s as fail_90 / peak min — not a one-day patch. 10/5 773C still locks after 90s. 10/2 leftover still clips `$0.30`. 9/28 10:42 / 10/2 10:54 / 10/5 12:22 still SEND. Do not STC on BTO fill. Do not fire starter `$37.50` giveback before 90s.
   - **Scratch hold (10/13):** `/health` advertised `min_hold_sec=90` then sold a 14-lot 1.07→1.05 in **4s** (`recover_lost_flat` / `broker_flat` ladder) and a 12-lot 1.19→1.15 in **122s** (−$48, live `$37.50` peak_starter from print high). `flatten_allowed` is fail-closed: only envelope reasons post (`protective` / `ticket_risk` / cata / `fail_90` / `peak_giveback` / `orphan_adopt` / `rth_end`). Live scratch names never flatten.
   - **Scratch lock (10/13, holds):** Listing leftover names is not enough — live can relabel a $0.04 dip as `protective` / `peak_giveback` / `fail_90` and sell. `may_post_stc` **recomputes** `envelope_hit` from fill/bid/qty and **ignores the claimed reason**. `on_manage` and `before_stc` share that gate. Missing marks fail closed. `morning_rip_flatten=false` (live 09:45). 15:50 leftover still `rth_end`. A 4s $0.02 dip HOLDs. A 122s $0.04 dip HOLDs even if named `peak_giveback`. A 20s fill $0.15 dump still clips. 10/5 773C at 180s still peak_giveback $50.
+  - **1DTE exit log + short ladder (10/15):** `get_orders` is same-day and lost the 10/13 dump clock. Every flatten writes `flatten_exits` (trigger time, trigger bid, planned ladder, each posted step, final fill) and **keeps it across ET midnight**. 1DTE **protective** only: rest the trigger bid, then **market after 2s** (skip bid−0.05 / bid−0.10). 0DTE $0.15 keeps the four-step ladder. 1DTE size holds at **6** (`one_dte_qty_cap`); 1DTE extra BTO is off. Scaled 1DTE giveback (`max($0.08/contract, 25% of peak)`) is **replay-only** until a logged high-water exists — 10/14 +$30 never tagged $50, +$90 has no bid path. Do not change 0DTE size or 0DTE peak $50.
   - **Peak lock (10/5):** A runner’s bid high is the high-water mark. Once unrealized ≥ **$50** **and the ticket is ≥ 90s old**, flatten if the ticket gives back **$50** from that high (`peak_giveback`). 10/5 16-lot 773C 0.79→1.67 (~+$1,408) must NOT sit to the fill $0.15 stop at 0.64. Fill $0.15 / 1DTE $0.30 still protect tickets that never made a high. Quote grace 8s and no STC on fill stay. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
@@ -51,27 +53,30 @@ This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` 
 
 ```
 SHIP TO PRODUCTION NOW. RTH is OPEN. rec_book_ship MUST become
-2026-10-13-scratch-lock on /health. ADD nine levers on top of the live
-climax-1dte-book already on Railway. Do NOT overwrite peak_giveback_usd,
-session_loss_halt_usd, or starter_notional_usd (live independently uses
-$75 / $1125 / $3000). Do NOT fire peak_starter_giveback /
-$0.15-from-print-high in the first 90s. Protective down is fill_px − bid,
-never hold_high − bid. Do not keep a second knob set. Do not lift a halt
-that is already off. Do not freeze 0DTE TREND before 12:30 except
-10:00–10:20 fade tape. Do not loosen stall $0.08, 3-minute $0.20,
-chase $0.50, or queue_opposite=false. Fewer SUB alerts is correct if
-they are winners.
+2026-10-15-1dte-exit-log on /health. KEEP scratch-lock. ADD the 1DTE
+exit-log / short-ladder / size-hold on top of live. Do NOT overwrite
+peak_giveback_usd, session_loss_halt_usd, or starter_notional_usd
+(live independently uses $75 / $1125 / $3000). Do NOT fire
+peak_starter_giveback / $0.15-from-print-high in the first 90s.
+Protective down is fill_px − bid, never hold_high − bid. Do not keep
+a second knob set. Do not lift a halt that is already off. Do not
+freeze 0DTE TREND before 12:30 except 10:00–10:20 fade tape. Do not
+loosen stall $0.08, 3-minute $0.20, chase $0.50, or
+queue_opposite=false. 0DTE four-step ladder and 0DTE extra BTO to 16
+stay. Fewer SUB alerts is correct if they are winners.
 
-Copy these three files from getdeltaiq/deltaiq-website SHA a0e6292
-onto getdeltaiq/deltaiq-signal-engine production (merge knobs; do not
+Copy these files from getdeltaiq/deltaiq-website SHA 3a7cdd6 onto
+getdeltaiq/deltaiq-signal-engine production (merge knobs; do not
 wholesale-replace live peak / halt / starter size):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
+  engine/tradier_exec/persist.py
   engine/overlay/publish.py
 Public raw (website is public; curl these, do not rewrite knobs):
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/a0e6292/engine/shared/gates.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/a0e6292/engine/tradier_exec/hooks.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/a0e6292/engine/overlay/publish.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/3a7cdd6/engine/shared/gates.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/3a7cdd6/engine/tradier_exec/hooks.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/3a7cdd6/engine/tradier_exec/persist.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/3a7cdd6/engine/overlay/publish.py
 
 1) Continuous RTH: in_publish_window is 09:30–15:50 inclusive.
    Delete the 09:36–09:40 + 10:00–15:50 split. 09:41–09:59 is no longer
@@ -159,12 +164,30 @@ Public raw (website is public; curl these, do not rewrite knobs):
    already 0 — skip_already_flat, do not spray STC.
    stc_recomputes_envelope=true.
 
+10) 1DTE EXIT LOG + SHORT LADDER: CREATE flatten_exits from
+    FLATTEN_EXITS_CREATE_SQL. Never DELETE on flatten or ET
+    rollover (keep 30 days). On every flatten_now, persist the
+    row (trigger_ts, trigger_et, occ, dte, qty, fill_px,
+    trigger_bid, reason, ladder_steps). After each posted STC
+    step call on_ladder_step / note_ladder_step. On broker fill
+    call on_flatten_fill with the actual price. /health must
+    show flatten_exits (last 20, including prior ET dates) —
+    not hold_watch.events[] which clears at midnight.
+    1DTE protective ladder is bid, then market after 2s
+    (one_dte_protective_short_ladder=true). 0DTE stays
+    bid / bid-0.05 / bid-0.10 / market. 1DTE starter qty
+    min(notional, one_dte_qty_cap=6). extra_bto_1dte=false.
+    one_dte_scaled_giveback=false (replay only). 0DTE extra
+    BTO to 16 and 0DTE peak $50 stay. 10/13 6× 2.318→1.77
+    still flattens protective. 10/14 5-lot winners still
+    size under the cap.
+
 Wire overlay ingest to stamp every Candidate with with_spy_deltas /
 signed_spy_deltas on the last four 1m SPY closes before decide_sub_send.
 OCC tenor MUST be starter_dte_for_clock(et_hhmm): 0 at 09:30–09:59 and
 10:21–12:29; 1 in 10:00–10:20 and from 12:30. Leftover 0DTE after 12:30
 is skip_0dte_near_cutover (admin only). rec_book_ship MUST become
-2026-10-13-scratch-lock on /health.
+2026-10-15-1dte-exit-log on /health.
 
 HIGH-WATER $50 — 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408).
 The fill $0.15 stop (0.64) would give back ~$1,650. That is not the exit.
@@ -293,7 +316,7 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
    if kind == "adopt_stc_only": before_stc MUST post (orphan_adopt). Walk ladder.
    NEVER BTO from recover_lost.
 
-Proof: rec_book_ship=2026-10-13-scratch-lock, min_hold_sec=90,
+Proof: rec_book_ship=2026-10-15-1dte-exit-log, min_hold_sec=90,
 stc_requires_before_stc=true, stc_recomputes_envelope=true,
 native_close_push=false, morning_rip_flatten=false,
 peak_starter_giveback=false, peak_starter_giveback_usd=0,
@@ -359,6 +382,17 @@ peak_starter_giveback must not flatten. A 12-lot 1.19 marked 1.04
 at 20s is flatten_protective. 15:50 leftover is rth_end.
 Do not walk the STC ladder unless may_post_stc / before_stc /
 on_manage flatten is true.
+flatten_exits_durable=true, flatten_exits_keep_days=30,
+one_dte_protective_short_ladder=true,
+one_dte_protective_market_after_sec=2,
+one_dte_qty_cap=6, extra_bto_1dte=false,
+one_dte_scaled_giveback=false, on_ladder_step=true,
+on_flatten_fill=true.
+A 1DTE 6-lot 2.318 marked 2.018 is flatten_protective with a
+2-step ladder (bid then market in 2s). A 0DTE 1.25 protective
+is still 4 steps. A 1DTE 2.63 ask sizes 6, not 10. 1DTE extra
+BTO is top_up_blocked. 10/5 16-lot 0DTE still extra_bto to 16
+and still peak_giveback $50.
 
 ```
 

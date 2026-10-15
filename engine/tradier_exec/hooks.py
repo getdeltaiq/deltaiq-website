@@ -19,6 +19,9 @@ from engine.shared.gates import (
     extra_bto_qty,
     may_post_stc,
     new_session,
+    note_flatten_fill,
+    note_ladder_step,
+    option_dte,
     rec_book,
     source_skip_reason,
 )
@@ -131,14 +134,18 @@ def before_extra_bto(state: SessionState, **kwargs) -> dict:
     if src is not None:
         state.last_action = src
         return {"post": False, "action": src}
+    dte = kwargs.get("dte")
+    if dte is None:
+        dte = option_dte(state.last_option_symbol, state.session_date)
     add = int(kwargs.get("add_qty") or 0)
     if add <= 0:
-        add = extra_bto_qty(state.broker_qty)
+        add = extra_bto_qty(state.broker_qty, dte=dte)
     ok = state.extra_bto_ok(
         add,
         float(kwargs.get("mfe_usd") or 0.0),
         float(kwargs.get("mark_bid") or 0.0),
         float(kwargs.get("avg_fill") or 0.0),
+        dte=dte,
     )
     if not ok:
         state.last_action = "top_up_blocked"
@@ -180,6 +187,20 @@ def health_overlay(state: SessionState) -> dict:
             "recover_lost_posts_bto": False,
             "recover_lost_owned": True,
             "orphan_adopt_flattens": True,
+            "flatten_exits": list(state.flatten_exits[-20:]),
+            "last_flatten_exit": state.last_flatten_exit,
+            "on_ladder_step": True,
+            "on_flatten_fill": True,
         }
     )
     return rec
+
+
+def on_ladder_step(state: SessionState, **kwargs) -> dict | None:
+    """Call after each posted STC ladder step (limit or market)."""
+    return note_ladder_step(state, **kwargs)
+
+
+def on_flatten_fill(state: SessionState, **kwargs) -> dict | None:
+    """Call when the flatten STC fills. This is the durable exit print."""
+    return note_flatten_fill(state, **kwargs)

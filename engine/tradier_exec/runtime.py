@@ -37,6 +37,7 @@ class CoverUsExec:
             self.state.halt_lifted = True
             self.state.session_halt_reason = "session_loss_after_lift"
         self.state.load_consumed(self.db.load(d))
+        self.state.flatten_persist = self.db
         self.state.engine_exit_mode = ENGINE_EXIT_MODE
         self.state.refresh_halt()
         self.log: list[dict] = []
