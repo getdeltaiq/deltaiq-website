@@ -218,13 +218,18 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    After a lift, additional −$750 / 4 fails-after-lift re-halt.
    apply_broker_session_cash(tradier option cash) every flatten.
 
-8) /health must include health_overlay(state) and MUST match rec_book()
+8) /health IS health_overlay(state). Do not merge a second knob dict.
    rec_book=true, rec_book_ship=2026-10-15-match-rec, rec_revenue_lock=true
-   code_ship MUST equal rec_book_ship (FAIL if 2026-09-29b)
+   code_ship MUST equal rec_book_ship on tradier_exec AND
+   logic_rebuild AND performance AND cover_paths (FAIL if 2026-09-29b)
    rec_book_identity=true, rec_book_mismatch=[]
-   live_notional_usd=2000, notional_usd=2000
-   leftover $3000 / extra off / fill_to 24 / peak_starter $37.50
-   is skip_not_rec_book and does not consume
+   health_is_rec_book=true, do_not_merge_leftover_knobs=true
+   live_notional_usd=2000, notional_usd=2000, qty_max=16
+   peak_from_print=false, never_green_withhold=false,
+   opposite_sub_consumes=false
+   leftover $3000 / extra off / fill_to 24 / peak_starter $37.50 /
+   qty_max=100 / peak_from_print=true is skip_not_rec_book
+   and does not consume. REPLACE GitHub files. Do not patch.
    session_loss_halt_usd=750
    starter_notional_usd=2000, ticket_risk_usd=240, extra_bto=true
    extra_bto_on_run=true, extra_bto_fill_to=16, risk_qty_cap=16

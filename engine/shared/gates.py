@@ -296,6 +296,11 @@ REC_BOOK_REQUIRED = {
     "inflight_does_not_consume": True,
     "after_recover_lost": True,
     "rec_revenue_lock": True,
+    # Leftover Railway 2nd-book names. Rec is GitHub files, not these.
+    "peak_from_print": False,
+    "never_green_withhold": False,
+    "opposite_sub_consumes": False,
+    "qty_max": 16,
 }
 # Railway leftover aliases. before_bto pops these into live_book.
 LIVE_KNOB_KEYS = frozenset(
@@ -331,6 +336,10 @@ LIVE_KNOB_ALIAS = {
     "live_ticket_risk_usd": "ticket_risk_usd",
     "live_morning_rip_flatten": "morning_rip_flatten",
     "live_code_ship": "code_ship",
+    "peak_from_print": "peak_from_print",
+    "never_green_withhold": "never_green_withhold",
+    "opposite_sub_consumes": "opposite_sub_consumes",
+    "qty_max": "qty_max",
 }
 # 10/15 overlay A–G: SUB send_ts is the Tradier clock. Overlay-queued
 # SUB opposites must BTO (11:47 B, 14:49 F). Inflight/pending must not
@@ -438,6 +447,10 @@ def rec_book() -> dict:
         "overlay_sub_forces_queued": OVERLAY_SUB_FORCES_QUEUED,
         "inflight_does_not_consume": INFLIGHT_DOES_NOT_CONSUME,
         "after_recover_lost": True,
+        "peak_from_print": False,
+        "never_green_withhold": False,
+        "opposite_sub_consumes": False,
+        "qty_max": RISK_QTY_CAP,
     }
 
 

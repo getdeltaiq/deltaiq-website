@@ -56,6 +56,9 @@ def boot_state(loaded: SessionState | None = None) -> SessionState:
     enforce_keep_halt(st)
     st.engine_exit_mode = ENGINE_EXIT_MODE
     st.refresh_halt()
+    # GitHub Rec is the process. A leftover 2nd book cannot boot-and-trade.
+    if rec_book_skip_reason() is not None:
+        st.last_action = "skip_not_rec_book"
     return st
 
 
@@ -214,6 +217,8 @@ def health_overlay(state: SessionState) -> dict:
             "on_ladder_step": True,
             "on_flatten_fill": True,
             "after_recover_lost": True,
+            "health_is_rec_book": True,
+            "do_not_merge_leftover_knobs": True,
         }
     )
     return rec

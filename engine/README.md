@@ -57,33 +57,31 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` **production** agent and ship now:
 
 ```
-SHIP TO PRODUCTION NOW. Before 09:30 ET. ONE BOOK: Tradier IS Rec.
+REPLACE PRODUCTION WITH GITHUB REC. Do not patch a second book.
+The website files ARE the book. curl them over engine/* and DELETE
+leftover Railway knobs. Do not merge-keep. Do not wrap health_overlay
+with a second dict (peak_from_print / never_green_withhold /
+opposite_sub_consumes / qty_max=100 / logic_rebuild 2026-09-29b).
+Before 09:30 ET. ONE BOOK: Tradier IS GitHub rec_book().
 code_ship MUST equal rec_book_ship=2026-10-15-match-rec.
-FAIL if code_ship is still 2026-09-29b. FAIL if rec_book_mismatch
-is nonempty. rec_book_identity=true. rec_revenue_lock=true.
-ALSO ship quality_at_seal: at_seal restamps 1m/3m at send_ts, never
-the arm bar. 10/15 A/C/D/G erred at entry determination, not flatten.
-KEEP SUB clock = Tradier clock, scratch-lock, and 1DTE exit-log.
-Rec IS the book — do not retune skip/hold/extra/halt.
-Leftover $3000 / extra off / fill_to 24 / peak_starter $37.50 is
-skip_not_rec_book (does not consume).
-OVERWRITE leftover size so Tradier IS the Rec book. Live $3000 /
-$1125 / $360 / $75 / extra_bto=false / fill_to 24 / extra_bto_on_run=false
-MUST become Rec starter $2000, halt $750, ticket $240, peak $50,
-extra_bto=true, extra_bto_on_run=true, extra_bto_fill_to=16,
-risk_qty_cap=16, one_dte_qty_cap=6, extra_bto_1dte=false.
-notional_usd and live_notional_usd follow starter_notional_usd=$2000.
-Do NOT fire peak_starter_giveback / $0.15-from-print-high in the first 90s.
-Protective down is fill_px − bid, never hold_high − bid. Do not keep
-a second knob set. Do not lift a halt that is already off. Do not
-freeze 0DTE TREND before 12:30 except 10:00–10:20 fade tape. Do not
-loosen stall $0.08, 3-minute $0.20, chase $0.50, or
-queue_opposite=false. 0DTE four-step ladder and 0DTE extra BTO to 16
-stay. Fewer SUB alerts is correct if they are winners.
+FAIL if logic_rebuild.code_ship or performance.code_ship or
+cover_paths.code_ship is still 2026-09-29b. FAIL if
+rec_book_mismatch is nonempty. rec_book_identity=true.
+rec_revenue_lock=true. quality_at_seal / SUB clock / scratch-lock
+ARE Rec, not add-ons. Do not retune stall $0.08 / 3m $0.20 /
+chase $0.50 / climax $0.50/80%.
+DELETE these live leftovers (they are a 2nd book):
+  peak_from_print, never_green_withhold, opposite_sub_consumes,
+  qty_max=100, peak_starter $37.50, starter $3000, extra_bto=false,
+  fill_to 24, halt $1125. Rec is starter $2000, extra BTO on to 16,
+  halt $750, ticket $240, peak $50, qty_max=16, peak_from_print=false,
+  never_green_withhold=false, opposite_sub_consumes=false.
+Import engine.shared.gates + engine.tradier_exec.hooks. Call
+at_seal then decide_sub_send then before_bto. health IS
+health_overlay(state). Do not overlay a second knob set.
 
 Copy these files from getdeltaiq/deltaiq-website SHA 3ce1abe onto
-getdeltaiq/deltaiq-signal-engine production (overwrite leftover peak /
-halt / starter / extra_bto / ticket_risk — Rec dollars, not merge-keep):
+getdeltaiq/deltaiq-signal-engine production (REPLACE, do not patch):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/tradier_exec/persist.py
@@ -500,17 +498,17 @@ is still 4 steps. A 1DTE 2.63 ask sizes 6, not 10. 1DTE extra
     SEND at seal. Do not retune stall $0.08, 3m $0.20, chase $0.50,
     or climax $0.50/80%. Do not mix this with flatten/hold.
 
-17) SINGULAR REC BOOK: Tradier IS rec_book(). One ship id —
-    code_ship == rec_book_ship == 2026-10-15-match-rec.
-    rec_book_identity=true. rec_book_mismatch=[].
-    live_notional_usd=2000 and notional_usd=2000 follow
-    starter_notional_usd. Pass leftover Railway knobs into
-    before_bto as live_notional_usd / extra_bto_on_run /
-    peak_starter_giveback / code_ship; mismatch is
-    skip_not_rec_book and MUST NOT consume. A $3000 starter,
-    extra_bto=false, fill_to 24, peak_starter $37.50, or
-    code_ship=2026-09-29b cannot POST. Rec process still
-    POSTs 10/5 12:22. Do not keep a second knob set.
+17) SINGULAR REC BOOK: REPLACE live with GitHub rec_book().
+    Do not keep a patched 2nd version. code_ship == rec_book_ship
+    == 2026-10-15-match-rec on tradier_exec AND logic_rebuild
+    AND performance AND cover_paths. rec_book_identity=true.
+    rec_book_mismatch=[]. health_is_rec_book=true.
+    do_not_merge_leftover_knobs=true. DELETE peak_from_print,
+    never_green_withhold, opposite_sub_consumes, qty_max=100.
+    Rec: peak_from_print=false, never_green_withhold=false,
+    opposite_sub_consumes=false, qty_max=16. A leftover name
+    that is still True is skip_not_rec_book and MUST NOT consume.
+    Rec process still POSTs 10/5 12:22.
 
 ```
 

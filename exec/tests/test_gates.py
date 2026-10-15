@@ -1000,6 +1000,10 @@ class ChannelAlignTests(unittest.TestCase):
         self.assertTrue(h["rec_book_identity"])
         self.assertEqual(h["live_notional_usd"], 2000.0)
         self.assertEqual(h["notional_usd"], 2000.0)
+        self.assertFalse(h["peak_from_print"])
+        self.assertFalse(h["never_green_withhold"])
+        self.assertFalse(h["opposite_sub_consumes"])
+        self.assertEqual(h["qty_max"], 16)
         self.assertTrue(h["rec_revenue_lock"])
         self.assertEqual(h["min_hold_sec"], 90.0)
         self.assertTrue(h["stc_requires_before_stc"])
@@ -2569,6 +2573,22 @@ class RecBookIdentityTests(unittest.TestCase):
             "skip_not_rec_book",
         )
 
+    def test_second_book_names_are_not_rec(self):
+        from engine.tradier_exec.hooks import before_bto, boot_state
+
+        self.assertIn("peak_from_print", rec_book_mismatch({"peak_from_print": True}))
+        self.assertIn("never_green_withhold", rec_book_mismatch({"never_green_withhold": True}))
+        self.assertIn(
+            "opposite_sub_consumes", rec_book_mismatch({"opposite_sub_consumes": True})
+        )
+        self.assertIn("qty_max", rec_book_mismatch({"qty_max": 100}))
+        s = new_session("2026-10-15")
+        d = before_bto(s, peak_from_print=True, **self._args())
+        self.assertFalse(d["post"])
+        self.assertEqual(d["action"], "skip_not_rec_book")
+        st = boot_state()
+        self.assertNotEqual(st.last_action, "skip_not_rec_book")
+
     def test_extra_bto_refuses_leftover_book(self):
         from engine.tradier_exec.hooks import before_extra_bto
 
@@ -2722,6 +2742,10 @@ class SubClockHoldTests(unittest.TestCase):
         self.assertEqual(h["code_ship"], h["rec_book_ship"])
         self.assertTrue(h["rec_book_identity"])
         self.assertEqual(h["rec_book_mismatch"], [])
+        self.assertTrue(h["health_is_rec_book"])
+        self.assertTrue(h["do_not_merge_leftover_knobs"])
+        self.assertFalse(h["peak_from_print"])
+        self.assertEqual(h["qty_max"], 16)
 
 
 class BounceHelperTests(unittest.TestCase):
