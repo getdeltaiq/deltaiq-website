@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from engine.shared.gates import (
     ENGINE_EXIT_MODE,
+    HOLD_EXIT,
     SessionState,
     apply_manage_result,
     decide_manage,
@@ -191,9 +192,43 @@ def health_overlay(state: SessionState) -> dict:
             "last_flatten_exit": state.last_flatten_exit,
             "on_ladder_step": True,
             "on_flatten_fill": True,
+            "after_recover_lost": True,
         }
     )
     return rec
+
+
+def after_recover_lost(state: SessionState, kind: str, **kwargs) -> dict:
+    """Only STC path after recover_lost(). Flat already means qty=0.
+
+    10/15 C 12:45, D 13:12, G 15:20 sold $0.02 1DTE dips in 2–7s because
+    live walked the ladder on recover_lost_flat / broker_flat. Those
+    names are scratches. fresh_fill HOLDs. owned goes through on_manage
+    (envelope only). adopt_stc_only still reaches before_stc.
+    """
+    enforce_keep_halt(state)
+    k = str(kind or "")
+    qty = kwargs.get("qty")
+    if k in ("flat", "recover_lost_flat") or (qty is not None and int(qty) <= 0):
+        return decide_stc(state, **{**kwargs, "qty": 0})
+    if k == "fresh_fill":
+        state.last_action = "recover_lost_fresh_fill"
+        return apply_manage_result(
+            state,
+            {
+                "action": "hold",
+                "flatten": False,
+                "post_stc": False,
+                "working_stc": False,
+                "reason": "fresh_fill",
+                "override_trail": False,
+                "ignore_trail": False,
+                "engine_exit_mode": ENGINE_EXIT_MODE,
+                "ticket_phase": state.ticket_phase,
+                "take_exit": HOLD_EXIT,
+            },
+        )
+    return on_manage(state, **kwargs)
 
 
 def on_ladder_step(state: SessionState, **kwargs) -> dict | None:

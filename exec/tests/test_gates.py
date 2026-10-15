@@ -619,9 +619,15 @@ class QualityLearnTests(unittest.TestCase):
 
     def test_exec_queued_opposite_is_not_a_starter(self):
         s = new_session("2026-09-29")
-        d = self._base(s, is_opposite=True, overlay_queued=False)
+        d = self._base(s, plot="admin_alert_ledger", is_opposite=True, overlay_queued=False)
         self.assertFalse(d["post"])
-        self.assertEqual(d["action"], "skip_queue_opposite")
+        self.assertEqual(d["action"], "skip_not_sub")
+
+    def test_overlay_sub_opposite_posts_even_if_queued_flag_missing(self):
+        """10/15 B 11:47 BULL after A 10:26 BEAR. SUB plot is the queue."""
+        s = new_session("2026-10-15")
+        d = self._base(s, is_opposite=True, overlay_queued=False)
+        self.assertTrue(d["post"])
 
     def test_overlay_queued_opposite_still_posts(self):
         s = new_session("2026-09-29")
@@ -996,6 +1002,10 @@ class ChannelAlignTests(unittest.TestCase):
         self.assertFalse(h["peak_starter_giveback"])
         self.assertFalse(h["morning_rip_flatten"])
         self.assertTrue(h["clock_identity_lock"])
+        self.assertTrue(h["sub_clock_is_tradier_clock"])
+        self.assertTrue(h["overlay_sub_forces_queued"])
+        self.assertTrue(h["inflight_does_not_consume"])
+        self.assertTrue(h["after_recover_lost"])
         self.assertTrue(h["sms_at_seal"])
         self.assertFalse(h["follow_delivered_sub"])
         self.assertTrue(h["overlay_iff_sms"])
@@ -2472,6 +2482,137 @@ class RecRevenueGuardrailTests(unittest.TestCase):
         self.assertFalse(
             may_post_stc(4, "recover_lost_flat", fill_px=1.07, mark_bid=1.05, qty=14, dte=0)
         )
+
+
+class SubClockHoldTests(unittest.TestCase):
+    """10/15: SUB send_ts is Tradier clock; 2–7s 1DTE $0.02 dips HOLD."""
+
+    def _start(self, s, send_ts, direction, et_hhmm, **kw):
+        sign = 1.0 if direction == "BULL" else -1.0
+        args = dict(
+            send_ts=send_ts,
+            direction=direction,
+            send_spy=770.0,
+            spy=770.0,
+            bar_high=770.2,
+            bar_low=769.8,
+            et_hhmm=et_hhmm,
+            ask=2.80,
+            **CLEAN_Q,
+        )
+        args.update(
+            rip_1m_spy=sign * 0.25,
+            trend_3m_spy=sign * 0.60,
+            option_symbol=(
+                "SPY261016C00770000" if direction == "BULL" else "SPY261015P00768000"
+            ),
+            dte=0 if et_hhmm < "12:30" else 1,
+        )
+        args.update(kw)
+        return decide_starter(s, **args)
+
+    def test_inflight_does_not_consume_next_sub(self):
+        s = new_session("2026-10-15")
+        first = self._start(s, 10.26, "BEAR", "10:26")
+        self.assertTrue(first["post"])
+        s.inflight = True
+        s.pending_entry = True
+        s.broker_qty = 9
+        nxt = self._start(
+            s, 11.47, "BULL", "11:47", is_opposite=True, overlay_queued=False
+        )
+        self.assertEqual(nxt["action"], "skip_inflight")
+        self.assertFalse(nxt["post"])
+        self.assertNotIn(11.47, s.consumed)
+        s.inflight = False
+        s.pending_entry = False
+        s.broker_qty = 0
+        s.on_flatten(-189.0, "FAIL", dte=0, et_hhmm="10:27")
+        again = self._start(
+            s, 11.47, "BULL", "11:47", is_opposite=True, overlay_queued=False
+        )
+        self.assertTrue(again["post"])
+
+    def test_publication_clock_must_match_send_ts(self):
+        from engine.shared.gates import et_hms_from_ts
+
+        live_ts = 1792082717.742985
+        s = new_session("2026-10-15")
+        d = self._start(
+            s,
+            live_ts,
+            "BULL",
+            "12:45",
+            publication_et="12:42:00",
+            dte=1,
+        )
+        self.assertEqual(d["action"], "skip_clock_identity")
+        self.assertFalse(d["post"])
+        self.assertNotIn(live_ts, s.consumed)
+        self.assertEqual(d["et_hms"], et_hms_from_ts(live_ts))
+
+    def test_1015_cdg_micro_dips_hold(self):
+        from engine.tradier_exec.hooks import after_recover_lost, on_manage
+
+        cases = (
+            ("C_1245", 6, 2.73, 2.71, 4, 1),
+            ("D_1312", 6, 2.83, 2.81, 2, 1),
+            ("G_1520", 6, 2.71, 2.70, 7, 1),
+        )
+        for name, qty, fill, bid, age, dte in cases:
+            s = new_session("2026-10-15")
+            s.on_bto_fill(qty, fill, now=1_000.0)
+            kwargs = dict(
+                fill_px=fill,
+                mark_bid=bid,
+                qty=qty,
+                spy_adverse=0.02,
+                seconds_since_fill=age,
+                ticket_phase="FAIL",
+                bid=bid,
+                now=1_000.0 + age,
+                dte=dte,
+            )
+            m = on_manage(s, **kwargs)
+            self.assertFalse(m.get("flatten"), msg=name)
+            self.assertFalse(m.get("post_stc"), msg=name)
+            flat = after_recover_lost(s, "flat", **{**kwargs, "qty": 0})
+            self.assertEqual(flat["reason"], "skip_already_flat", msg=name)
+            owned = after_recover_lost(
+                new_session("2026-10-15"), "owned", **kwargs
+            )
+            self.assertFalse(owned.get("flatten") or owned.get("post_stc"), msg=name)
+
+    def test_1015_a_protective_still_flattens(self):
+        from engine.tradier_exec.hooks import on_manage
+
+        s = new_session("2026-10-15")
+        s.on_bto_fill(9, 2.05, now=1_000.0)
+        d = on_manage(
+            s,
+            fill_px=2.05,
+            mark_bid=1.83,
+            qty=9,
+            spy_adverse=0.10,
+            seconds_since_fill=22,
+            ticket_phase="FAIL",
+            bid=1.83,
+            now=1_022.0,
+            dte=0,
+        )
+        self.assertTrue(d["flatten"])
+        self.assertEqual(d["reason"], "protective")
+
+    def test_health_advertises_sub_clock_hold(self):
+        from engine.shared.gates import rec_book
+        from engine.tradier_exec.hooks import health_overlay
+
+        h = health_overlay(new_session("2026-10-15"))
+        self.assertTrue(h["sub_clock_is_tradier_clock"])
+        self.assertTrue(h["overlay_sub_forces_queued"])
+        self.assertTrue(h["inflight_does_not_consume"])
+        self.assertTrue(h["after_recover_lost"])
+        self.assertEqual(rec_book()["rec_book_ship"], "2026-10-15-match-rec")
 
 
 class BounceHelperTests(unittest.TestCase):

@@ -1,4 +1,5 @@
 from engine.tradier_exec.hooks import (
+    after_recover_lost,
     before_bto,
     before_extra_bto,
     before_stc,
@@ -11,6 +12,7 @@ from engine.tradier_exec.runtime import CoverUsExec
 
 __all__ = [
     "CoverUsExec",
+    "after_recover_lost",
     "before_bto",
     "before_extra_bto",
     "before_stc",

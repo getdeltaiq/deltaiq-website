@@ -44,6 +44,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **1DTE exit log + short ladder (10/15):** `get_orders` is same-day and lost the 10/13 dump clock. Every flatten writes `flatten_exits` (trigger time, trigger bid, planned ladder, each posted step, final fill) and **keeps it across ET midnight**. 1DTE **protective** only: rest the trigger bid, then **market after 2s** (skip bid−0.05 / bid−0.10). 0DTE $0.15 keeps the four-step ladder. 1DTE size holds at **6** (`one_dte_qty_cap`); 1DTE extra BTO is off. Scaled 1DTE giveback (`max($0.08/contract, 25% of peak)`) is **replay-only** until a logged high-water exists — 10/14 +$30 never tagged $50, +$90 has no bid path. Do not change 0DTE size or 0DTE peak $50.
   - **Match Rec dollars (10/15):** Tradier must run the Rec book, not leftover size. Overwrite live `$3000` / `$1125` / `$360` / `$75` / `extra_bto=false` / `fill_to 24`. Rec is starter **$2000**, extra BTO **on** to **16**, ticket **−$240**, halt **−$750**, peak **$50**, 1DTE cap **6**. `extra_bto_on_run=true`. Skip+hold already in SoT; leftover knobs were the revenue hole.
   - **Rec revenue lock (10/15):** Rec beats live on priced tape (30-day Rec +$5,314 vs −$2,480; Oct 1–8 Rec +$1,637 vs +$958). Those rails stay frozen: stall **$0.08**, 3m **$0.20**, chase **$0.50**, climax **$0.50/80%**, CHOPPY refuse, extra BTO to 16, halt **−$750**, 90s hold, peak **$50**, envelope still clips fill **$0.15** / 1DTE **$0.30**. Do not tighten (kills 10/5 12:22). Do not loosen (reopens 10/8 A/D/E and 9/29). `rec_revenue_lock=true`.
+  - **SUB clock = Tradier clock (10/15 A–G):** Overlay marker unix `send_ts` is the BTO clock. `plot=sub_alert_send` forces `overlay_queued` so opposite SUBs post (B 11:47). Inflight does **not** consume (B/F retry when flat). `after_recover_lost("flat")` is `skip_already_flat`. 1DTE $0.02 dips at 2–7s HOLD (C/D/G). A 10:26 fill $0.15 dump still clips.
   - **Peak lock (10/5):** A runner’s bid high is the high-water mark. Once unrealized ≥ **$50** **and the ticket is ≥ 90s old**, flatten if the ticket gives back **$50** from that high (`peak_giveback`). 10/5 16-lot 773C 0.79→1.67 (~+$1,408) must NOT sit to the fill $0.15 stop at 0.64. Fill $0.15 / 1DTE $0.30 still protect tickets that never made a high. Quote grace 8s and no STC on fill stay. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
@@ -54,9 +55,12 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` **production** agent and ship now:
 
 ```
-SHIP TO PRODUCTION NOW. Before 09:30 ET. rec_book_ship MUST become
-2026-10-15-match-rec on /health. rec_revenue_lock=true. KEEP scratch-lock
-and 1DTE exit-log. Rec IS the book — do not retune skip/hold/extra/halt.
+SHIP TO PRODUCTION NOW. Before 09:30 ET. rec_book_ship stays
+2026-10-15-match-rec. rec_revenue_lock=true. ALSO ship SUB clock =
+Tradier clock: sub_clock_is_tradier_clock=true,
+overlay_sub_forces_queued=true, inflight_does_not_consume=true,
+after_recover_lost=true. KEEP scratch-lock and 1DTE exit-log.
+Rec IS the book — do not retune skip/hold/extra/halt.
 OVERWRITE leftover size so Tradier IS the Rec book. Live $3000 /
 $1125 / $360 / $75 / extra_bto=false / fill_to 24 / extra_bto_on_run=false
 MUST become Rec starter $2000, halt $750, ticket $240, peak $50,
@@ -322,7 +326,9 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
    if kind == "adopt_stc_only": before_stc MUST post (orphan_adopt). Walk ladder.
    NEVER BTO from recover_lost.
 
-Proof: rec_book_ship=2026-10-15-match-rec, rec_revenue_lock=true, min_hold_sec=90,
+Proof: rec_book_ship=2026-10-15-match-rec, rec_revenue_lock=true,
+sub_clock_is_tradier_clock=true, overlay_sub_forces_queued=true,
+inflight_does_not_consume=true, after_recover_lost=true, min_hold_sec=90,
 stc_requires_before_stc=true, stc_recomputes_envelope=true,
 native_close_push=false, morning_rip_flatten=false,
 peak_starter_giveback=false, peak_starter_giveback_usd=0,
@@ -435,6 +441,27 @@ is still 4 steps. A 1DTE 2.63 ask sizes 6, not 10. 1DTE extra
     10/5 16-lot 0.79 marked 1.67 MUST HOLD until $50 giveback after 90s
     — do not sit to fill $0.15. A 20s fill $0.15 dump still flattens.
     9/29 CHOPPY is skip, not chop_size.
+
+13) SUB CLOCK = TRADIER CLOCK: One unix send_ts is SMS publication_et,
+    overlay marker, and before_bto consume. Pass publication_et into
+    before_bto; mismatch is skip_clock_identity and does NOT consume.
+    overlay_sub_forces_queued=true: plot=sub_alert_send is overlay-queued,
+    so an opposite SUB (10/15 B 11:47 after A 10:26) POSTS. Do not invent
+    opposites (queue_opposite=false still). extra BTO on an exec opposite
+    stays blocked. Twilio body is et_hms_from_ts(send_ts). follow_delivered_sub
+    stays false. overlay_sends MUST equal those publication clocks.
+
+14) INFLIGHT DOES NOT CONSUME: halt still consumes (lift cannot recycle).
+    pending_entry / inflight / broker_qty is skip_inflight WITHOUT
+    consume. 10/15 B 11:47 and F 14:49 were burned with no order.
+    When the mutex clears, the same send_ts may POST.
+
+15) AFTER RECOVER LOST: kind=flat / qty=0 is skip_already_flat — never
+    walk the ladder. fresh_fill HOLDs. owned goes through on_manage /
+    may_post_stc (envelope only). 10/15 C 12:45 2.73→2.71 at 4s, D 13:12
+    2.83→2.81 at 2s, G 15:20 2.71→2.70 at 7s HOLD. 10/15 A 10:26 2.05 vs
+    1.83 at 22s is still flatten_protective. Call after_recover_lost
+    from the lost-scan. Do not STC on recover_lost_flat / broker_flat.
 
 ```
 
