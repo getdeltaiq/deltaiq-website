@@ -24,6 +24,7 @@ from engine.shared.gates import (
     INFLIGHT_DOES_NOT_CONSUME,
     OVERLAY_IFF_SMS,
     OVERLAY_SUB_FORCES_QUEUED,
+    QUALITY_AT_SEAL,
     SUB_CLOCK_IS_TRADIER,
     DTE_BOOK_ET,
     DTE_CUTOVER_ET,
@@ -43,6 +44,7 @@ from engine.shared.gates import (
     locked_et_hhmm,
     seal_identity,
     signed_spy_deltas,
+    starter_dte_for_clock,
     sub_action_skip_reason,
     ledger_invariant as _qty_ledger_ok,
 )
@@ -121,6 +123,37 @@ def with_clock_identity(c: Candidate) -> Candidate:
     return replace(c, et_hhmm=locked_et_hhmm(c.ts, c.et_hhmm))
 
 
+def at_seal(
+    c: Candidate,
+    closes: Sequence[float] | None,
+    *,
+    on_arm_bar: bool = False,
+    spy: float | None = None,
+    dte: int | None = None,
+) -> Candidate:
+    """Quality at the send instant. Never reuse arm-bar 1m/3m.
+
+    Rec stamps each bar's last four closes at that bar. Live arms, waits
+    PUBLISH_ARM_SEC, then must restamp here immediately before
+    decide_sub_send. 10/15 A 10:26 BEAR into a rising 3-minute is
+    skip_1min_rip once the seal tape is visible. Flatten/hold is not
+    this helper.
+    """
+    if spy is not None:
+        c = replace(c, spy=float(spy))
+    elif closes is not None and len(closes) >= 1:
+        try:
+            c = replace(c, spy=float(closes[-1]))
+        except (TypeError, ValueError):
+            pass
+    c = with_clock_identity(replace(c, on_arm_bar=on_arm_bar))
+    if dte is not None:
+        c = replace(c, dte=int(dte))
+    else:
+        c = replace(c, dte=starter_dte_for_clock(c.et_hhmm))
+    return with_spy_deltas(c, closes)
+
+
 def skip_reason(c: Candidate) -> str | None:
     """Why this candidate is admin-only (not a subscriber/Tradier send). None = sub send."""
     if not in_publish_window(c.et_hhmm):
@@ -148,8 +181,13 @@ def skip_reason(c: Candidate) -> str | None:
     return None
 
 
-def decide_sub_send(c: Candidate) -> dict:
-    c = with_clock_identity(c)
+def decide_sub_send(
+    c: Candidate, closes: Sequence[float] | None = None
+) -> dict:
+    if QUALITY_AT_SEAL and closes is not None:
+        c = at_seal(c, closes)
+    else:
+        c = with_clock_identity(c)
     ident = seal_identity(c.ts, c.direction, c.spy, c.et_hhmm)
     reason = skip_reason(c)
     if reason is not None:
@@ -265,8 +303,13 @@ class PublishLedgers:
                 rows.append(payload)
         return rows
 
-    def ingest(self, c: Candidate) -> dict:
-        c = with_clock_identity(c)
+    def ingest(
+        self, c: Candidate, closes: Sequence[float] | None = None
+    ) -> dict:
+        if QUALITY_AT_SEAL and closes is not None:
+            c = at_seal(c, closes)
+        else:
+            c = with_clock_identity(c)
         self.admin.append(c)
         d = decide_sub_send(c)
         overlay = overlay_send_row(c)
@@ -361,6 +404,7 @@ class PublishLedgers:
             "overlay_sub_forces_queued": OVERLAY_SUB_FORCES_QUEUED,
             "inflight_does_not_consume": INFLIGHT_DOES_NOT_CONSUME,
             "sms_at_seal": SMS_AT_SEAL,
+            "quality_at_seal": QUALITY_AT_SEAL,
             "follow_delivered_sub": FOLLOW_DELIVERED_SUB,
             "overlay_iff_sms": OVERLAY_IFF_SMS,
             "pushover_from": PUSHOVER_FROM,
