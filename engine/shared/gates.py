@@ -255,6 +255,12 @@ REC_BOOK_SHIP = "2026-10-15-match-rec"
 # $0.30 skips 10/5 12:22 +$1,344. Loosening stall/chase/CHOPPY reopens
 # 10/8 A/D/E and 9/29. Envelope dumps still flatten.
 REC_REVENUE_LOCK = True
+# 10/15 overlay A–G: SUB send_ts is the Tradier clock. Overlay-queued
+# SUB opposites must BTO (11:47 B, 14:49 F). Inflight/pending must not
+# consume the next send so it can post once flat.
+SUB_CLOCK_IS_TRADIER = True
+OVERLAY_SUB_FORCES_QUEUED = True
+INFLIGHT_DOES_NOT_CONSUME = True
 
 
 def rec_book() -> dict:
@@ -346,6 +352,10 @@ def rec_book() -> dict:
         "follow_delivered_sub": FOLLOW_DELIVERED_SUB,
         "overlay_iff_sms": OVERLAY_IFF_SMS,
         "min_hold_sec": MIN_HOLD_SEC,
+        "sub_clock_is_tradier_clock": SUB_CLOCK_IS_TRADIER,
+        "overlay_sub_forces_queued": OVERLAY_SUB_FORCES_QUEUED,
+        "inflight_does_not_consume": INFLIGHT_DOES_NOT_CONSUME,
+        "after_recover_lost": True,
     }
 
 
@@ -1455,15 +1465,31 @@ def decide_starter(
     dte: int | None = None,
     rip_1m_spy: float | None = None,
     trend_3m_spy: float | None = None,
+    publication_et: str | None = None,
 ) -> dict:
-    """Single entry point before any Tradier buy_to_open."""
+    """Single entry point before any Tradier buy_to_open.
+
+    send_ts is the SUB clock. publication_et, if passed, must equal
+    et_hms_from_ts(send_ts). Overlay SUB (plot=sub_alert_send) is queued.
+    """
     if not ledger_ok_placeholder():
         pass
     state.refresh_halt()
     et_hhmm = locked_et_hhmm(send_ts, et_hhmm)
     ident = seal_identity(send_ts, direction, send_spy, et_hhmm)
+    if (
+        SUB_CLOCK_IS_TRADIER
+        and publication_et
+        and ident.get("publication_et")
+        and str(publication_et) != str(ident["publication_et"])
+    ):
+        state.last_action = "skip_clock_identity"
+        return {"action": "skip_clock_identity", "qty": 0, "post": False, **ident}
+    queued = bool(overlay_queued) or (
+        OVERLAY_SUB_FORCES_QUEUED and plot == BTO_SOURCE
+    )
     src = source_skip_reason(
-        plot=plot, is_opposite=is_opposite, overlay_queued=overlay_queued
+        plot=plot, is_opposite=is_opposite, overlay_queued=queued
     )
     if src is not None:
         state.try_consume(send_ts, direction, count_starter=False, persist=persist)
@@ -1498,11 +1524,20 @@ def decide_starter(
         state.skip_bounce_n += 1
         state.last_action = "skip_bounce_against"
         return {"action": "skip_bounce_against", "qty": 0, "post": False}
-    if not state.may_starter_bto():
+    halted = bool(
+        state.operator_halt or state.session_halt or state.session_lost_blocks_send
+    )
+    if halted:
         # Consume so an illicit halt lift cannot fire this send later the same day.
         state.try_consume(send_ts, direction, count_starter=False, persist=persist)
         state.last_action = "skip_halt_or_inflight"
         return {"action": "skip_halt_or_inflight", "qty": 0, "post": False}
+    if not state.may_starter_bto():
+        # Inflight / pending / broker_qty: do not burn the SUB send_ts.
+        # 10/15 11:47 BULL was consumed with no order; once 10:26 was
+        # flat it could never post. Retry when the mutex clears.
+        state.last_action = "skip_inflight"
+        return {"action": "skip_inflight", "qty": 0, "post": False}
     if send_ts in state.consumed:
         state.skipped_dup_submit_n += 1
         state.last_action = "skip_dup_send_ts"

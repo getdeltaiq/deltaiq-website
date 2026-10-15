@@ -227,6 +227,8 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    hold_unstamped_fill=true, fail_90_requires_reversal=true
    peak_giveback_min_sec=90, min_hold_sec=90
    clock_identity_lock=true, sms_at_seal=true
+   sub_clock_is_tradier_clock=true, overlay_sub_forces_queued=true
+   inflight_does_not_consume=true, after_recover_lost=true
    overlay_iff_sms=true, follow_delivered_sub=false
    stc_requires_before_stc=true, stc_recomputes_envelope=true
    native_close_push=false, morning_rip_flatten=false
