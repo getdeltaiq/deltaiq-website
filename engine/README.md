@@ -42,6 +42,8 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **Scratch hold (10/13):** `/health` advertised `min_hold_sec=90` then sold a 14-lot 1.07→1.05 in **4s** (`recover_lost_flat` / `broker_flat` ladder) and a 12-lot 1.19→1.15 in **122s** (−$48, live `$37.50` peak_starter from print high). `flatten_allowed` is fail-closed: only envelope reasons post (`protective` / `ticket_risk` / cata / `fail_90` / `peak_giveback` / `orphan_adopt` / `rth_end`). Live scratch names never flatten.
   - **Scratch lock (10/13, holds):** Listing leftover names is not enough — live can relabel a $0.04 dip as `protective` / `peak_giveback` / `fail_90` and sell. `may_post_stc` **recomputes** `envelope_hit` from fill/bid/qty and **ignores the claimed reason**. `on_manage` and `before_stc` share that gate. Missing marks fail closed. `morning_rip_flatten=false` (live 09:45). 15:50 leftover still `rth_end`. A 4s $0.02 dip HOLDs. A 122s $0.04 dip HOLDs even if named `peak_giveback`. A 20s fill $0.15 dump still clips. 10/5 773C at 180s still peak_giveback $50.
   - **1DTE exit log + short ladder (10/15):** `get_orders` is same-day and lost the 10/13 dump clock. Every flatten writes `flatten_exits` (trigger time, trigger bid, planned ladder, each posted step, final fill) and **keeps it across ET midnight**. 1DTE **protective** only: rest the trigger bid, then **market after 2s** (skip bid−0.05 / bid−0.10). 0DTE $0.15 keeps the four-step ladder. 1DTE size holds at **6** (`one_dte_qty_cap`); 1DTE extra BTO is off. Scaled 1DTE giveback (`max($0.08/contract, 25% of peak)`) is **replay-only** until a logged high-water exists — 10/14 +$30 never tagged $50, +$90 has no bid path. Do not change 0DTE size or 0DTE peak $50.
+  - **Match Rec dollars (10/15):** Tradier must run the Rec book, not leftover size. Overwrite live `$3000` / `$1125` / `$360` / `$75` / `extra_bto=false` / `fill_to 24`. Rec is starter **$2000**, extra BTO **on** to **16**, ticket **−$240**, halt **−$750**, peak **$50**, 1DTE cap **6**. `extra_bto_on_run=true`. Skip+hold already in SoT; leftover knobs were the revenue hole.
+  - **Rec revenue lock (10/15):** Rec beats live on priced tape (30-day Rec +$5,314 vs −$2,480; Oct 1–8 Rec +$1,637 vs +$958). Those rails stay frozen: stall **$0.08**, 3m **$0.20**, chase **$0.50**, climax **$0.50/80%**, CHOPPY refuse, extra BTO to 16, halt **−$750**, 90s hold, peak **$50**, envelope still clips fill **$0.15** / 1DTE **$0.30**. Do not tighten (kills 10/5 12:22). Do not loosen (reopens 10/8 A/D/E and 9/29). `rec_revenue_lock=true`.
   - **Peak lock (10/5):** A runner’s bid high is the high-water mark. Once unrealized ≥ **$50** **and the ticket is ≥ 90s old**, flatten if the ticket gives back **$50** from that high (`peak_giveback`). 10/5 16-lot 773C 0.79→1.67 (~+$1,408) must NOT sit to the fill $0.15 stop at 0.64. Fill $0.15 / 1DTE $0.30 still protect tickets that never made a high. Quote grace 8s and no STC on fill stay. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
@@ -52,12 +54,16 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` **production** agent and ship now:
 
 ```
-SHIP TO PRODUCTION NOW. RTH is OPEN. rec_book_ship MUST become
-2026-10-15-1dte-exit-log on /health. KEEP scratch-lock. ADD the 1DTE
-exit-log / short-ladder / size-hold on top of live. Do NOT overwrite
-peak_giveback_usd, session_loss_halt_usd, or starter_notional_usd
-(live independently uses $75 / $1125 / $3000). Do NOT fire
-peak_starter_giveback / $0.15-from-print-high in the first 90s.
+SHIP TO PRODUCTION NOW. Before 09:30 ET. rec_book_ship MUST become
+2026-10-15-match-rec on /health. rec_revenue_lock=true. KEEP scratch-lock
+and 1DTE exit-log. Rec IS the book — do not retune skip/hold/extra/halt.
+OVERWRITE leftover size so Tradier IS the Rec book. Live $3000 /
+$1125 / $360 / $75 / extra_bto=false / fill_to 24 / extra_bto_on_run=false
+MUST become Rec starter $2000, halt $750, ticket $240, peak $50,
+extra_bto=true, extra_bto_on_run=true, extra_bto_fill_to=16,
+risk_qty_cap=16, one_dte_qty_cap=6, extra_bto_1dte=false.
+notional_usd and live_notional_usd follow starter_notional_usd=$2000.
+Do NOT fire peak_starter_giveback / $0.15-from-print-high in the first 90s.
 Protective down is fill_px − bid, never hold_high − bid. Do not keep
 a second knob set. Do not lift a halt that is already off. Do not
 freeze 0DTE TREND before 12:30 except 10:00–10:20 fade tape. Do not
@@ -65,18 +71,18 @@ loosen stall $0.08, 3-minute $0.20, chase $0.50, or
 queue_opposite=false. 0DTE four-step ladder and 0DTE extra BTO to 16
 stay. Fewer SUB alerts is correct if they are winners.
 
-Copy these files from getdeltaiq/deltaiq-website SHA 3a7cdd6 onto
-getdeltaiq/deltaiq-signal-engine production (merge knobs; do not
-wholesale-replace live peak / halt / starter size):
+Copy these files from getdeltaiq/deltaiq-website SHA 685ec84 onto
+getdeltaiq/deltaiq-signal-engine production (overwrite leftover peak /
+halt / starter / extra_bto / ticket_risk — Rec dollars, not merge-keep):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/tradier_exec/persist.py
   engine/overlay/publish.py
-Public raw (website is public; curl these, do not rewrite knobs):
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/3a7cdd6/engine/shared/gates.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/3a7cdd6/engine/tradier_exec/hooks.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/3a7cdd6/engine/tradier_exec/persist.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/3a7cdd6/engine/overlay/publish.py
+Public raw (website is public; curl these, then SET Rec knobs):
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/685ec84/engine/shared/gates.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/685ec84/engine/tradier_exec/hooks.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/685ec84/engine/tradier_exec/persist.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/685ec84/engine/overlay/publish.py
 
 1) Continuous RTH: in_publish_window is 09:30–15:50 inclusive.
    Delete the 09:36–09:40 + 10:00–15:50 split. 09:41–09:59 is no longer
@@ -187,7 +193,7 @@ signed_spy_deltas on the last four 1m SPY closes before decide_sub_send.
 OCC tenor MUST be starter_dte_for_clock(et_hhmm): 0 at 09:30–09:59 and
 10:21–12:29; 1 in 10:00–10:20 and from 12:30. Leftover 0DTE after 12:30
 is skip_0dte_near_cutover (admin only). rec_book_ship MUST become
-2026-10-15-1dte-exit-log on /health.
+2026-10-15-match-rec on /health.
 
 HIGH-WATER $50 — 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408).
 The fill $0.15 stop (0.64) would give back ~$1,650. That is not the exit.
@@ -316,7 +322,7 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
    if kind == "adopt_stc_only": before_stc MUST post (orphan_adopt). Walk ladder.
    NEVER BTO from recover_lost.
 
-Proof: rec_book_ship=2026-10-15-1dte-exit-log, min_hold_sec=90,
+Proof: rec_book_ship=2026-10-15-match-rec, rec_revenue_lock=true, min_hold_sec=90,
 stc_requires_before_stc=true, stc_recomputes_envelope=true,
 native_close_push=false, morning_rip_flatten=false,
 peak_starter_giveback=false, peak_starter_giveback_usd=0,
@@ -339,8 +345,10 @@ recover_lost_owned=true, orphan_adopt_flattens=true,
 skip_1min_rip=true, one_min_rip_usd=0.20, one_min_climax_frac=0.80,
 one_min_climax_usd=0.50, trend_3m_min_usd=0.20,
 skip_1min_stall=true, stall_1m_usd=0.08.
-Do NOT require peak_giveback_usd=50 / session_loss_halt_usd=750 /
-starter_notional_usd=2000 on live; preserve Railway $75 / $1125 / $3000.
+REQUIRE peak_giveback_usd=50 / session_loss_halt_usd=750 /
+starter_notional_usd=2000 / ticket_risk_usd=240 / extra_bto=true /
+extra_bto_on_run=true / extra_bto_fill_to=16 / risk_qty_cap=16
+on live. Overwrite Railway $75 / $1125 / $3000 / $360 / extra off / fill_to 24.
 A 10:01 0DTE must be skip_0dte_open_fade on SMS AND BTO. A 10:14 0DTE BEAR
 must be skip_0dte_open_fade. A 12:44 0DTE BULL must be skip_0dte_near_cutover.
 An 11:48 0DTE and a 15:16 1DTE must still SEND and POST.
@@ -391,8 +399,42 @@ on_flatten_fill=true.
 A 1DTE 6-lot 2.318 marked 2.018 is flatten_protective with a
 2-step ladder (bid then market in 2s). A 0DTE 1.25 protective
 is still 4 steps. A 1DTE 2.63 ask sizes 6, not 10. 1DTE extra
-BTO is top_up_blocked. 10/5 16-lot 0DTE still extra_bto to 16
-and still peak_giveback $50.
+    BTO is top_up_blocked. 10/5 16-lot 0DTE still extra_bto to 16
+    and still peak_giveback $50.
+
+11) MATCH REC DOLLARS: Tradier cash must be the Rec book, not leftover
+    size. Overwrite (do not merge-keep):
+      starter_notional_usd=2000
+      notional_usd=2000
+      live_notional_usd=2000
+      ticket_risk_usd=240
+      risk_qty_cap=16
+      extra_bto=true
+      extra_bto_on_run=true
+      extra_bto_fill_to=16
+      extra_bto_1dte=false
+      one_dte_qty_cap=6
+      session_loss_halt_usd=750
+      peak_giveback_usd=50
+    Kill live extra_bto=false / fill_to 24 / extra_bto_on_run=false /
+    starter $3000 / halt $1125 / ticket $360 / peak $75.
+    0DTE extra BTO on RUN to 16 is how Rec sizes 10/5 12:22.
+    1DTE stays cap 6 / no extra. A 2.63 1DTE ask sizes 6, not 10.
+
+12) REC REVENUE LOCK: Rec IS the book. Do not retune the skip bar,
+    extra BTO, halt, 90s hold, or $50 peak for one-day tape.
+    rec_revenue_lock=true.
+    stall_1m_usd=0.08, trend_3m_min_usd=0.20, chase_spy=0.50,
+    one_min_climax_usd=0.50, one_min_climax_frac=0.80,
+    skip_choppy_is_refuse=true, chop_size=false,
+    extra_bto=true, extra_bto_on_run=true, extra_bto_fill_to=16,
+    session_loss_halt_usd=750, peak_giveback_usd=50,
+    min_hold_sec=90, stc_recomputes_envelope=true.
+    10/5 12:22 +0.175 / +0.235 MUST still SEND (raising 3m to $0.30
+    skips it). 10/8 12:17 +1.55 / +1.61 MUST stay skip_1min_rip.
+    10/5 16-lot 0.79 marked 1.67 MUST HOLD until $50 giveback after 90s
+    — do not sit to fill $0.15. A 20s fill $0.15 dump still flattens.
+    9/29 CHOPPY is skip, not chop_size.
 
 ```
 

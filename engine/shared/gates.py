@@ -80,6 +80,9 @@ NEAR_CUTOVER_0DTE_ET = "12:30"
 # 10:21–12:29. Do not freeze 0DTE TREND before 12:30.
 DTE_BOOK_ET = NEAR_CUTOVER_0DTE_ET
 EXTRA_BTO_MFE_USD = 0.20
+# Live leftover extra_bto_on_run=false is why Rec winners stay small.
+# Rec 30-day revenue extra-BTOs RUN to 16. This must be true on Railway.
+EXTRA_BTO_ON_RUN = True
 # 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408). Fill $0.15 stop was 0.64
 # (~$1,650 giveback). Once the ticket prints a high of at least $50,
 # flatten if unrealized gives back $50 from that high. Ratchet the high
@@ -183,9 +186,10 @@ ONE_DTE_SCALED_GIVEBACK = False
 ONE_DTE_GIVEBACK_FLOOR_PER_CONTRACT = 0.08
 ONE_DTE_GIVEBACK_PEAK_FRAC = 0.25
 # 10/14 dump was 10-lot (live $3000 leftover). Afternoon winners were
-# 5 / 4. Cap 1DTE at 6 until the short-ladder and giveback replays have
-# a logged path. 0DTE extra BTO to 16 stays. Do not overwrite live
-# starter_notional_usd.
+# 5 / 4. Cap 1DTE at 6. Rec dollars use starter $2000 (not live $3000),
+# extra BTO to 16 (not extra_bto=false / fill_to 24), ticket −$240,
+# halt −$750, peak $50. Overwrite leftover size so Tradier IS the Rec
+# book. 0DTE extra BTO to 16 stays.
 ONE_DTE_QTY_CAP = 6
 EXTRA_BTO_1DTE = False
 STC_REQUIRES_BEFORE_STC = True
@@ -244,8 +248,13 @@ WORKING_STC_ON_FILL = False
 # markers are the Pushover publications (overlay_iff_sms). Receipts
 # never SMS on their own (follow_delivered_sub=false).
 # Railway must advertise this dict on /health
-# and ignore leftover knobs (queue_opposite=true, take_exit=bid).
-REC_BOOK_SHIP = "2026-10-15-1dte-exit-log"
+# and overwrite leftover knobs ($3000 / $1125 / $360 / $75 / extra off).
+REC_BOOK_SHIP = "2026-10-15-match-rec"
+# Rec revenue lock: skip bar + extra BTO + halt + 90s hold + $50 peak
+# are load-bearing. Do not retune for one red day. Tightening 3m to
+# $0.30 skips 10/5 12:22 +$1,344. Loosening stall/chase/CHOPPY reopens
+# 10/8 A/D/E and 9/29. Envelope dumps still flatten.
+REC_REVENUE_LOCK = True
 
 
 def rec_book() -> dict:
@@ -253,6 +262,7 @@ def rec_book() -> dict:
     return {
         "rec_book": True,
         "rec_book_ship": REC_BOOK_SHIP,
+        "rec_revenue_lock": REC_REVENUE_LOCK,
         "engine_exit_mode": ENGINE_EXIT_MODE,
         "take_exit": TAKE_EXIT,
         "bto_source": BTO_SOURCE,
@@ -260,6 +270,7 @@ def rec_book() -> dict:
         "chop_size": CHOP_SIZE,
         "fail_streak_0dte_only": FAIL_STREAK_0DTE_ONLY,
         "extra_bto": True,
+        "extra_bto_on_run": EXTRA_BTO_ON_RUN,
         "extra_bto_fill_to": RISK_QTY_CAP,
         "extra_bto_mfe_usd": EXTRA_BTO_MFE_USD,
         "extra_bto_1dte": EXTRA_BTO_1DTE,
