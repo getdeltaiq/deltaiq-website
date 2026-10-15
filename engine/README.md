@@ -69,7 +69,7 @@ loosen stall $0.08, 3-minute $0.20, chase $0.50, or
 queue_opposite=false. 0DTE four-step ladder and 0DTE extra BTO to 16
 stay. Fewer SUB alerts is correct if they are winners.
 
-Copy these files from getdeltaiq/deltaiq-website SHA PIN onto
+Copy these files from getdeltaiq/deltaiq-website SHA a4484bd onto
 getdeltaiq/deltaiq-signal-engine production (overwrite leftover peak /
 halt / starter / extra_bto / ticket_risk — Rec dollars, not merge-keep):
   engine/shared/gates.py
@@ -77,10 +77,10 @@ halt / starter / extra_bto / ticket_risk — Rec dollars, not merge-keep):
   engine/tradier_exec/persist.py
   engine/overlay/publish.py
 Public raw (website is public; curl these, then SET Rec knobs):
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/PIN/engine/shared/gates.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/PIN/engine/tradier_exec/hooks.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/PIN/engine/tradier_exec/persist.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/PIN/engine/overlay/publish.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/a4484bd/engine/shared/gates.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/a4484bd/engine/tradier_exec/hooks.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/a4484bd/engine/tradier_exec/persist.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/a4484bd/engine/overlay/publish.py
 
 1) Continuous RTH: in_publish_window is 09:30–15:50 inclusive.
    Delete the 09:36–09:40 + 10:00–15:50 split. 09:41–09:59 is no longer
