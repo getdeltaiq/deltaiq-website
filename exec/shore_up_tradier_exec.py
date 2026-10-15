@@ -220,6 +220,11 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
 
 8) /health must include health_overlay(state) and MUST match rec_book()
    rec_book=true, rec_book_ship=2026-10-15-match-rec, rec_revenue_lock=true
+   code_ship MUST equal rec_book_ship (FAIL if 2026-09-29b)
+   rec_book_identity=true, rec_book_mismatch=[]
+   live_notional_usd=2000, notional_usd=2000
+   leftover $3000 / extra off / fill_to 24 / peak_starter $37.50
+   is skip_not_rec_book and does not consume
    session_loss_halt_usd=750
    starter_notional_usd=2000, ticket_risk_usd=240, extra_bto=true
    extra_bto_on_run=true, extra_bto_fill_to=16, risk_qty_cap=16

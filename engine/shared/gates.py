@@ -256,11 +256,82 @@ WORKING_STC_ON_FILL = False
 # Railway must advertise this dict on /health
 # and overwrite leftover knobs ($3000 / $1125 / $360 / $75 / extra off).
 REC_BOOK_SHIP = "2026-10-15-match-rec"
+# One ship id. 10/15 advertised rec_book_ship while code_ship stayed
+# 2026-09-29b — that is two books. code_ship MUST equal rec_book_ship.
+CODE_SHIP = REC_BOOK_SHIP
 # Rec revenue lock: skip bar + extra BTO + halt + 90s hold + $50 peak
 # are load-bearing. Do not retune for one red day. Tightening 3m to
 # $0.30 skips 10/5 12:22 +$1,344. Loosening stall/chase/CHOPPY reopens
 # 10/8 A/D/E and 9/29. Envelope dumps still flatten.
 REC_REVENUE_LOCK = True
+# Singular Rec book. Tradier IS rec_book(). Leftover live knobs
+# ($3000 / extra off / fill_to 24 / peak_starter $37.50 / 9/29b
+# code_ship) are skip_not_rec_book. Do not consume the send.
+REC_BOOK_IDENTITY = True
+# Frozen Rec dollars. rec_book() values MUST match these literals.
+# Editing STARTER_NOTIONAL to 3000 without this dict is a refuse.
+REC_BOOK_REQUIRED = {
+    "code_ship": "2026-10-15-match-rec",
+    "rec_book_ship": "2026-10-15-match-rec",
+    "starter_notional_usd": 2000.0,
+    "ticket_risk_usd": 240.0,
+    "session_loss_halt_usd": 750.0,
+    "peak_giveback_usd": 50.0,
+    "extra_bto": True,
+    "extra_bto_on_run": True,
+    "extra_bto_fill_to": 16,
+    "risk_qty_cap": 16,
+    "one_dte_qty_cap": 6,
+    "extra_bto_1dte": False,
+    "peak_starter_giveback": False,
+    "peak_starter_giveback_usd": 0.0,
+    "morning_rip_flatten": False,
+    "stall_1m_usd": 0.08,
+    "trend_3m_min_usd": 0.20,
+    "one_min_climax_usd": 0.50,
+    "one_min_climax_frac": 0.80,
+    "min_hold_sec": 90.0,
+    "quality_at_seal": True,
+    "sub_clock_is_tradier_clock": True,
+    "inflight_does_not_consume": True,
+    "after_recover_lost": True,
+    "rec_revenue_lock": True,
+}
+# Railway leftover aliases. before_bto pops these into live_book.
+LIVE_KNOB_KEYS = frozenset(
+    {
+        "live_notional_usd",
+        "notional_usd",
+        "live_extra_bto",
+        "live_extra_bto_on_run",
+        "live_extra_bto_fill_to",
+        "live_peak_starter_giveback",
+        "live_peak_starter_giveback_usd",
+        "live_risk_qty_cap",
+        "live_peak_giveback_usd",
+        "live_session_loss_halt_usd",
+        "live_ticket_risk_usd",
+        "live_morning_rip_flatten",
+        "live_code_ship",
+        "code_ship",
+        *REC_BOOK_REQUIRED,
+    }
+)
+LIVE_KNOB_ALIAS = {
+    "live_notional_usd": "starter_notional_usd",
+    "notional_usd": "starter_notional_usd",
+    "live_extra_bto": "extra_bto",
+    "live_extra_bto_on_run": "extra_bto_on_run",
+    "live_extra_bto_fill_to": "extra_bto_fill_to",
+    "live_peak_starter_giveback": "peak_starter_giveback",
+    "live_peak_starter_giveback_usd": "peak_starter_giveback_usd",
+    "live_risk_qty_cap": "risk_qty_cap",
+    "live_peak_giveback_usd": "peak_giveback_usd",
+    "live_session_loss_halt_usd": "session_loss_halt_usd",
+    "live_ticket_risk_usd": "ticket_risk_usd",
+    "live_morning_rip_flatten": "morning_rip_flatten",
+    "live_code_ship": "code_ship",
+}
 # 10/15 overlay A–G: SUB send_ts is the Tradier clock. Overlay-queued
 # SUB opposites must BTO (11:47 B, 14:49 F). Inflight/pending must not
 # consume the next send so it can post once flat.
@@ -274,6 +345,8 @@ def rec_book() -> dict:
     return {
         "rec_book": True,
         "rec_book_ship": REC_BOOK_SHIP,
+        "code_ship": CODE_SHIP,
+        "rec_book_identity": REC_BOOK_IDENTITY,
         "rec_revenue_lock": REC_REVENUE_LOCK,
         "engine_exit_mode": ENGINE_EXIT_MODE,
         "take_exit": TAKE_EXIT,
@@ -317,6 +390,8 @@ def rec_book() -> dict:
         "ticket_risk_usd": TICKET_RISK_USD,
         "risk_qty_cap": RISK_QTY_CAP,
         "starter_notional_usd": STARTER_NOTIONAL_USD,
+        "live_notional_usd": STARTER_NOTIONAL_USD,
+        "notional_usd": STARTER_NOTIONAL_USD,
         "override_trail": True,
         "use_trail": False,
         "stc_requires_envelope": STC_REQUIRES_ENVELOPE,
@@ -364,6 +439,47 @@ def rec_book() -> dict:
         "inflight_does_not_consume": INFLIGHT_DOES_NOT_CONSUME,
         "after_recover_lost": True,
     }
+
+
+def _knob_same(got, want) -> bool:
+    if isinstance(want, bool):
+        return bool(got) is want
+    if isinstance(want, (int, float)):
+        try:
+            return abs(float(got) - float(want)) < 1e-9
+        except (TypeError, ValueError):
+            return False
+    return got == want
+
+
+def rec_book_mismatch(observed: dict | None = None) -> list[str]:
+    """Keys that are not Rec. Empty means Tradier IS the Rec book."""
+    rec = rec_book()
+    bad: list[str] = []
+    for key, want in REC_BOOK_REQUIRED.items():
+        if not _knob_same(rec.get(key), want):
+            bad.append(key)
+    if rec.get("code_ship") != rec.get("rec_book_ship") and "code_ship" not in bad:
+        bad.append("code_ship")
+    if not observed:
+        return bad
+    for raw_key, got in observed.items():
+        if got is None:
+            continue
+        rec_key = LIVE_KNOB_ALIAS.get(raw_key, raw_key)
+        if rec_key not in REC_BOOK_REQUIRED:
+            continue
+        if not _knob_same(got, REC_BOOK_REQUIRED[rec_key]) and rec_key not in bad:
+            bad.append(rec_key)
+    return bad
+
+
+def rec_book_skip_reason(observed: dict | None = None) -> str | None:
+    if not REC_BOOK_IDENTITY:
+        return None
+    if rec_book_mismatch(observed):
+        return "skip_not_rec_book"
+    return None
 
 
 def et_hhmm_from_ts(send_ts: float) -> str:
@@ -1474,15 +1590,27 @@ def decide_starter(
     rip_1m_spy: float | None = None,
     trend_3m_spy: float | None = None,
     publication_et: str | None = None,
+    live_book: dict | None = None,
 ) -> dict:
     """Single entry point before any Tradier buy_to_open.
 
     send_ts is the SUB clock. publication_et, if passed, must equal
     et_hms_from_ts(send_ts). Overlay SUB (plot=sub_alert_send) is queued.
+    live_book leftover knobs ($3000 / extra off / 9/29b code_ship)
+    are skip_not_rec_book and do not consume.
     """
     if not ledger_ok_placeholder():
         pass
     state.refresh_halt()
+    rec_skip = rec_book_skip_reason(live_book)
+    if rec_skip is not None:
+        state.last_action = rec_skip
+        return {
+            "action": rec_skip,
+            "qty": 0,
+            "post": False,
+            "rec_book_mismatch": rec_book_mismatch(live_book),
+        }
     et_hhmm = locked_et_hhmm(send_ts, et_hhmm)
     ident = seal_identity(send_ts, direction, send_spy, et_hhmm)
     if (

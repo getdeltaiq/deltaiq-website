@@ -46,6 +46,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **Rec revenue lock (10/15):** Rec beats live on priced tape (30-day Rec +$5,314 vs −$2,480; Oct 1–8 Rec +$1,637 vs +$958). Those rails stay frozen: stall **$0.08**, 3m **$0.20**, chase **$0.50**, climax **$0.50/80%**, CHOPPY refuse, extra BTO to 16, halt **−$750**, 90s hold, peak **$50**, envelope still clips fill **$0.15** / 1DTE **$0.30**. Do not tighten (kills 10/5 12:22). Do not loosen (reopens 10/8 A/D/E and 9/29). `rec_revenue_lock=true`.
   - **SUB clock = Tradier clock (10/15 B/F):** Overlay marker unix `send_ts` is the BTO clock. `plot=sub_alert_send` forces `overlay_queued` so opposite SUBs post (B 11:47). Inflight does **not** consume (B/F retry when flat). `after_recover_lost("flat")` is `skip_already_flat`. 1DTE $0.02 dips at 2–7s HOLD is the **exit** track, not A/C/D/G.
   - **Entry at seal (10/15 A/C/D/G):** Those clocks erred at `decide_sub_send`, not STC. Live stamped 1m/3m at arm, waited `PUBLISH_ARM_SEC`, then sent into the opposite tape. Rec stamps the send bar. Call `at_seal(c, last_four_1m_closes_at_send_ts)` immediately before `decide_sub_send` / ingest. A 10:26 BEAR into a rising 3-minute is `skip_1min_rip`. C 12:45 stall, D 13:12 BEAR into rally, G 15:20 climax same skip. Do not retune stall $0.08 / 3m $0.20 / chase $0.50 / climax $0.50/80%. Flatten/hold stays a separate track. `quality_at_seal=true`.
+  - **Singular Rec book (10/15):** One book. Rec in `engine/shared/gates.py` (`rec_book()`, ship `2026-10-15-match-rec`) is the winner — 30-day Rec +$5,314 vs live −$2,480. Rec-on-prod was a **label**: `/health` advertised `rec_book_ship` while `code_ship` stayed `2026-09-29b` and leftover `$3000` / extra off / `$37.50` peak-from-print-high still sized and flattened. `code_ship` MUST equal `rec_book_ship`. Process constants MUST match `REC_BOOK_REQUIRED`. Leftover live knobs are `skip_not_rec_book` and do **not** consume. `rec_book_identity=true`. `rec_book_mismatch=[]`. Do not keep a second knob set.
   - **Peak lock (10/5):** A runner’s bid high is the high-water mark. Once unrealized ≥ **$50** **and the ticket is ≥ 90s old**, flatten if the ticket gives back **$50** from that high (`peak_giveback`). 10/5 16-lot 773C 0.79→1.67 (~+$1,408) must NOT sit to the fill $0.15 stop at 0.64. Fill $0.15 / 1DTE $0.30 still protect tickets that never made a high. Quote grace 8s and no STC on fill stay. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
@@ -56,12 +57,16 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` **production** agent and ship now:
 
 ```
-SHIP TO PRODUCTION NOW. Before 09:30 ET. rec_book_ship stays
-2026-10-15-match-rec. rec_revenue_lock=true. ALSO ship quality_at_seal:
-at_seal restamps 1m/3m at send_ts, never the arm bar. 10/15 A/C/D/G
-erred at entry determination, not flatten. KEEP SUB clock = Tradier
-clock, scratch-lock, and 1DTE exit-log.
+SHIP TO PRODUCTION NOW. Before 09:30 ET. ONE BOOK: Tradier IS Rec.
+code_ship MUST equal rec_book_ship=2026-10-15-match-rec.
+FAIL if code_ship is still 2026-09-29b. FAIL if rec_book_mismatch
+is nonempty. rec_book_identity=true. rec_revenue_lock=true.
+ALSO ship quality_at_seal: at_seal restamps 1m/3m at send_ts, never
+the arm bar. 10/15 A/C/D/G erred at entry determination, not flatten.
+KEEP SUB clock = Tradier clock, scratch-lock, and 1DTE exit-log.
 Rec IS the book — do not retune skip/hold/extra/halt.
+Leftover $3000 / extra off / fill_to 24 / peak_starter $37.50 is
+skip_not_rec_book (does not consume).
 OVERWRITE leftover size so Tradier IS the Rec book. Live $3000 /
 $1125 / $360 / $75 / extra_bto=false / fill_to 24 / extra_bto_on_run=false
 MUST become Rec starter $2000, halt $750, ticket $240, peak $50,
@@ -332,7 +337,9 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
    if kind == "adopt_stc_only": before_stc MUST post (orphan_adopt). Walk ladder.
    NEVER BTO from recover_lost.
 
-Proof: rec_book_ship=2026-10-15-match-rec, rec_revenue_lock=true,
+Proof: rec_book_ship=2026-10-15-match-rec, code_ship MUST equal
+rec_book_ship (FAIL if 2026-09-29b), rec_book_identity=true,
+rec_book_mismatch=[], rec_revenue_lock=true,
 quality_at_seal=true, sub_clock_is_tradier_clock=true,
 overlay_sub_forces_queued=true,
 inflight_does_not_consume=true, after_recover_lost=true, min_hold_sec=90,
@@ -492,6 +499,18 @@ is still 4 steps. A 1DTE 2.63 ask sizes 6, not 10. 1DTE extra
     10/2 10:54 −0.28 / −0.87 and 10/5 12:22 +0.175 / +0.235 still
     SEND at seal. Do not retune stall $0.08, 3m $0.20, chase $0.50,
     or climax $0.50/80%. Do not mix this with flatten/hold.
+
+17) SINGULAR REC BOOK: Tradier IS rec_book(). One ship id —
+    code_ship == rec_book_ship == 2026-10-15-match-rec.
+    rec_book_identity=true. rec_book_mismatch=[].
+    live_notional_usd=2000 and notional_usd=2000 follow
+    starter_notional_usd. Pass leftover Railway knobs into
+    before_bto as live_notional_usd / extra_bto_on_run /
+    peak_starter_giveback / code_ship; mismatch is
+    skip_not_rec_book and MUST NOT consume. A $3000 starter,
+    extra_bto=false, fill_to 24, peak_starter $37.50, or
+    code_ship=2026-09-29b cannot POST. Rec process still
+    POSTs 10/5 12:22. Do not keep a second knob set.
 
 ```
 
