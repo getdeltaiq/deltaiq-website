@@ -250,6 +250,11 @@ WORKING_STC_ON_FILL = False
 # Railway must advertise this dict on /health
 # and overwrite leftover knobs ($3000 / $1125 / $360 / $75 / extra off).
 REC_BOOK_SHIP = "2026-10-15-match-rec"
+# Rec revenue lock: skip bar + extra BTO + halt + 90s hold + $50 peak
+# are load-bearing. Do not retune for one red day. Tightening 3m to
+# $0.30 skips 10/5 12:22 +$1,344. Loosening stall/chase/CHOPPY reopens
+# 10/8 A/D/E and 9/29. Envelope dumps still flatten.
+REC_REVENUE_LOCK = True
 
 
 def rec_book() -> dict:
@@ -257,6 +262,7 @@ def rec_book() -> dict:
     return {
         "rec_book": True,
         "rec_book_ship": REC_BOOK_SHIP,
+        "rec_revenue_lock": REC_REVENUE_LOCK,
         "engine_exit_mode": ENGINE_EXIT_MODE,
         "take_exit": TAKE_EXIT,
         "bto_source": BTO_SOURCE,

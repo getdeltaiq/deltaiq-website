@@ -5,12 +5,24 @@ from __future__ import annotations
 import unittest
 
 from exec.gates import (
+    CHASE_SPY,
+    CHOP_SIZE,
+    ONE_MIN_CLIMAX_FRAC,
+    ONE_MIN_CLIMAX_USD,
+    TREND_3M_MIN_USD,
+    PEAK_GIVEBACK_MIN_SEC,
+    PEAK_GIVEBACK_USD,
+    SESSION_LOSS_HALT_USD,
+    STALL_1M_USD,
+    TICKET_RISK_USD,
     SessionState,
     bounce_against,
     clock_quality_skip_reason,
     et_hhmm_from_ts,
     et_hms_from_ts,
+    extra_bto_qty,
     locked_et_hhmm,
+    may_post_stc,
     seal_identity,
     strike_copy,
     starter_dte_for_clock,
@@ -976,6 +988,7 @@ class ChannelAlignTests(unittest.TestCase):
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
         self.assertEqual(h["rec_book_ship"], "2026-10-15-match-rec")
+        self.assertTrue(h["rec_revenue_lock"])
         self.assertEqual(h["min_hold_sec"], 90.0)
         self.assertTrue(h["stc_requires_before_stc"])
         self.assertTrue(h["stc_recomputes_envelope"])
@@ -2373,6 +2386,92 @@ class ExtraBtoTests(unittest.TestCase):
         )
         self.assertFalse(d["post"])
         self.assertEqual(d["action"], "skip_queue_opposite")
+
+
+class RecRevenueGuardrailTests(unittest.TestCase):
+    """Rec beats live on priced tape. These rails stay frozen."""
+
+    def test_rec_beats_live_on_30_day_tape(self):
+        from engine.tradier_exec.week_replay import weekly_impact
+
+        w = weekly_impact()
+        self.assertGreater(w["impact"], 7000)
+        self.assertEqual(w["result"], "win")
+        self.assertGreater(w["rec"], w["live"])
+
+    def test_skip_bar_is_frozen(self):
+        h = rec_book()
+        self.assertTrue(h["rec_revenue_lock"])
+        self.assertEqual(STALL_1M_USD, 0.08)
+        self.assertEqual(TREND_3M_MIN_USD, 0.20)
+        self.assertEqual(CHASE_SPY, 0.50)
+        self.assertEqual(ONE_MIN_CLIMAX_USD, 0.50)
+        self.assertEqual(ONE_MIN_CLIMAX_FRAC, 0.80)
+        self.assertFalse(CHOP_SIZE)
+        self.assertEqual(h["stall_1m_usd"], 0.08)
+        self.assertEqual(h["trend_3m_min_usd"], 0.20)
+
+    def test_105_1222_would_die_if_3m_tightened(self):
+        # 10/5 12:22 +$1,344. Rec 3m $0.20 keeps it. $0.30 would skip.
+        self.assertGreaterEqual(0.235, TREND_3M_MIN_USD)
+        self.assertLess(0.235, 0.30)
+        self.assertGreaterEqual(0.175, STALL_1M_USD)
+        self.assertIsNone(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=0.175, trend_3m_spy=0.235
+            ),
+        )
+
+    def test_108_1217_climax_stays_skipped(self):
+        self.assertEqual(
+            one_bar_rip_skip_reason(
+                direction="BULL", rip_1m_spy=1.55, trend_3m_spy=1.61
+            ),
+            "skip_1min_rip",
+        )
+
+    def test_choppy_is_refuse_not_size(self):
+        self.assertEqual(
+            quality_skip_reason(
+                choppy=True,
+                on_arm_bar=False,
+                pre_move_spy=0.40,
+                chase_spy=0.10,
+            ),
+            "skip_choppy",
+        )
+
+    def test_extra_bto_and_halt_stay_rec(self):
+        h = rec_book()
+        self.assertTrue(h["extra_bto"])
+        self.assertTrue(h["extra_bto_on_run"])
+        self.assertEqual(h["extra_bto_fill_to"], 16)
+        self.assertEqual(extra_bto_qty(13), 3)
+        self.assertEqual(SESSION_LOSS_HALT_USD, 750.0)
+        self.assertEqual(TICKET_RISK_USD, 240.0)
+        self.assertEqual(PEAK_GIVEBACK_USD, 50.0)
+        self.assertEqual(PEAK_GIVEBACK_MIN_SEC, 90.0)
+
+    def test_envelope_still_clips_a_real_dump(self):
+        # Guardrail is hold scratches, not hold dead premium.
+        self.assertEqual(
+            envelope_hit(
+                fill_px=1.19,
+                mark_bid=1.04,
+                qty=12,
+                spy_adverse=0.0,
+                seconds_since_fill=20,
+                ticket_phase="FAIL",
+                dte=0,
+            ),
+            "protective",
+        )
+        self.assertTrue(
+            may_post_stc(20, "protective", fill_px=1.19, mark_bid=1.04, qty=12, dte=0)
+        )
+        self.assertFalse(
+            may_post_stc(4, "recover_lost_flat", fill_px=1.07, mark_bid=1.05, qty=14, dte=0)
+        )
 
 
 class BounceHelperTests(unittest.TestCase):

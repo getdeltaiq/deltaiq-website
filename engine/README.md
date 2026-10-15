@@ -43,6 +43,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **Scratch lock (10/13, holds):** Listing leftover names is not enough — live can relabel a $0.04 dip as `protective` / `peak_giveback` / `fail_90` and sell. `may_post_stc` **recomputes** `envelope_hit` from fill/bid/qty and **ignores the claimed reason**. `on_manage` and `before_stc` share that gate. Missing marks fail closed. `morning_rip_flatten=false` (live 09:45). 15:50 leftover still `rth_end`. A 4s $0.02 dip HOLDs. A 122s $0.04 dip HOLDs even if named `peak_giveback`. A 20s fill $0.15 dump still clips. 10/5 773C at 180s still peak_giveback $50.
   - **1DTE exit log + short ladder (10/15):** `get_orders` is same-day and lost the 10/13 dump clock. Every flatten writes `flatten_exits` (trigger time, trigger bid, planned ladder, each posted step, final fill) and **keeps it across ET midnight**. 1DTE **protective** only: rest the trigger bid, then **market after 2s** (skip bid−0.05 / bid−0.10). 0DTE $0.15 keeps the four-step ladder. 1DTE size holds at **6** (`one_dte_qty_cap`); 1DTE extra BTO is off. Scaled 1DTE giveback (`max($0.08/contract, 25% of peak)`) is **replay-only** until a logged high-water exists — 10/14 +$30 never tagged $50, +$90 has no bid path. Do not change 0DTE size or 0DTE peak $50.
   - **Match Rec dollars (10/15):** Tradier must run the Rec book, not leftover size. Overwrite live `$3000` / `$1125` / `$360` / `$75` / `extra_bto=false` / `fill_to 24`. Rec is starter **$2000**, extra BTO **on** to **16**, ticket **−$240**, halt **−$750**, peak **$50**, 1DTE cap **6**. `extra_bto_on_run=true`. Skip+hold already in SoT; leftover knobs were the revenue hole.
+  - **Rec revenue lock (10/15):** Rec beats live on priced tape (30-day Rec +$5,314 vs −$2,480; Oct 1–8 Rec +$1,637 vs +$958). Those rails stay frozen: stall **$0.08**, 3m **$0.20**, chase **$0.50**, climax **$0.50/80%**, CHOPPY refuse, extra BTO to 16, halt **−$750**, 90s hold, peak **$50**, envelope still clips fill **$0.15** / 1DTE **$0.30**. Do not tighten (kills 10/5 12:22). Do not loosen (reopens 10/8 A/D/E and 9/29). `rec_revenue_lock=true`.
   - **Peak lock (10/5):** A runner’s bid high is the high-water mark. Once unrealized ≥ **$50** **and the ticket is ≥ 90s old**, flatten if the ticket gives back **$50** from that high (`peak_giveback`). 10/5 16-lot 773C 0.79→1.67 (~+$1,408) must NOT sit to the fill $0.15 stop at 0.64. Fill $0.15 / 1DTE $0.30 still protect tickets that never made a high. Quote grace 8s and no STC on fill stay. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
@@ -54,7 +55,8 @@ This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` 
 
 ```
 SHIP TO PRODUCTION NOW. Before 09:30 ET. rec_book_ship MUST become
-2026-10-15-match-rec on /health. KEEP scratch-lock and 1DTE exit-log.
+2026-10-15-match-rec on /health. rec_revenue_lock=true. KEEP scratch-lock
+and 1DTE exit-log. Rec IS the book — do not retune skip/hold/extra/halt.
 OVERWRITE leftover size so Tradier IS the Rec book. Live $3000 /
 $1125 / $360 / $75 / extra_bto=false / fill_to 24 / extra_bto_on_run=false
 MUST become Rec starter $2000, halt $750, ticket $240, peak $50,
@@ -320,7 +322,7 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
    if kind == "adopt_stc_only": before_stc MUST post (orphan_adopt). Walk ladder.
    NEVER BTO from recover_lost.
 
-Proof: rec_book_ship=2026-10-15-match-rec, min_hold_sec=90,
+Proof: rec_book_ship=2026-10-15-match-rec, rec_revenue_lock=true, min_hold_sec=90,
 stc_requires_before_stc=true, stc_recomputes_envelope=true,
 native_close_push=false, morning_rip_flatten=false,
 peak_starter_giveback=false, peak_starter_giveback_usd=0,
@@ -418,6 +420,21 @@ is still 4 steps. A 1DTE 2.63 ask sizes 6, not 10. 1DTE extra
     starter $3000 / halt $1125 / ticket $360 / peak $75.
     0DTE extra BTO on RUN to 16 is how Rec sizes 10/5 12:22.
     1DTE stays cap 6 / no extra. A 2.63 1DTE ask sizes 6, not 10.
+
+12) REC REVENUE LOCK: Rec IS the book. Do not retune the skip bar,
+    extra BTO, halt, 90s hold, or $50 peak for one-day tape.
+    rec_revenue_lock=true.
+    stall_1m_usd=0.08, trend_3m_min_usd=0.20, chase_spy=0.50,
+    one_min_climax_usd=0.50, one_min_climax_frac=0.80,
+    skip_choppy_is_refuse=true, chop_size=false,
+    extra_bto=true, extra_bto_on_run=true, extra_bto_fill_to=16,
+    session_loss_halt_usd=750, peak_giveback_usd=50,
+    min_hold_sec=90, stc_recomputes_envelope=true.
+    10/5 12:22 +0.175 / +0.235 MUST still SEND (raising 3m to $0.30
+    skips it). 10/8 12:17 +1.55 / +1.61 MUST stay skip_1min_rip.
+    10/5 16-lot 0.79 marked 1.67 MUST HOLD until $50 giveback after 90s
+    — do not sit to fill $0.15. A 20s fill $0.15 dump still flattens.
+    9/29 CHOPPY is skip, not chop_size.
 
 ```
 

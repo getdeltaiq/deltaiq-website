@@ -678,6 +678,7 @@ class HookHaltTests(unittest.TestCase):
         self.assertFalse(h["queue_opposite"])
         self.assertTrue(h["rec_book"])
         self.assertEqual(h["rec_book_ship"], "2026-10-15-match-rec")
+        self.assertTrue(h["rec_revenue_lock"])
         self.assertEqual(h["min_hold_sec"], 90.0)
         self.assertTrue(h["stc_requires_before_stc"])
         self.assertTrue(h["stc_recomputes_envelope"])

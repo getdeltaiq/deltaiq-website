@@ -218,7 +218,8 @@ WIRE CONTRACT (must be in the live BTO/manage path, not comments):
    apply_broker_session_cash(tradier option cash) every flatten.
 
 8) /health must include health_overlay(state) and MUST match rec_book()
-   rec_book=true, rec_book_ship=2026-10-15-match-rec, session_loss_halt_usd=750
+   rec_book=true, rec_book_ship=2026-10-15-match-rec, rec_revenue_lock=true
+   session_loss_halt_usd=750
    starter_notional_usd=2000, ticket_risk_usd=240, extra_bto=true
    extra_bto_on_run=true, extra_bto_fill_to=16, risk_qty_cap=16
    peak_giveback_usd=50 (overwrite live $3000 / $1125 / $360 / $75 / extra off)
