@@ -205,6 +205,12 @@ CLOCK = "America/New_York unix send instant"
 CLOCK_FALLBACK = "historical_audits_only"
 CLOCK_IDENTITY_LOCK = True
 SMS_AT_SEAL = True
+# 10/15 overlay A/C/D/G SENT because 1m/3m were stamped at arm, then
+# decide_sub_send ran ~PUBLISH_ARM_SEC later into the opposite tape.
+# Rec stamps signed deltas on the send bar. Live must call at_seal on
+# the last four 1-minute closes at send_ts immediately before
+# decide_sub_send. Flatten/hold is a separate track.
+QUALITY_AT_SEAL = True
 # Overlay chart/table markers are the Pushover/Twilio SUB publications.
 # 10/12: overlay showed 1 (11:13) while the phone got 3 (10:35:53,
 # 11:49:03, 12:22:52) because receipts SMS'd independently of the overlay
@@ -349,6 +355,7 @@ def rec_book() -> dict:
         "clock_fallback": CLOCK_FALLBACK,
         "clock_identity_lock": CLOCK_IDENTITY_LOCK,
         "sms_at_seal": SMS_AT_SEAL,
+        "quality_at_seal": QUALITY_AT_SEAL,
         "follow_delivered_sub": FOLLOW_DELIVERED_SUB,
         "overlay_iff_sms": OVERLAY_IFF_SMS,
         "min_hold_sec": MIN_HOLD_SEC,
@@ -499,8 +506,9 @@ def trend_confirm_kwargs(direction: Direction) -> dict:
 def signed_spy_deltas(closes: Sequence[float] | None) -> dict[str, float | None]:
     """Stamp overlay Candidate from the last four 1-minute SPY closes.
 
-    closes[-1] is now. Up is +. Production overlay MUST call this on every
-    candidate. Do not invent defaults — a short tape is skip_1min_unconfirmed.
+    closes[-1] is now. Up is +. Production overlay MUST call this at
+    the SEAL (send_ts), never reuse the arm-bar four. Do not invent
+    defaults — a short tape is skip_1min_unconfirmed.
     10/2 11:42: last four closes that yield +0.44 / +0.12.
     10/2 10:54: last four closes that yield −0.28 / −0.87.
     """

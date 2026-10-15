@@ -7,6 +7,7 @@ import unittest
 from engine.overlay.publish import (
     Candidate,
     PublishLedgers,
+    at_seal,
     decide_sub_send,
     in_publish_window,
     overlay_matches_pushover,
@@ -70,6 +71,7 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertTrue(h["overlay_sub_forces_queued"])
         self.assertTrue(h["inflight_does_not_consume"])
         self.assertTrue(h["sms_at_seal"])
+        self.assertTrue(h["quality_at_seal"])
         self.assertFalse(h["follow_delivered_sub"])
         self.assertTrue(h["overlay_iff_sms"])
         self.assertEqual(h["pushover_from"], "sub_alert_send")
@@ -650,6 +652,199 @@ class OverlayPushoverSyncTests(unittest.TestCase):
         self.assertNotEqual(overlay[0]["et_hhmm"], "10:32")
 
 
+class EntryAtSealTests(unittest.TestCase):
+    """10/15 A/C/D/G erred at decide_sub_send, not STC.
+
+    Live stamped 1m/3m at arm, waited PUBLISH_ARM_SEC, then sent into
+    the opposite tape. Rec stamps the send bar. Flatten/hold is a
+    separate track.
+    """
+
+    ARM_A = [767.90, 767.70, 767.55, 767.20]  # BEAR dump −0.35 / −0.70
+    SEAL_A = [767.10, 767.20, 767.30, 767.40]  # rally +0.10 / +0.30
+    ARM_C = [769.70, 769.85, 770.00, 770.20]  # BULL +0.20 / +0.50
+    SEAL_C = [770.00, 770.05, 770.06, 770.08]  # stall +0.02 / +0.08
+    ARM_D = [770.50, 770.35, 770.20, 769.90]  # BEAR −0.30 / −0.60
+    SEAL_D = [769.80, 769.90, 769.95, 770.01]  # rally +0.06 / +0.21
+    ARM_G = [771.80, 772.00, 772.20, 772.40]  # BULL grind +0.20 / +0.60
+    SEAL_G = [772.00, 772.10, 772.12, 772.62]  # climax +0.50 / +0.62
+    DUMP_1054 = [771.81, 771.22, 771.22, 770.94]
+    CONT_1222 = [768.00, 768.06, 768.06, 768.235]
+
+    def _ts(self, h: int, m: int, s: int = 0) -> float:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        return datetime(
+            2026, 10, 15, h, m, s, tzinfo=ZoneInfo("America/New_York")
+        ).timestamp()
+
+    def test_arm_bear_dump_would_send(self):
+        armed = with_spy_deltas(
+            _c(direction="BEAR", et_hhmm="10:23", spy=767.20, dte=0),
+            self.ARM_A,
+        )
+        self.assertAlmostEqual(armed.rip_1m_spy, -0.35, places=2)
+        self.assertAlmostEqual(armed.trend_3m_spy, -0.70, places=2)
+        self.assertTrue(decide_sub_send(armed)["send"])
+
+    def test_a_1026_bear_into_rally_is_admin_only(self):
+        armed = with_spy_deltas(
+            _c(
+                ts=self._ts(10, 26, 0),
+                et_hhmm="10:23",
+                direction="BEAR",
+                spy=767.20,
+                dte=0,
+            ),
+            self.ARM_A,
+        )
+        self.assertTrue(decide_sub_send(armed)["send"])
+        d = decide_sub_send(armed, self.SEAL_A)
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_1min_rip")
+        self.assertEqual(d["et_hhmm"], "10:26")
+        sealed = at_seal(armed, self.SEAL_A)
+        self.assertNotAlmostEqual(armed.rip_1m_spy, sealed.rip_1m_spy)
+        self.assertAlmostEqual(sealed.spy, 767.40, places=2)
+        self.assertFalse(sealed.on_arm_bar)
+
+    def test_c_1245_bull_stall_is_admin_only(self):
+        armed = with_spy_deltas(
+            _c(
+                ts=self._ts(12, 45, 17),
+                et_hhmm="12:42",
+                direction="BULL",
+                spy=770.20,
+                dte=1,
+                regime="TREND",
+            ),
+            self.ARM_C,
+        )
+        self.assertTrue(decide_sub_send(armed)["send"])
+        sealed = at_seal(armed, self.SEAL_C)
+        self.assertEqual(sealed.dte, 1)
+        self.assertEqual(sealed.et_hhmm, "12:45")
+        d = decide_sub_send(sealed)
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_1min_rip")
+
+    def test_d_1312_bear_into_rally_is_admin_only(self):
+        armed = with_spy_deltas(
+            _c(
+                ts=self._ts(13, 12, 40),
+                et_hhmm="13:09",
+                direction="BEAR",
+                spy=769.90,
+                dte=1,
+            ),
+            self.ARM_D,
+        )
+        d = decide_sub_send(armed, self.SEAL_D)
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_1min_rip")
+
+    def test_g_1520_bull_climax_is_admin_only(self):
+        armed = with_spy_deltas(
+            _c(
+                ts=self._ts(15, 20, 0),
+                et_hhmm="15:17",
+                direction="BULL",
+                spy=772.40,
+                dte=1,
+            ),
+            self.ARM_G,
+        )
+        self.assertTrue(decide_sub_send(armed)["send"])
+        d = decide_sub_send(armed, self.SEAL_G)
+        self.assertFalse(d["send"])
+        self.assertEqual(d["reason"], "skip_1min_rip")
+
+    def test_rec_1054_dump_still_sends_at_seal(self):
+        d = decide_sub_send(
+            _c(direction="BEAR", et_hhmm="10:54", dte=0),
+            self.DUMP_1054,
+        )
+        self.assertTrue(d["send"])
+        self.assertEqual(d["reason"], "sub_alert_send")
+
+    def test_rec_1222_continuation_still_sends_at_seal(self):
+        d = decide_sub_send(
+            _c(direction="BULL", et_hhmm="12:22", dte=0),
+            self.CONT_1222,
+        )
+        self.assertTrue(d["send"])
+        self.assertEqual(d["reason"], "sub_alert_send")
+
+    def test_missing_seal_tape_is_unconfirmed(self):
+        sealed = at_seal(_c(direction="BEAR", et_hhmm="10:26", dte=0), None)
+        self.assertIsNone(sealed.rip_1m_spy)
+        self.assertEqual(decide_sub_send(sealed)["reason"], "skip_1min_unconfirmed")
+
+    def test_ingest_seal_tape_does_not_plot_a(self):
+        armed = with_spy_deltas(
+            _c(
+                ts=self._ts(10, 26, 0),
+                et_hhmm="10:23",
+                direction="BEAR",
+                spy=767.20,
+                dte=0,
+            ),
+            self.ARM_A,
+        )
+        p = PublishLedgers("2026-10-15")
+        out = p.ingest(armed, self.SEAL_A)
+        self.assertFalse(out["sent"])
+        self.assertFalse(out["sms"])
+        self.assertEqual(out["reason"], "skip_1min_rip")
+        self.assertEqual(p.admin_n, 1)
+        self.assertEqual(p.sub_n, 0)
+        self.assertIsNone(out["overlay"])
+        self.assertIsNone(out["pushover"])
+
+    def test_seal_skip_is_sms_and_bto(self):
+        from engine.shared.gates import decide_starter, new_session
+
+        c = at_seal(
+            _c(
+                ts=self._ts(10, 26, 0),
+                et_hhmm="10:23",
+                direction="BEAR",
+                spy=767.20,
+                dte=0,
+            ),
+            self.SEAL_A,
+        )
+        sms = decide_sub_send(c)
+        st = new_session("2026-10-15")
+        bto = decide_starter(
+            st,
+            send_ts=c.ts,
+            direction=c.direction,
+            send_spy=c.spy,
+            spy=c.spy,
+            bar_high=c.spy + 0.05,
+            bar_low=c.spy - 0.05,
+            et_hhmm=c.et_hhmm,
+            ask=2.05,
+            choppy=c.choppy,
+            on_arm_bar=c.on_arm_bar,
+            pre_move_spy=c.pre_move_spy,
+            chase_spy=c.chase_spy,
+            plot="sub_alert_send",
+            overlay_queued=True,
+            option_symbol="SPY261015P00767000",
+            dte=c.dte,
+            rip_1m_spy=c.rip_1m_spy,
+            trend_3m_spy=c.trend_3m_spy,
+        )
+        self.assertFalse(sms["send"])
+        self.assertFalse(sms["sms"])
+        self.assertFalse(bto["post"])
+        self.assertEqual(sms["reason"], "skip_1min_rip")
+        self.assertEqual(bto["action"], sms["reason"])
+
+
 class HookHaltTests(unittest.TestCase):
     def test_health_names_github_module(self):
         from engine.shared.gates import new_session
@@ -694,6 +889,7 @@ class HookHaltTests(unittest.TestCase):
         self.assertTrue(h["inflight_does_not_consume"])
         self.assertTrue(h["after_recover_lost"])
         self.assertTrue(h["sms_at_seal"])
+        self.assertTrue(h["quality_at_seal"])
         self.assertFalse(h["follow_delivered_sub"])
         self.assertTrue(h["overlay_iff_sms"])
         self.assertEqual(h["clock"], "America/New_York unix send instant")

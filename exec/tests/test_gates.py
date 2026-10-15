@@ -1007,6 +1007,7 @@ class ChannelAlignTests(unittest.TestCase):
         self.assertTrue(h["inflight_does_not_consume"])
         self.assertTrue(h["after_recover_lost"])
         self.assertTrue(h["sms_at_seal"])
+        self.assertTrue(h["quality_at_seal"])
         self.assertFalse(h["follow_delivered_sub"])
         self.assertTrue(h["overlay_iff_sms"])
         self.assertEqual(h["clock"], "America/New_York unix send instant")
@@ -2612,6 +2613,7 @@ class SubClockHoldTests(unittest.TestCase):
         self.assertTrue(h["overlay_sub_forces_queued"])
         self.assertTrue(h["inflight_does_not_consume"])
         self.assertTrue(h["after_recover_lost"])
+        self.assertTrue(h["quality_at_seal"])
         self.assertEqual(rec_book()["rec_book_ship"], "2026-10-15-match-rec")
 
 

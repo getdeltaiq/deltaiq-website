@@ -15,7 +15,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from engine.overlay.publish import Candidate, decide_sub_send, in_publish_window, with_spy_deltas
+from engine.overlay.publish import Candidate, at_seal, decide_sub_send, in_publish_window
 from engine.shared.gates import (
     ONE_MIN_RIP_USD,
     STALL_1M_USD,
@@ -63,7 +63,7 @@ def _candidate(et_hhmm: str, spy: float, four: list[float], dte: int) -> Candida
         rip_1m_spy=None,
         trend_3m_spy=None,
     )
-    return with_spy_deltas(c, four)
+    return at_seal(c, four, on_arm_bar=False, dte=dte, spy=spy)
 
 
 def bar_row(

@@ -44,7 +44,8 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - **1DTE exit log + short ladder (10/15):** `get_orders` is same-day and lost the 10/13 dump clock. Every flatten writes `flatten_exits` (trigger time, trigger bid, planned ladder, each posted step, final fill) and **keeps it across ET midnight**. 1DTE **protective** only: rest the trigger bid, then **market after 2s** (skip bid−0.05 / bid−0.10). 0DTE $0.15 keeps the four-step ladder. 1DTE size holds at **6** (`one_dte_qty_cap`); 1DTE extra BTO is off. Scaled 1DTE giveback (`max($0.08/contract, 25% of peak)`) is **replay-only** until a logged high-water exists — 10/14 +$30 never tagged $50, +$90 has no bid path. Do not change 0DTE size or 0DTE peak $50.
   - **Match Rec dollars (10/15):** Tradier must run the Rec book, not leftover size. Overwrite live `$3000` / `$1125` / `$360` / `$75` / `extra_bto=false` / `fill_to 24`. Rec is starter **$2000**, extra BTO **on** to **16**, ticket **−$240**, halt **−$750**, peak **$50**, 1DTE cap **6**. `extra_bto_on_run=true`. Skip+hold already in SoT; leftover knobs were the revenue hole.
   - **Rec revenue lock (10/15):** Rec beats live on priced tape (30-day Rec +$5,314 vs −$2,480; Oct 1–8 Rec +$1,637 vs +$958). Those rails stay frozen: stall **$0.08**, 3m **$0.20**, chase **$0.50**, climax **$0.50/80%**, CHOPPY refuse, extra BTO to 16, halt **−$750**, 90s hold, peak **$50**, envelope still clips fill **$0.15** / 1DTE **$0.30**. Do not tighten (kills 10/5 12:22). Do not loosen (reopens 10/8 A/D/E and 9/29). `rec_revenue_lock=true`.
-  - **SUB clock = Tradier clock (10/15 A–G):** Overlay marker unix `send_ts` is the BTO clock. `plot=sub_alert_send` forces `overlay_queued` so opposite SUBs post (B 11:47). Inflight does **not** consume (B/F retry when flat). `after_recover_lost("flat")` is `skip_already_flat`. 1DTE $0.02 dips at 2–7s HOLD (C/D/G). A 10:26 fill $0.15 dump still clips.
+  - **SUB clock = Tradier clock (10/15 B/F):** Overlay marker unix `send_ts` is the BTO clock. `plot=sub_alert_send` forces `overlay_queued` so opposite SUBs post (B 11:47). Inflight does **not** consume (B/F retry when flat). `after_recover_lost("flat")` is `skip_already_flat`. 1DTE $0.02 dips at 2–7s HOLD is the **exit** track, not A/C/D/G.
+  - **Entry at seal (10/15 A/C/D/G):** Those clocks erred at `decide_sub_send`, not STC. Live stamped 1m/3m at arm, waited `PUBLISH_ARM_SEC`, then sent into the opposite tape. Rec stamps the send bar. Call `at_seal(c, last_four_1m_closes_at_send_ts)` immediately before `decide_sub_send` / ingest. A 10:26 BEAR into a rising 3-minute is `skip_1min_rip`. C 12:45 stall, D 13:12 BEAR into rally, G 15:20 climax same skip. Do not retune stall $0.08 / 3m $0.20 / chase $0.50 / climax $0.50/80%. Flatten/hold stays a separate track. `quality_at_seal=true`.
   - **Peak lock (10/5):** A runner’s bid high is the high-water mark. Once unrealized ≥ **$50** **and the ticket is ≥ 90s old**, flatten if the ticket gives back **$50** from that high (`peak_giveback`). 10/5 16-lot 773C 0.79→1.67 (~+$1,408) must NOT sit to the fill $0.15 stop at 0.64. Fill $0.15 / 1DTE $0.30 still protect tickets that never made a high. Quote grace 8s and no STC on fill stay. Do not freeze 0DTE TREND.
   - `consumed_sends` SQL persist on every consume; boot `load_consumed`. Never DELETE on flatten.
   - Pass `plot=sub_alert_send`, `overlay_queued`, `is_opposite`, `choppy` / `on_arm_bar` / `pre_move_spy` / `chase_spy` / `regime` / `same_dir_age_sec` / `rip_1m_spy` / `trend_3m_spy` into `before_bto`.
@@ -56,10 +57,10 @@ This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` 
 
 ```
 SHIP TO PRODUCTION NOW. Before 09:30 ET. rec_book_ship stays
-2026-10-15-match-rec. rec_revenue_lock=true. ALSO ship SUB clock =
-Tradier clock: sub_clock_is_tradier_clock=true,
-overlay_sub_forces_queued=true, inflight_does_not_consume=true,
-after_recover_lost=true. KEEP scratch-lock and 1DTE exit-log.
+2026-10-15-match-rec. rec_revenue_lock=true. ALSO ship quality_at_seal:
+at_seal restamps 1m/3m at send_ts, never the arm bar. 10/15 A/C/D/G
+erred at entry determination, not flatten. KEEP SUB clock = Tradier
+clock, scratch-lock, and 1DTE exit-log.
 Rec IS the book — do not retune skip/hold/extra/halt.
 OVERWRITE leftover size so Tradier IS the Rec book. Live $3000 /
 $1125 / $360 / $75 / extra_bto=false / fill_to 24 / extra_bto_on_run=false
@@ -75,7 +76,7 @@ loosen stall $0.08, 3-minute $0.20, chase $0.50, or
 queue_opposite=false. 0DTE four-step ladder and 0DTE extra BTO to 16
 stay. Fewer SUB alerts is correct if they are winners.
 
-Copy these files from getdeltaiq/deltaiq-website SHA f48a383 onto
+Copy these files from getdeltaiq/deltaiq-website SHA 94a0b5e onto
 getdeltaiq/deltaiq-signal-engine production (overwrite leftover peak /
 halt / starter / extra_bto / ticket_risk — Rec dollars, not merge-keep):
   engine/shared/gates.py
@@ -83,10 +84,10 @@ halt / starter / extra_bto / ticket_risk — Rec dollars, not merge-keep):
   engine/tradier_exec/persist.py
   engine/overlay/publish.py
 Public raw (website is public; curl these, then SET Rec knobs):
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/f48a383/engine/shared/gates.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/f48a383/engine/tradier_exec/hooks.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/f48a383/engine/tradier_exec/persist.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/f48a383/engine/overlay/publish.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/94a0b5e/engine/shared/gates.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/94a0b5e/engine/tradier_exec/hooks.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/94a0b5e/engine/tradier_exec/persist.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/94a0b5e/engine/overlay/publish.py
 
 1) Continuous RTH: in_publish_window is 09:30–15:50 inclusive.
    Delete the 09:36–09:40 + 10:00–15:50 split. 09:41–09:59 is no longer
@@ -192,8 +193,9 @@ Public raw (website is public; curl these, then SET Rec knobs):
     still flattens protective. 10/14 5-lot winners still
     size under the cap.
 
-Wire overlay ingest to stamp every Candidate with with_spy_deltas /
-signed_spy_deltas on the last four 1m SPY closes before decide_sub_send.
+Wire overlay ingest to at_seal every Candidate on the last four 1m
+SPY closes AT send_ts before decide_sub_send. Arm-bar deltas must not
+survive PUBLISH_ARM_SEC.
 OCC tenor MUST be starter_dte_for_clock(et_hhmm): 0 at 09:30–09:59 and
 10:21–12:29; 1 in 10:00–10:20 and from 12:30. Leftover 0DTE after 12:30
 is skip_0dte_near_cutover (admin only). rec_book_ship MUST become
@@ -214,14 +216,18 @@ and not stalled 3-minute rips. Impactful winners (10:54 BEAR
 −0.28 / −0.87, 10/5 12:22 +0.175 / +0.235) still SEND and extra-BTO
 to 16 on RUN (MFE ≥ $0.20). Admin ledger still records the skips.
 
-OVERLAY TAPE — every Candidate MUST be stamped before ingest/decide_sub_send:
-  from engine.overlay.publish import with_spy_deltas
+OVERLAY TAPE — every Candidate MUST be stamped AT SEAL before ingest/decide_sub_send:
+  from engine.overlay.publish import at_seal, with_spy_deltas
   from engine.shared.gates import signed_spy_deltas
-  c = with_spy_deltas(c, last_four_1m_spy_closes)  # oldest → now
-  # or Candidate(..., **signed_spy_deltas(last_four_1m_spy_closes))
+  c = at_seal(c, last_four_1m_spy_closes_at_send_ts)  # oldest → now, not the arm bar
+  # or with_spy_deltas(c, last_four_1m_spy_closes_at_send_ts)
+  # or Candidate(..., **signed_spy_deltas(last_four_1m_spy_closes_at_send_ts))
 Up is +. Need 4 closes. Short tape => None, None => skip_1min_unconfirmed
 (no SMS, no BTO). Do NOT default 1m/3m. Do NOT inject trend_confirm_kwargs
-on live sends (that is replay-only).
+on live sends (that is replay-only). Do NOT reuse the arm-bar four after
+PUBLISH_ARM_SEC. 10/15 A 10:26 BEAR / C 12:45 BULL / D 13:12 BEAR /
+G 15:20 BULL SENT because quality was the arm tape. Rec already stamps
+the send bar. Flatten/hold is not this lock.
 
 1-MINUTE RIP — 10/2 SUB losers were 1-minute prints. Do not send those.
 SUB requires the 3-minute move in the send direction of at least $0.20.
@@ -327,7 +333,8 @@ Path-bind (STC-hold / skip_already_flat) stays. Do not freeze 0DTE TREND.
    NEVER BTO from recover_lost.
 
 Proof: rec_book_ship=2026-10-15-match-rec, rec_revenue_lock=true,
-sub_clock_is_tradier_clock=true, overlay_sub_forces_queued=true,
+quality_at_seal=true, sub_clock_is_tradier_clock=true,
+overlay_sub_forces_queued=true,
 inflight_does_not_consume=true, after_recover_lost=true, min_hold_sec=90,
 stc_requires_before_stc=true, stc_recomputes_envelope=true,
 native_close_push=false, morning_rip_flatten=false,
@@ -372,6 +379,10 @@ A 10/8 12:37 0DTE is skip_0dte_near_cutover. A 12:37 1DTE TREND BEAR
 −0.22 / −0.67 must SEND and POST (starter_dte_for_clock=1).
 A 10/5 10:58 BULL +0.03 / +0.505 must be skip_1min_stall.
 A 10/5 12:22 BULL +0.175 / +0.235 must still SEND and POST.
+A 10/15 10:26 BEAR into a rising 3-minute (arm dump, seal rally) must
+be skip_1min_rip at seal. C 12:45 stall, D 13:12 BEAR into rally, and
+G 15:20 $0.50/80% climax must be skip_1min_rip at seal. Arm-bar 1m/3m
+must not survive PUBLISH_ARM_SEC. Flatten/hold is a separate track.
 A 16-lot 0.79 fill marked 1.67 must HOLD. Marked 1.63 after 90s
 must flatten_peak_giveback. Do not sit to fill-0.15 (0.64).
 A 13-lot 1.17 marked 1.10 at 62s with peak $78 must HOLD. Same mark
@@ -462,6 +473,25 @@ is still 4 steps. A 1DTE 2.63 ask sizes 6, not 10. 1DTE extra
     2.83→2.81 at 2s, G 15:20 2.71→2.70 at 7s HOLD. 10/15 A 10:26 2.05 vs
     1.83 at 22s is still flatten_protective. Call after_recover_lost
     from the lost-scan. Do not STC on recover_lost_flat / broker_flat.
+    This is the EXIT track. A/C/D/G send clocks are item 16.
+
+16) ENTRY AT SEAL: 10/15 overlay A 10:26 BEAR, C 12:45 BULL, D 13:12
+    BEAR, G 15:20 BULL erred at decide_sub_send, not STC. Live stamped
+    rip_1m_spy / trend_3m_spy at arm, waited PUBLISH_ARM_SEC (180s),
+    then sent into the opposite / stalled / climax tape. Rec stamps
+    the last four 1-minute closes on the SEND bar.
+      from engine.overlay.publish import at_seal
+      c = at_seal(c, last_four_1m_spy_closes_at_send_ts)
+      d = decide_sub_send(c)  # or decide_sub_send(c, closes)
+    quality_at_seal=true. Arm-bar 1m/3m must not survive the wait.
+    Missing seal tape is skip_1min_unconfirmed (no SMS, no BTO).
+    A 10:26 BEAR into a rising 3-minute is skip_1min_rip.
+    C 12:45 last-minute stall is skip_1min_rip.
+    D 13:12 BEAR into a rally is skip_1min_rip.
+    G 15:20 $0.50 / 80% climax is skip_1min_rip.
+    10/2 10:54 −0.28 / −0.87 and 10/5 12:22 +0.175 / +0.235 still
+    SEND at seal. Do not retune stall $0.08, 3m $0.20, chase $0.50,
+    or climax $0.50/80%. Do not mix this with flatten/hold.
 
 ```
 
