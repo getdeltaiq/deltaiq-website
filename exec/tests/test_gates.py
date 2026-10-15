@@ -975,7 +975,7 @@ class ChannelAlignTests(unittest.TestCase):
 
     def test_rec_book_advertises_channel_align(self):
         h = rec_book()
-        self.assertEqual(h["rec_book_ship"], "2026-10-15-1dte-exit-log")
+        self.assertEqual(h["rec_book_ship"], "2026-10-15-match-rec")
         self.assertEqual(h["min_hold_sec"], 90.0)
         self.assertTrue(h["stc_requires_before_stc"])
         self.assertTrue(h["stc_recomputes_envelope"])
@@ -1013,6 +1013,16 @@ class ChannelAlignTests(unittest.TestCase):
         self.assertTrue(h["channels_aligned"])
         self.assertTrue(h["sms_iff_sub_send"])
         self.assertEqual(h["sms_from"], "sub_alert_send")
+        self.assertTrue(h["extra_bto"])
+        self.assertTrue(h["extra_bto_on_run"])
+        self.assertEqual(h["extra_bto_fill_to"], 16)
+        self.assertEqual(h["starter_notional_usd"], 2000.0)
+        self.assertEqual(h["ticket_risk_usd"], 240.0)
+        self.assertEqual(h["session_loss_halt_usd"], 750.0)
+        self.assertEqual(h["risk_qty_cap"], 16)
+        self.assertEqual(h["peak_giveback_usd"], 50.0)
+        self.assertEqual(h["one_dte_qty_cap"], 6)
+        self.assertFalse(h["extra_bto_1dte"])
 
     def test_1001_0dte_is_open_fade_on_shared_stack(self):
         self.assertEqual(
