@@ -54,43 +54,108 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 
 ## Copy prompt for the signal-engine agent
 
-This website PR does not deploy the bot. Paste into the `deltaiq-signal-engine` **production** agent and ship now:
+This website PR does not deploy the bot. Paste the block below into the
+`deltaiq-signal-engine` **production** agent and ship now:
 
 ```
-REPLACE PRODUCTION WITH GITHUB REC. Do not patch a second book.
-The website files ARE the book. curl them over engine/* and DELETE
-leftover Railway knobs. Do not merge-keep. Do not wrap health_overlay
-with a second dict (peak_from_print / never_green_withhold /
-opposite_sub_consumes / qty_max=100 / logic_rebuild 2026-09-29b).
-Before 09:30 ET. ONE BOOK: Tradier IS GitHub rec_book().
-code_ship MUST equal rec_book_ship=2026-10-15-match-rec.
-FAIL if logic_rebuild.code_ship or performance.code_ship or
-cover_paths.code_ship is still 2026-09-29b. FAIL if
-rec_book_mismatch is nonempty. rec_book_identity=true.
-rec_revenue_lock=true. quality_at_seal / SUB clock / scratch-lock
-ARE Rec, not add-ons. Do not retune stall $0.08 / 3m $0.20 /
-chase $0.50 / climax $0.50/80%.
-DELETE these live leftovers (they are a 2nd book):
-  peak_from_print, never_green_withhold, opposite_sub_consumes,
-  qty_max=100, peak_starter $37.50, starter $3000, extra_bto=false,
-  fill_to 24, halt $1125. Rec is starter $2000, extra BTO on to 16,
-  halt $750, ticket $240, peak $50, qty_max=16, peak_from_print=false,
-  never_green_withhold=false, opposite_sub_consumes=false.
-Import engine.shared.gates + engine.tradier_exec.hooks. Call
-at_seal then decide_sub_send then before_bto. health IS
-health_overlay(state). Do not overlay a second knob set.
+CHANGE REQUEST — REPLACE LIVE WITH GITHUB REC (one book)
+Repo: getdeltaiq/deltaiq-signal-engine branch production
+Source: getdeltaiq/deltaiq-website SHA cecf279
+Ship before 09:30 ET. Do not patch a second book.
 
-Copy these files from getdeltaiq/deltaiq-website SHA cecf279 onto
-getdeltaiq/deltaiq-signal-engine production (REPLACE, do not patch):
+GOAL
+Tradier IS GitHub rec_book() (ship 2026-10-15-match-rec).
+Hold / clock / at_seal / scratch-lock ARE Rec, not add-ons.
+Proven Rec tape stays frozen: 30-day Rec +$5,314 vs live −$2,480;
+Oct 1–8 Rec +$1,637 vs +$958. 10/2 10:54 and 10/5 12:22 still SEND.
+
+REPLACE these files (curl over engine/*; do not merge-keep):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/tradier_exec/persist.py
   engine/overlay/publish.py
-Public raw (website is public; curl these, then SET Rec knobs):
+Public raw:
   https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/cecf279/engine/shared/gates.py
   https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/cecf279/engine/tradier_exec/hooks.py
   https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/cecf279/engine/tradier_exec/persist.py
   https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/cecf279/engine/overlay/publish.py
+
+WIRE (GitHub Rec only — no native leftover path)
+  from engine.overlay.publish import at_seal, decide_sub_send
+  from engine.tradier_exec.hooks import before_bto, health_overlay
+  c = at_seal(c, last_four_1m_closes_at_send_ts)
+  d = decide_sub_send(c)
+  if d["send"]:
+      bto = before_bto(state, ...)   # skip_not_rec_book if leftover knobs
+  /health IS health_overlay(state). Do not merge a second dict.
+
+DELETE 2nd-book leftovers (still True on Railway tonight):
+  peak_from_print, never_green_withhold, opposite_sub_consumes,
+  qty_max=100, peak_starter $37.50, starter $3000, extra_bto=false,
+  fill_to 24, halt $1125, logic_rebuild/performance/cover_paths
+  code_ship=2026-09-29b.
+
+ADOPT THESE PROVEN REVENUE RAILS (already in GitHub Rec — do not retune)
+Entry (skip losers, keep Rec winners)
+  CHOPPY refuse not chop_size          9/29 −$1,880 / CHOPPY 0/8 −$297
+  weak pre-move $0.15–$0.29            9/29 1/9 −$160
+  strong pre-move ≥ $0.50              9/29 0/5 −$256
+  chase ≥ $0.50                        9/29 chase losers
+  missing quality = skip_quality_unknown (fail closed)
+  1m rip skip unless 3m ≥ $0.20        10/2 11:42 skip; 10:54 −0.28/−0.87 SEND
+  stall last-minute ≥ $0.08            10/5 10:58 −$182 / 11:42 −$320 skip;
+                                       12:22 +0.175/+0.235 SEND +$1,344
+  climax ≥ $0.50 AND ≥ 80% of 3m       10/8 12:17 +1.55/+1.61 skip;
+                                       9/28 10:42 −0.24/−0.26 SEND
+  0DTE open-fade 10:00–10:20           9/30 10:14 −$190; overlay 1DTE TREND
+  0DTE near-cutover from 12:30         9/30 12:44 −$256; 1DTE TREND SENDS
+  1DTE TREND required until 12:45      9/25 runner
+  quality AT SEAL not arm bar          10/15 A/C/D/G; 10:54 and 12:22 still SEND
+  SMS iff decide_sub_send send=True    channel align 10/1
+Size / halt
+  starter $2000, extra BTO on to 16    10/5 12:22 16-lot
+  1DTE cap 6, extra_bto_1dte=false     10/14 10-lot dump
+  ticket −$240, halt −$750 or 4× 0DTE FAIL
+  1DTE FAILs do not increment streak   9/28
+Hold / exit (do not scratch Rec tickets)
+  min_hold 90s except fill $0.15 / 1DTE $0.30 / cata / ticket_risk
+                                       10/9 C/D/E 5–12s; 10/15 C/D/G 2–7s
+  fail_90 only if SPY reversed $0.30   10/8 10:23 / 11:11
+  HOLD_UNSTAMPED_FILL                  10/8 13:20 9s scratch
+  peak $50 after 90s from fill, not print-high
+                                       10/5 773C ~+$1,408; 10/9 62s HOLD
+  may_post_stc recomputes envelope     10/13 4s / 122s scratches
+  after_recover_lost("flat") = skip_already_flat
+  inflight does NOT consume            10/15 B 11:47 / F 14:49
+  SUB send_ts = Tradier clock          10/9 11:04 vs 11:07
+  overlay_sends == pushover            10/12 phone 3 / overlay 1
+  1DTE protective: rest bid, market 2s 10/13 −$334 ladder sit
+  peak_from_print=false, never_green_withhold=false,
+  opposite_sub_consumes=false, qty_max=16
+
+DO NOT
+  Retune stall $0.08 / 3m $0.20 / chase $0.50 / climax $0.50/80%
+    (tighten skips 10/5 12:22; loosen reopens 10/8 A/D/E and 9/29)
+  Keep a second knob set or wrap health_overlay
+  Freeze 0DTE TREND before 12:30 except 10:00–10:20 fade
+  STC on BTO fill; fire $37.50 print-high giveback; lift a dead halt
+
+FAIL before 09:30 ET unless ALL of:
+  tradier_exec.code_ship == rec_book_ship == 2026-10-15-match-rec
+  logic_rebuild.code_ship AND performance.code_ship AND
+    cover_paths.code_ship are NOT 2026-09-29b
+  rec_book_identity=true, rec_book_mismatch=[], rec_revenue_lock=true
+  quality_at_seal=true, min_hold_sec=90, stall_1m_usd=0.08
+  one_min_climax_usd=0.50 / frac=0.80, extra_bto_on_run=true
+  starter_notional_usd=2000, session_loss_halt_usd=750
+  peak_giveback_usd=50, peak_from_print=false, qty_max=16
+  A 10:01 0DTE is skip_0dte_open_fade on SMS AND BTO
+  A 10/5 12:22 +0.175/+0.235 still SEND and POST
+  A 10/8 12:17 +1.55/+1.61 is skip_1min_rip
+  Leftover $3000 / peak_from_print=true is skip_not_rec_book
+    and does not consume
+
+WIRE DETAILS (same Rec book — not a 2nd version)
 
 1) Continuous RTH: in_publish_window is 09:30–15:50 inclusive.
    Delete the 09:36–09:40 + 10:00–15:50 split. 09:41–09:59 is no longer
