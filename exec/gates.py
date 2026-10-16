@@ -84,6 +84,8 @@ from engine.shared.gates import (  # noqa: F401
     QUALITY_SKIP_CODES,
     MISFIRE_SKIP_CODES,
     rec_book,
+    rec_book_mismatch,
+    rec_book_skip_reason,
     source_skip_reason,
     starter_dte_for_clock,
     starter_qty,

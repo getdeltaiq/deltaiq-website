@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from engine.shared.gates import (
     ENGINE_EXIT_MODE,
     HOLD_EXIT,
+    LIVE_KNOB_KEYS,
     SessionState,
     apply_manage_result,
     decide_manage,
@@ -24,6 +25,8 @@ from engine.shared.gates import (
     note_ladder_step,
     option_dte,
     rec_book,
+    rec_book_mismatch,
+    rec_book_skip_reason,
     source_skip_reason,
 )
 
@@ -53,13 +56,26 @@ def boot_state(loaded: SessionState | None = None) -> SessionState:
     enforce_keep_halt(st)
     st.engine_exit_mode = ENGINE_EXIT_MODE
     st.refresh_halt()
+    # GitHub Rec is the process. A leftover 2nd book cannot boot-and-trade.
+    if rec_book_skip_reason() is not None:
+        st.last_action = "skip_not_rec_book"
     return st
+
+
+def _live_book_from(kwargs: dict) -> dict | None:
+    """Pull Railway leftover knobs out of before_bto kwargs."""
+    live = dict(kwargs.pop("live_book", None) or {})
+    for key in list(kwargs):
+        if key in LIVE_KNOB_KEYS:
+            live[key] = kwargs.pop(key)
+    return live or None
 
 
 def before_bto(state: SessionState, **kwargs) -> dict:
     """Call immediately before any Tradier buy_to_open. If post is False, return."""
     enforce_keep_halt(state)
-    return decide_starter(state, **kwargs)
+    live_book = _live_book_from(kwargs)
+    return decide_starter(state, live_book=live_book, **kwargs)
 
 
 def on_manage(state: SessionState, **kwargs) -> dict:
@@ -127,6 +143,10 @@ def before_extra_bto(state: SessionState, **kwargs) -> dict:
     Default add_qty is remaining room to 16. 9/24 winners left 3–5 unused.
     """
     enforce_keep_halt(state)
+    rec_skip = rec_book_skip_reason(_live_book_from(kwargs))
+    if rec_skip is not None:
+        state.last_action = rec_skip
+        return {"post": False, "action": rec_skip, "qty": 0}
     src = source_skip_reason(
         plot=kwargs.get("plot"),
         is_opposite=bool(kwargs.get("is_opposite")),
@@ -157,9 +177,13 @@ def before_extra_bto(state: SessionState, **kwargs) -> dict:
 
 def health_overlay(state: SessionState) -> dict:
     rec = rec_book()
+    mismatch = rec_book_mismatch()
     rec.update(
         {
             "gates_module": "engine.shared.gates",
+            "code_ship": rec["rec_book_ship"],
+            "rec_book_identity": mismatch == [],
+            "rec_book_mismatch": mismatch,
             "decide_starter": True,
             "before_bto": True,
             "on_manage": True,
@@ -193,6 +217,8 @@ def health_overlay(state: SessionState) -> dict:
             "on_ladder_step": True,
             "on_flatten_fill": True,
             "after_recover_lost": True,
+            "health_is_rec_book": True,
+            "do_not_merge_leftover_knobs": True,
         }
     )
     return rec
