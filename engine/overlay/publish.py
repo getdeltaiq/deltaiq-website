@@ -2,9 +2,12 @@
 
 Admin ledger = 100% of scored candidates.
 Sub send = actionable subset only (armed_rip after quality gates).
-SMS and Tradier consume sub_alert_send only. Never BTO from admin rows.
+SMS/Pushover SUB and Tradier consume sub_alert_send only. Never BTO from admin rows.
 skip_reason calls sub_action_skip_reason so SMS and BTO share one skip stack.
-aligned_copy=false is SMS wording, not a non-trade.
+aligned_copy=false is SUB SMS wording ("sign in to view"), not a non-trade.
+Pushover admin = every scored candidate. Pushover sub = sub_alert_send only.
+A SUB text must have an equivalent admin alert (same send_ts / direction / spy).
+Admin may fire with no SUB. Health/outage never uses admin or SUB channels.
 Invariant: admin_n >= sub_n >= 0.
 """
 
@@ -33,6 +36,14 @@ COPY = "armed_rip"
 ALIGNED_COPY = False
 CHANNELS_ALIGNED = True
 SMS_IFF_SUB_SEND = True
+PUSHOVER_ADMIN = "admin"
+PUSHOVER_SUB = "sub"
+PUSHOVER_FROM = SMS_FROM
+PUSHOVER_ADMIN_ALL = True
+PUSHOVER_SUB_SUBSET = True
+FOLLOW_DELIVERED_SUB = False
+HEALTH_NEVER_SUB = True
+HEALTH_NEVER_ADMIN = True
 SCORED_FANOUT = "candidate_only"
 
 PUBLISH_ARM_SPY = 0.20
@@ -119,10 +130,83 @@ def skip_reason(c: Candidate) -> str | None:
 
 
 def decide_sub_send(c: Candidate) -> dict:
+    ident = {
+        "send_ts": c.ts,
+        "et_hhmm": c.et_hhmm,
+        "direction": c.direction,
+        "spy": c.spy,
+    }
     reason = skip_reason(c)
     if reason is not None:
-        return {"send": False, "reason": reason, "plot": PLOT}
-    return {"send": True, "reason": "sub_alert_send", "plot": PLOT}
+        return {"send": False, "sms": False, "reason": reason, "plot": PLOT, **ident}
+    return {
+        "send": True,
+        "sms": True,
+        "reason": "sub_alert_send",
+        "plot": PLOT,
+        **ident,
+    }
+
+
+def _alert_key(row: dict) -> tuple:
+    return (
+        round(float(row["send_ts"]), 3),
+        row["direction"],
+        round(float(row["spy"]), 2),
+        str(row.get("et_hhmm") or ""),
+    )
+
+
+def pushover_admin_from_candidate(c: Candidate, *, reason: str) -> dict:
+    """Every scored candidate. Admin Pushover. Never a health/outage row."""
+    return {
+        "channel": PUSHOVER_ADMIN,
+        "kind": "overlay_alert",
+        "send_ts": c.ts,
+        "et_hhmm": c.et_hhmm,
+        "direction": c.direction,
+        "spy": c.spy,
+        "reason": reason,
+        "sub_send": reason == "sub_alert_send",
+        "plot": ADMIN_ROWS,
+    }
+
+
+def pushover_sub_from_send(d: dict) -> dict | None:
+    """SUB_signals payload. None unless decide_sub_send send=True.
+
+    aligned_copy=false is the SUB body ("publication available… sign in to view").
+    Receipts / follow_delivered_sub must not call this.
+    """
+    if FOLLOW_DELIVERED_SUB:
+        raise AssertionError("follow_delivered_sub must stay false")
+    if not d.get("send") or not d.get("sms"):
+        return None
+    clock = d.get("et_hhmm") or ""
+    return {
+        "channel": PUSHOVER_SUB,
+        "kind": "overlay_alert",
+        "send_ts": d["send_ts"],
+        "et_hhmm": clock,
+        "direction": d["direction"],
+        "spy": d["spy"],
+        "reason": "sub_alert_send",
+        "publication": f"New publication available at {clock} ET",
+        "aligned_copy": ALIGNED_COPY,
+        "sms": True,
+        "plot": PLOT,
+    }
+
+
+def health_may_pushover(channel: str) -> bool:
+    """Tasty /ES outage etc. Never SUB_signals. Never overlay admin."""
+    return channel not in {PUSHOVER_ADMIN, PUSHOVER_SUB}
+
+
+def sub_has_admin_twin(sub: dict, admin_rows: Sequence[dict]) -> bool:
+    """Every SUB fire must have the equivalent admin alert."""
+    want = _alert_key(sub)
+    return any(_alert_key(row) == want for row in admin_rows)
 
 
 @dataclass
@@ -142,27 +226,61 @@ class PublishLedgers:
     def sub_n(self) -> int:
         return len(self.sub)
 
+    def admin_pushovers(self) -> list[dict]:
+        """Admin Pushover: one row per scored candidate."""
+        rows: list[dict] = []
+        for c in self.admin:
+            d = decide_sub_send(c)
+            rows.append(pushover_admin_from_candidate(c, reason=d["reason"]))
+        return rows
+
+    def sub_pushovers(self) -> list[dict]:
+        """SUB_signals: only the sub_alert_send subset."""
+        rows: list[dict] = []
+        for c in self.sub:
+            payload = pushover_sub_from_send(decide_sub_send(c))
+            if payload is not None:
+                rows.append(payload)
+        return rows
+
     def ingest(self, c: Candidate) -> dict:
         self.admin.append(c)
         d = decide_sub_send(c)
+        admin_push = pushover_admin_from_candidate(c, reason=d["reason"])
+        sub_push = pushover_sub_from_send(d)
         if d["send"]:
+            if sub_push is None:
+                raise AssertionError("sub send missing SUB Pushover payload")
+            if not sub_has_admin_twin(sub_push, [admin_push]):
+                raise AssertionError(
+                    f"SUB without admin twin sub={sub_push} admin={admin_push}"
+                )
             self.sub.append(c)
             self.last_skip = None
         else:
+            if sub_push is not None:
+                raise AssertionError("skip must not SMS SUB")
             self.last_skip = d["reason"]
         if not ledger_invariant(self.admin_n, self.sub_n):
             raise AssertionError(
                 f"ledger inverted: admin_n={self.admin_n} sub_n={self.sub_n}"
             )
+        for row in self.sub_pushovers():
+            if not sub_has_admin_twin(row, self.admin_pushovers()):
+                raise AssertionError("SUB Pushover missing admin twin")
         return {
             "admin_rows": ADMIN_ROWS,
             "plot": PLOT,
             "sms_from": SMS_FROM,
+            "pushover_from": PUSHOVER_FROM,
             "aligned_copy": ALIGNED_COPY,
             "admin_n": self.admin_n,
             "sub_n": self.sub_n,
             "sent": d["send"],
+            "sms": d["sms"],
             "reason": d["reason"],
+            "admin_pushover": admin_push,
+            "sub_pushover": sub_push,
             "invariant_ok": True,
         }
 
@@ -192,6 +310,14 @@ class PublishLedgers:
             "dte_cutover_et": DTE_CUTOVER_ET,
             "channels_aligned": CHANNELS_ALIGNED,
             "sms_iff_sub_send": SMS_IFF_SUB_SEND,
+            "pushover_from": PUSHOVER_FROM,
+            "pushover_admin": PUSHOVER_ADMIN,
+            "pushover_sub": PUSHOVER_SUB,
+            "pushover_admin_all": PUSHOVER_ADMIN_ALL,
+            "pushover_sub_subset": PUSHOVER_SUB_SUBSET,
+            "follow_delivered_sub": FOLLOW_DELIVERED_SUB,
+            "health_never_sub": HEALTH_NEVER_SUB,
+            "health_never_admin": HEALTH_NEVER_ADMIN,
             "skip_1min_rip": True,
             "one_min_rip_usd": 0.20,
             "trend_3m_min_usd": 0.20,
