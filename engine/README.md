@@ -49,15 +49,15 @@ SHIP TO PRODUCTION NOW. Live /health is still rec_book_ship=2026-10-02-1min-rip
 Do not keep a second knob set. Do not lift a halt that is already off.
 Do not freeze 0DTE TREND. Fewer SUB alerts is correct.
 
-Copy these three files from getdeltaiq/deltaiq-website SHA 33f8d2a (PR 24)
+Copy these three files from getdeltaiq/deltaiq-website SHA 44b1d42
 onto getdeltaiq/deltaiq-signal-engine production (replace Railway copies):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/overlay/publish.py
 Public raw (website is public; curl these, do not rewrite knobs):
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/33f8d2a6d3822d964b3eafa58b173591ecbb7432/engine/shared/gates.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/33f8d2a6d3822d964b3eafa58b173591ecbb7432/engine/tradier_exec/hooks.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/33f8d2a6d3822d964b3eafa58b173591ecbb7432/engine/overlay/publish.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/44b1d42/engine/shared/gates.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/44b1d42/engine/tradier_exec/hooks.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/44b1d42/engine/overlay/publish.py
 Wire overlay ingest to stamp every Candidate with with_spy_deltas /
 signed_spy_deltas on the last four 1m SPY closes before decide_sub_send.
 rec_book_ship MUST become 2026-10-06-1min-stall on /health.
