@@ -10,9 +10,9 @@ Railway is not the source of this logic. **`engine/` is.** This directory is a c
 
 ## Contract
 
-- **Admin** (`admin_alert_ledger`): every scored/armed candidate.
-- **Sub** (`sub_alert_send`): quality-gated `armed_rip` only. SMS and Tradier consume **sub only**.
-- Invariant: `admin_n >= sub_n`.
+- **Admin** (`admin_alert_ledger`): every scored/armed candidate. **Pushover admin** posts all of these.
+- **Sub** (`sub_alert_send`): quality-gated `armed_rip` only. SMS, Pushover SUB, and Tradier consume **sub only**.
+- Invariant: `admin_n >= sub_n`. Every SUB Pushover has an equivalent admin alert. Admin may fire with no SUB. Tasty /ES health never uses admin or SUB.
 
 ## What this closes
 

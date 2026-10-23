@@ -16,6 +16,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
 
 - **Adopted book:** overlay **sub** is the performer (PF 1.86 paper). Cover-us is the cash floor. Never BTO `admin_alert_ledger`. Never exec-queue an opposite (`queue_opposite=false`) unless overlay itself queued that send. Flatten `take_exit=ladder_to_market` (not bid).
 - `admin_n >= sub_n`. Plot `sub_alert_send`. `admin_rows=admin_alert_ledger`. `aligned_copy=false` is SMS **body** (“sign in to view”), not “not a trade.”
+- **Pushover fanout:** admin group = every scored candidate (`pushover_admin_from_candidate`). SUB_signals = `sub_alert_send` only (`pushover_sub_from_send`). A SUB text must have an equivalent admin alert (same `send_ts` / direction / spy). Admin may fire with no SUB. `follow_delivered_sub=false`. Tasty /ES health never posts to admin or SUB.
 - **Channels aligned:** overlay `decide_sub_send` and Tradier `before_bto` share `sub_action_skip_reason`. SMS only if `send=True`. If overlay SMS, Tradier BTO that send (bounce / halt / inflight stay exec-only). Never SMS a skip.
 - Starter BTO only after `before_bto` returns `post=True` with `plot=sub_alert_send`.
 - Envelope flatten sets `override_trail=True` and `engine_exit_mode=ladder_to_market` (never hold a loser on trail).
@@ -29,6 +30,7 @@ This conversation **edits these files**. Railway must import them. Do not patch 
   - Misfire: 8-minute cooldown after any FAIL (`skip_cooldown_after_fail`). Before **12:45 ET** 1DTE starters require overlay `regime=TREND` (`skip_1dte_not_trend`). From **12:45** the book is 1DTE: trade next-day OCC, refuse leftover 0DTE (`skip_0dte_after_cutover`). Do not freeze 0DTE before cutover.
   - **9/30 alert quality (morning losses >$150):** 0DTE in **10:00–10:20** is `skip_0dte_open_fade` (10:14 BEAR −$190; also 10/1 10:01 SUB ping). 0DTE in **12:30–12:44** is `skip_0dte_near_cutover` (12:44 BULL −$256, STC at the 12:45 cutover). 1DTE TREND still posts in those windows. 10:21–12:29 0DTE still posts. 09:36–09:40 morning rip still sends.
   - **Channel align (10/1):** SUB_signals SMS is a `sub_alert_send`. Overlay and Tradier call the same skip stack. A 10:01 0DTE is admin-only (no SMS, no BTO). Do not SMS a quality/misfire/clock skip.
+  - **Pushover restore (10/23):** 12:13 SUB_signals “New publication available at 13:25:11 ET. Sign in to view” with no matching admin overlay alert (SPY group showed Tasty /ES health instead). Admin Pushover must post every ingest. SUB_signals only from `pushover_sub_from_send`. Health/outage uses neither channel.
   - **1DTE adaptive protect (10/1 close):** 0DTE stays `protective $0.15` + `fail_90`. 1DTE uses `protective $0.30` and does **not** 90s-FAIL (10/1 14:04 $0.15-clip then rally; 14:26 fail_90 scratch). Ticket risk −$240 and flatten 15:50 stay. Do not freeze 0DTE TREND.
   - **1-minute rip (10/2, production):** SUB losers were 1-minute prints (11:42 +$0.44 bar / 3-minute +$0.12). The 10:54 BEAR winner had a 3-minute dump (−$0.87). Overlay MUST stamp signed `rip_1m_spy` / `trend_3m_spy` via `signed_spy_deltas` / `with_spy_deltas` on the last four 1-minute SPY closes. Missing is `skip_1min_unconfirmed`. A 1-minute print without a 3-minute trend in the send direction is `skip_1min_rip` (admin only, no SMS, no BTO). Fewer SUB alerts is the bar. Extra BTO on RUN sizes impactful winners to 16. Do not freeze 0DTE TREND.
   - **1-minute stall (10/5):** 10:58 BULL −$182 and 11:42 BULL −$320 had a 3-minute move (≥ $0.20) with a dead last minute (+$0.03 / +$0.02). SUB also requires the last minute still print WITH the send by at least **$0.08** (`skip_1min_stall`). 10/5 12:22 +$1,344 was +$0.175 / +$0.235 and still SENDS. 9/24 10:43 BEAR, 9/25 11:55 BULL, 9/28 10:42 BEAR, 10/2 10:54 BEAR still SEND. Do not raise the 3-minute floor to $0.30 (that would skip 12:22). Do not freeze 0DTE TREND.
@@ -47,18 +49,32 @@ SHIP TO PRODUCTION NOW. Live /health is still rec_book_ship=2026-10-02-1min-rip
 Do not keep a second knob set. Do not lift a halt that is already off.
 Do not freeze 0DTE TREND. Fewer SUB alerts is correct.
 
-Copy these three files from getdeltaiq/deltaiq-website SHA 33f8d2a (PR 24)
+Copy these three files from getdeltaiq/deltaiq-website SHA 44b1d42
 onto getdeltaiq/deltaiq-signal-engine production (replace Railway copies):
   engine/shared/gates.py
   engine/tradier_exec/hooks.py
   engine/overlay/publish.py
 Public raw (website is public; curl these, do not rewrite knobs):
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/33f8d2a6d3822d964b3eafa58b173591ecbb7432/engine/shared/gates.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/33f8d2a6d3822d964b3eafa58b173591ecbb7432/engine/tradier_exec/hooks.py
-  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/33f8d2a6d3822d964b3eafa58b173591ecbb7432/engine/overlay/publish.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/44b1d42/engine/shared/gates.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/44b1d42/engine/tradier_exec/hooks.py
+  https://raw.githubusercontent.com/getdeltaiq/deltaiq-website/44b1d42/engine/overlay/publish.py
 Wire overlay ingest to stamp every Candidate with with_spy_deltas /
 signed_spy_deltas on the last four 1m SPY closes before decide_sub_send.
 rec_book_ship MUST become 2026-10-06-1min-stall on /health.
+
+PUSHOVER FANOUT — 10/23 12:13 SUB_signals “New publication available at
+13:25:11 ET. Sign in to view” with no matching admin overlay alert.
+SPY group showed Tasty /ES health instead. Restore admin ⊇ sub.
+On every overlay ingest:
+  d = decide_sub_send(c)
+  post Pushover ADMIN from pushover_admin_from_candidate(c, reason=d["reason"])
+  sub = pushover_sub_from_send(d)   # None unless send=True
+  if sub: post Pushover SUB_signals from that payload only
+follow_delivered_sub=false. Do not SMS SUB from receipts.
+Tasty /ES outage must not use channel admin or sub (health_may_pushover).
+A SUB text must have the same send_ts / direction / spy as an admin alert.
+Admin-only skips (10:01 0DTE fade, choppy, stall, 1min rip) still POST admin.
+They must NOT post SUB. aligned_copy=false is the SUB body, not “not a trade.”
 
 HIGH-WATER $50 — 10/5 16-lot 773C 0.79 ran to ~1.67 (~+$1,408).
 The fill $0.15 stop (0.64) would give back ~$1,650. That is not the exit.

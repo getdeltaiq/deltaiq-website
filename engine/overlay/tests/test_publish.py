@@ -8,6 +8,10 @@ from engine.overlay.publish import (
     Candidate,
     PublishLedgers,
     decide_sub_send,
+    health_may_pushover,
+    pushover_admin_from_candidate,
+    pushover_sub_from_send,
+    sub_has_admin_twin,
     with_spy_deltas,
 )
 
@@ -56,6 +60,13 @@ class LedgerHierarchyTests(unittest.TestCase):
         self.assertEqual(h["pre_move_strong"], 0.50)
         self.assertTrue(h["channels_aligned"])
         self.assertTrue(h["sms_iff_sub_send"])
+        self.assertTrue(h["pushover_admin_all"])
+        self.assertTrue(h["pushover_sub_subset"])
+        self.assertFalse(h["follow_delivered_sub"])
+        self.assertEqual(h["pushover_admin"], "admin")
+        self.assertEqual(h["pushover_sub"], "sub")
+        self.assertTrue(h["health_never_sub"])
+        self.assertTrue(h["health_never_admin"])
 
     def test_unarmed_is_admin_only(self):
         d = decide_sub_send(_c(armed=False))
@@ -318,6 +329,87 @@ class ChannelAlignTests(unittest.TestCase):
                 "skip_copy",
             ):
                 self.assertEqual(bto["action"], sms["reason"])
+
+
+class PushoverFanoutTests(unittest.TestCase):
+    """Admin Pushover = all scored. SUB_signals = sub pathway only."""
+
+    def test_admin_gets_every_candidate_sub_is_subset(self):
+        p = PublishLedgers("2026-10-23")
+        weak = p.ingest(_c(ts=1, pre_move_spy=0.22, armed=True))
+        send = p.ingest(_c(ts=2, pre_move_spy=0.40, armed=True))
+        chop = p.ingest(_c(ts=3, choppy=True))
+        self.assertEqual(p.admin_n, 3)
+        self.assertEqual(p.sub_n, 1)
+        self.assertIsNotNone(weak["admin_pushover"])
+        self.assertIsNone(weak["sub_pushover"])
+        self.assertIsNotNone(send["admin_pushover"])
+        self.assertIsNotNone(send["sub_pushover"])
+        self.assertIsNone(chop["sub_pushover"])
+        self.assertEqual(len(p.admin_pushovers()), 3)
+        self.assertEqual(len(p.sub_pushovers()), 1)
+        self.assertTrue(
+            sub_has_admin_twin(p.sub_pushovers()[0], p.admin_pushovers())
+        )
+        self.assertEqual(p.sub_pushovers()[0]["channel"], "sub")
+        self.assertEqual(p.admin_pushovers()[0]["channel"], "admin")
+        self.assertEqual(p.admin_pushovers()[1]["reason"], "sub_alert_send")
+        self.assertEqual(p.admin_pushovers()[0]["reason"], "skip_weak_pre_move")
+        self.assertIn("New publication available at", send["sub_pushover"]["publication"])
+        self.assertIn("11:02", send["sub_pushover"]["publication"])
+
+    def test_sub_send_has_equivalent_admin_alert(self):
+        c = _c(et_hhmm="11:02", dte=0, ts=1102.0)
+        d = decide_sub_send(c)
+        self.assertTrue(d["send"])
+        admin = pushover_admin_from_candidate(c, reason=d["reason"])
+        sub = pushover_sub_from_send(d)
+        self.assertIsNotNone(sub)
+        self.assertTrue(sub_has_admin_twin(sub, [admin]))
+        self.assertEqual(admin["direction"], sub["direction"])
+        self.assertEqual(admin["spy"], sub["spy"])
+        self.assertEqual(admin["send_ts"], sub["send_ts"])
+        self.assertEqual(admin["et_hhmm"], sub["et_hhmm"])
+
+    def test_admin_only_skip_does_not_sms_sub(self):
+        c = _c(et_hhmm="10:01", dte=0, ts=1001.0)
+        d = decide_sub_send(c)
+        self.assertFalse(d["send"])
+        self.assertFalse(d["sms"])
+        self.assertEqual(d["reason"], "skip_0dte_open_fade")
+        self.assertIsNone(pushover_sub_from_send(d))
+        admin = pushover_admin_from_candidate(c, reason=d["reason"])
+        self.assertEqual(admin["channel"], "admin")
+        self.assertFalse(admin["sub_send"])
+        p = PublishLedgers("2026-10-01")
+        out = p.ingest(c)
+        self.assertEqual(p.admin_n, 1)
+        self.assertEqual(p.sub_n, 0)
+        self.assertIsNone(out["sub_pushover"])
+        self.assertEqual(p.sub_pushovers(), [])
+
+    def test_tasty_health_never_uses_admin_or_sub(self):
+        self.assertFalse(health_may_pushover("admin"))
+        self.assertFalse(health_may_pushover("sub"))
+        self.assertTrue(health_may_pushover("health"))
+        self.assertTrue(health_may_pushover("SPY"))
+
+    def test_follow_delivered_sub_cannot_sms(self):
+        c = _c(et_hhmm="13:25", dte=1, ts=1325.0)
+        d = decide_sub_send(c)
+        self.assertTrue(d["send"])
+        import engine.overlay.publish as pub
+
+        self.assertFalse(pub.FOLLOW_DELIVERED_SUB)
+        payload = pushover_sub_from_send(d)
+        self.assertEqual(payload["channel"], "sub")
+        orig = pub.FOLLOW_DELIVERED_SUB
+        try:
+            pub.FOLLOW_DELIVERED_SUB = True
+            with self.assertRaises(AssertionError):
+                pushover_sub_from_send(d)
+        finally:
+            pub.FOLLOW_DELIVERED_SUB = orig
 
 
 class HookHaltTests(unittest.TestCase):
