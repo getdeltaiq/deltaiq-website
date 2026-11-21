@@ -13,7 +13,7 @@ import re
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 Direction = Literal["BULL", "BEAR"]
@@ -172,6 +172,13 @@ TREND_3M_MIN_USD = 0.20
 # WITH the send by at least $0.08. 10/5 12:22 +$1,344 was +$0.175 / +$0.235.
 # 9/24 10:43 BEAR, 9/25 11:55 BULL, 9/28 10:42 BEAR, 10/2 10:54 BEAR keep.
 STALL_1M_USD = 0.08
+# Verified keep-away (paper Sep 15–Nov 20 + rth_minute_book / score_minute).
+# D: 09:30–09:40 ET send whose prior completed book minute is CHOPPY and
+# NO-TRADE. B: wait ≥ 3 minutes AND peak adverse 1m SPY close ≥ $0.20.
+WAIT_MAE_SEC = 180.0
+WAIT_MAE_SPY = 0.20
+MORNING_CHOPPY_START_ET = "09:30"
+MORNING_CHOPPY_END_ET = "09:40"
 
 CONSUMED_CREATE_SQL = """\
 CREATE TABLE IF NOT EXISTS consumed_sends (
@@ -383,6 +390,163 @@ def clock_quality_skip_reason(
     return None
 
 
+def prior_completed_minute_et(
+    now: datetime | None = None,
+    et_hhmm: str | None = None,
+) -> str | None:
+    """HH:MM of the last fully closed 1m book bar. 09:38:46 → 09:37."""
+    if now is not None:
+        prior = now.replace(second=0, microsecond=0) - timedelta(minutes=1)
+        return f"{prior.hour:02d}:{prior.minute:02d}"
+    hhmm = str(et_hhmm or "").strip()[:5]
+    if len(hhmm) != 5 or hhmm[2] != ":":
+        return None
+    try:
+        total = int(hhmm[:2]) * 60 + int(hhmm[3:5]) - 1
+    except ValueError:
+        return None
+    if total < 0:
+        return None
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def morning_choppy_no_trade_skip_reason(
+    *,
+    et_hhmm: str | None,
+    prior_regime: str | None,
+    prior_gate_verdict: str | None,
+) -> str | None:
+    """Hold a 09:30–09:40 MARKET when the prior book minute is CHOPPY+NO-TRADE."""
+    hhmm = str(et_hhmm or "").strip()[:5]
+    if len(hhmm) < 5:
+        return None
+    if hhmm < MORNING_CHOPPY_START_ET or hhmm >= MORNING_CHOPPY_END_ET:
+        return None
+    regime = str(prior_regime or "").strip().upper()
+    gate = (
+        str(prior_gate_verdict or "")
+        .strip()
+        .upper()
+        .replace("_", "-")
+        .replace(" ", "-")
+    )
+    if regime == "CHOPPY" and gate in {"NO-TRADE", "NOTRADE"}:
+        return "skip_morning_choppy_no_trade"
+    return None
+
+
+def _epoch_seconds(value: object) -> float | None:
+    if value is None:
+        return None
+    ts = getattr(value, "timestamp", None)
+    if callable(ts):
+        try:
+            out = float(ts())
+        except (TypeError, ValueError):
+            return None
+        return out if out > 0 else None
+    try:
+        out = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return out if out > 0 else None
+
+
+def wait_mae_path_closes(
+    bars: Sequence[dict] | None,
+    *,
+    send_ts: float | object | None,
+    now_ts: float | object | None,
+) -> list[float]:
+    """1m closes at or after send and at or before now. Empty if unknown."""
+    send_ep = _epoch_seconds(send_ts)
+    now_ep = _epoch_seconds(now_ts)
+    if send_ep is None or now_ep is None:
+        return []
+    out: list[float] = []
+    for bar in bars or []:
+        if not isinstance(bar, dict):
+            continue
+        stamp = bar.get("now")
+        if stamp is None:
+            stamp = bar.get("time") or bar.get("ts") or bar.get("epoch")
+        ep = _epoch_seconds(stamp)
+        if ep is None or ep + 1e-9 < send_ep or ep > now_ep + 1e-9:
+            continue
+        px = bar.get("close")
+        if px is None:
+            px = bar.get("spy_close") or bar.get("spy_price") or bar.get("spy")
+        try:
+            val = float(px)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if val > 0:
+            out.append(val)
+    return out
+
+
+def wait_mae_against(
+    direction: Direction | str | None,
+    send_spy: float | None,
+    path_closes: Sequence[float] | None,
+    live_spy: float | None = None,
+) -> float:
+    """Peak SPY dollars against the send. Path peak, not live-vs-send."""
+    try:
+        send = float(send_spy) if send_spy is not None else 0.0
+    except (TypeError, ValueError):
+        send = 0.0
+    if send <= 0:
+        return 0.0
+    samples: list[float] = []
+    for px in list(path_closes or []):
+        try:
+            val = float(px)
+        except (TypeError, ValueError):
+            continue
+        if val > 0:
+            samples.append(val)
+    if live_spy is not None:
+        try:
+            live = float(live_spy)
+        except (TypeError, ValueError):
+            live = 0.0
+        if live > 0:
+            samples.append(live)
+    if not samples:
+        return 0.0
+    side = str(direction or "").upper()
+    if side == "BULL":
+        return max(0.0, send - min(samples))
+    if side == "BEAR":
+        return max(0.0, max(samples) - send)
+    return 0.0
+
+
+def wait_mae_skip_reason(
+    *,
+    direction: Direction | str | None,
+    send_spy: float | None,
+    send_ts: float | object | None,
+    now: float | object | None,
+    path_closes: Sequence[float] | None = None,
+    live_spy: float | None = None,
+) -> str | None:
+    """Hold BTO/republish when the wait-clock MAE is ≥ $0.20 after 3 minutes."""
+    send_ep = _epoch_seconds(send_ts)
+    now_ep = _epoch_seconds(now)
+    if send_ep is None or now_ep is None:
+        return None
+    if send_ep < 1_000_000_000.0:
+        return None
+    if now_ep - send_ep + 1e-9 < WAIT_MAE_SEC:
+        return None
+    mae = wait_mae_against(direction, send_spy, path_closes, live_spy)
+    if mae + 1e-9 >= WAIT_MAE_SPY:
+        return "skip_wait_mae"
+    return None
+
+
 QUALITY_SKIP_CODES = frozenset(
     {
         "skip_choppy",
@@ -395,6 +559,8 @@ QUALITY_SKIP_CODES = frozenset(
         "skip_1min_rip",
         "skip_1min_unconfirmed",
         "skip_1min_stall",
+        "skip_morning_choppy_no_trade",
+        "skip_wait_mae",
         "skip_0dte_open_fade",
         "skip_0dte_near_cutover",
         "skip_not_sub",
@@ -425,6 +591,8 @@ def sub_action_skip_reason(
     direction: Direction | None = None,
     rip_1m_spy: float | None = None,
     trend_3m_spy: float | None = None,
+    prior_regime: str | None = None,
+    prior_gate_verdict: str | None = None,
 ) -> str | None:
     """One skip stack for SUB SMS and Tradier BTO. None = both may fire.
 
@@ -432,6 +600,13 @@ def sub_action_skip_reason(
     sub_alert_send. If this returns a code, do not SMS and do not BTO.
     Halt / bounce / inflight stay exec-only (live tape).
     """
+    morning = morning_choppy_no_trade_skip_reason(
+        et_hhmm=et_hhmm,
+        prior_regime=prior_regime,
+        prior_gate_verdict=prior_gate_verdict,
+    )
+    if morning is not None:
+        return morning
     q = quality_skip_reason(
         choppy=choppy,
         on_arm_bar=on_arm_bar,
@@ -864,6 +1039,10 @@ def decide_starter(
     dte: int | None = None,
     rip_1m_spy: float | None = None,
     trend_3m_spy: float | None = None,
+    prior_regime: str | None = None,
+    prior_gate_verdict: str | None = None,
+    path_closes: Sequence[float] | None = None,
+    now_ts: float | None = None,
 ) -> dict:
     """Single entry point before any Tradier buy_to_open."""
     if not ledger_ok_placeholder():
@@ -878,6 +1057,25 @@ def decide_starter(
         state.last_action = src
         return {"action": src, "qty": 0, "post": False}
     dte_val = dte if dte is not None else option_dte(option_symbol, state.session_date)
+    keepaway = morning_choppy_no_trade_skip_reason(
+        et_hhmm=et_hhmm,
+        prior_regime=prior_regime,
+        prior_gate_verdict=prior_gate_verdict,
+    )
+    if keepaway is None:
+        keepaway = wait_mae_skip_reason(
+            direction=direction,
+            send_spy=send_spy,
+            send_ts=send_ts,
+            now=now_ts,
+            path_closes=path_closes,
+            live_spy=spy,
+        )
+    if keepaway is not None:
+        state.try_consume(send_ts, direction, count_starter=False, persist=persist)
+        state.skip_quality_n += 1
+        state.last_action = keepaway
+        return {"action": keepaway, "qty": 0, "post": False}
     act = sub_action_skip_reason(
         choppy=choppy,
         on_arm_bar=on_arm_bar,
@@ -891,6 +1089,8 @@ def decide_starter(
         direction=direction,
         rip_1m_spy=rip_1m_spy,
         trend_3m_spy=trend_3m_spy,
+        prior_regime=prior_regime,
+        prior_gate_verdict=prior_gate_verdict,
     )
     if act is not None:
         state.try_consume(send_ts, direction, count_starter=False, persist=persist)

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from engine.shared.gates import (
+    morning_choppy_no_trade_skip_reason,
     DTE_CUTOVER_ET,
     NEAR_CUTOVER_0DTE_ET,
     OPEN_FADE_WINDOW,
@@ -84,6 +85,8 @@ class Candidate:
     last_fail_hhmm: str | None = None
     rip_1m_spy: float | None = None
     trend_3m_spy: float | None = None
+    prior_regime: str | None = None
+    prior_gate_verdict: str | None = None
 
 
 def with_spy_deltas(c: Candidate, closes: Sequence[float] | None) -> Candidate:
@@ -99,6 +102,13 @@ def skip_reason(c: Candidate) -> str | None:
         return "skip_copy"
     if not c.armed:
         return "skip_not_armed"
+    morning = morning_choppy_no_trade_skip_reason(
+        et_hhmm=c.et_hhmm,
+        prior_regime=c.prior_regime,
+        prior_gate_verdict=c.prior_gate_verdict,
+    )
+    if morning is not None:
+        return morning
     act = sub_action_skip_reason(
         choppy=c.choppy,
         on_arm_bar=c.on_arm_bar,
@@ -112,6 +122,8 @@ def skip_reason(c: Candidate) -> str | None:
         direction=c.direction,
         rip_1m_spy=c.rip_1m_spy,
         trend_3m_spy=c.trend_3m_spy,
+        prior_regime=c.prior_regime,
+        prior_gate_verdict=c.prior_gate_verdict,
     )
     if act is not None:
         return act
